@@ -11,6 +11,7 @@
   top: 0;
   width: 100%;
   overflow: hidden;
+  height: var(--wave-height, auto);
 }
 
 /* 组件内部使用的 wave 类，只做必要的私有设置。

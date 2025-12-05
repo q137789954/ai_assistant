@@ -88,16 +88,16 @@ export default function Wave(props: WaveProps) {
     children,
   } = props
 
-  const fullHeight = height + amplitude * 2
+  const maskHeight = height
 
   const maskImage = useMemo(
-    () => buildMaskImage(waveLength, fullHeight, amplitude, waveLength, direction),
-    [waveLength, fullHeight, amplitude, direction],
+    () => buildMaskImage(waveLength, maskHeight, amplitude, waveLength, direction),
+    [waveLength, maskHeight, amplitude, direction],
   )
 
   const waveStyle: CSSProperties = {
     background: fillColor,
-    height: fullHeight,
+    height: maskHeight,
     maskImage,
     WebkitMaskImage: maskImage,
     ['--wave-translate' as any]: `${-waveLength}px`,
@@ -105,11 +105,15 @@ export default function Wave(props: WaveProps) {
     animationDirection: movementDirection === 'left' ? 'normal' : 'reverse',
   }
 
+  const wrapperStyle: CSSProperties = {
+    ['--wave-height' as any]: `${height}px`,
+  }
+
   return (
     <div className={`${styles.waveContainer} ${className ?? ''}`}>
       {children}
 
-      <div className={styles.waveMaskWrapper}>
+      <div className={styles.waveMaskWrapper} style={wrapperStyle}>
         <div
           className={`${styles.wave} ${styles.waveBase} ${innerClassName ?? ''}`}
           style={waveStyle}
