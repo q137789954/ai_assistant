@@ -5,6 +5,23 @@
   --foreground: #171717;
 }
 
+:root {
+  --chromatic-hue: 220.44;
+  --chromatic-chroma: calc(0.18 + (cos(var(--chromatic-hue) * 3.14159265 / 180) * 0.04));
+  --chromatic-chroma-50: calc(var(--chromatic-chroma) * 0.3);
+  --chromatic-chroma-100: calc(var(--chromatic-chroma) * 0.5);
+  --chromatic-chroma-200: calc(var(--chromatic-chroma) * 0.6);
+  --chromatic-chroma-300: calc(var(--chromatic-chroma) * 0.75);
+  --chromatic-chroma-400: calc(var(--chromatic-chroma) * 0.85);
+  --chromatic-chroma-500: var(--chromatic-chroma);
+  --chromatic-chroma-600: calc(var(--chromatic-chroma) * 1.15);
+  --chromatic-chroma-700: calc(var(--chromatic-chroma) * 1.1);
+  --chromatic-chroma-800: calc(var(--chromatic-chroma) * 0.85);
+  --chromatic-chroma-900: calc(var(--chromatic-chroma) * 0.7);
+  --chromatic-chroma-950: calc(var(--chromatic-chroma) * 0.5);
+}
+
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -20,7 +37,19 @@
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+
+  background-color: #ffffff;
+  --cross-color: oklch(0.85 calc(var(--chromatic-chroma) * 0.3) var(--chromatic-hue) / 0.2);
+  background:
+    radial-gradient(circle, transparent 20%, #ffffff 20%, #ffffff 80%, transparent 80%, transparent),
+    radial-gradient(circle, transparent 20%, #ffffff 20%, #ffffff 80%, transparent 80%, transparent) 25px 25px,
+    linear-gradient(var(--cross-color) 2px, transparent 2px) 0 -1px,
+    linear-gradient(90deg, var(--cross-color) 2px, #ffffff 2px) -1px 0;
+  background-size:
+    50px 50px,
+    50px 50px,
+    25px 25px,
+    25px 25px;
 }

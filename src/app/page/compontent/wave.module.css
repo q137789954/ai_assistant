@@ -29,8 +29,8 @@
   }
 }
 
-/* 通用波浪基础样式，可被任意组件复用 */
-.wave-base {
+/* 组件专属动画类，使用 CSS Module 作用域 */
+.waveBase {
   width: 200vw;
   mask-repeat: repeat-x;
   -webkit-mask-repeat: repeat-x;

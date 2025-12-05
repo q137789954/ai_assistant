@@ -3,6 +3,11 @@
 import React, { useMemo, type ReactNode, type CSSProperties } from 'react'
 import styles from './wave.module.css'
 
+// 保证数字在服务端和浏览器端一致，所以路径字符串要经过统一的截断/格式化
+function formatNumber(value: number): string {
+  return Number(value.toFixed(3)).toString()
+}
+
 type WaveDirection = 'up' | 'down'
 type MovementDirection = 'left' | 'right'
 
@@ -35,19 +40,19 @@ function generateSineWavePath(
   const step = 1
   const baseY = direction === 'up' ? amplitude : height - amplitude
 
-  points.push(`M 0 ${baseY}`)
+  points.push(`M 0 ${formatNumber(baseY)}`)
 
   const factor = (Math.PI * 2) / waveLength
 
   for (let x = 0; x <= totalWavesWidth; x += step) {
     const deltaY = amplitude * Math.sin(factor * x)
     const y = direction === 'up' ? baseY - deltaY : baseY + deltaY
-    points.push(`L ${x} ${y}`)
+    points.push(`L ${formatNumber(x)} ${formatNumber(y)}`)
   }
 
   const closeY = direction === 'up' ? height : 0
-  points.push(`L ${totalWavesWidth} ${closeY}`)
-  points.push(`L 0 ${closeY} Z`)
+  points.push(`L ${formatNumber(totalWavesWidth)} ${formatNumber(closeY)}`)
+  points.push(`L 0 ${formatNumber(closeY)} Z`)
 
   return points.join(' ')
 }
@@ -106,7 +111,7 @@ export default function Wave(props: WaveProps) {
 
       <div className={styles.waveMaskWrapper}>
         <div
-          className={`${styles.wave} wave-base ${innerClassName ?? ''}`}
+          className={`${styles.wave} ${styles.waveBase} ${innerClassName ?? ''}`}
           style={waveStyle}
         />
       </div>
