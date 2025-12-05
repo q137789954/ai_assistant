@@ -1,4 +1,4 @@
-import Wave from './page/compontent/Wave'
+import Wave from './page/components/Wave'
 
 
 export default function Home() {
