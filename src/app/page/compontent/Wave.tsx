@@ -11,6 +11,15 @@ function formatNumber(value: number): string {
 type WaveDirection = 'up' | 'down'
 type MovementDirection = 'left' | 'right'
 
+type WaveStyleProps = CSSProperties & {
+  '--wave-translate'?: string
+  '--animation-duration'?: string
+}
+
+type WrapperStyleProps = CSSProperties & {
+  '--wave-height'?: string
+}
+
 interface WaveProps {
   height?: number
   amplitude?: number
@@ -95,18 +104,18 @@ export default function Wave(props: WaveProps) {
     [waveLength, maskHeight, amplitude, direction],
   )
 
-  const waveStyle: CSSProperties = {
+  const waveStyle: WaveStyleProps = {
     background: fillColor,
     height: maskHeight,
     maskImage,
     WebkitMaskImage: maskImage,
-    ['--wave-translate' as any]: `${-waveLength}px`,
-    ['--animation-duration' as any]: `${waveLength / animationSpeed}s`,
+    '--wave-translate': `${-waveLength}px`,
+    '--animation-duration': `${waveLength / animationSpeed}s`,
     animationDirection: movementDirection === 'left' ? 'normal' : 'reverse',
   }
 
-  const wrapperStyle: CSSProperties = {
-    ['--wave-height' as any]: `${height}px`,
+  const wrapperStyle: WrapperStyleProps = {
+    '--wave-height': `${height}px`,
   }
 
   return (
