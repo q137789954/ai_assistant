@@ -20,6 +20,8 @@ export const FAST_VAD_PRESET: Partial<RealTimeVADOptions> = {
   positiveSpeechThreshold: 0.65,
   negativeSpeechThreshold: 0.4,
   redemptionMs: 150,
+  preSpeechPadMs: 150,
+  minSpeechMs: 100,
 
   // 7. 如果你希望点“关闭语音输入”时也把尾巴提交，可以开这个
   // submitUserSpeechOnPause: true,
