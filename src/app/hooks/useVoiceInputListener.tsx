@@ -11,6 +11,19 @@ const DEFAULT_VAD_OPTIONS: Partial<RealTimeVADOptions> = {
   baseAssetPath: DEFAULT_VAD_ASSET_PATH,
   onnxWASMBasePath: DEFAULT_VAD_ASSET_PATH,
 }
+export const FAST_VAD_PRESET: Partial<RealTimeVADOptions> = {
+  // 1. 新模型，官方推荐的 v5，一般响应 & 鲁棒性会比 legacy 好一点
+  model: 'v5',
+
+  // 2. 阈值稍微调“硬”一点，减少噪音误触发
+  // 默认 0.5 / 0.35，这里略调高
+  positiveSpeechThreshold: 0.65,
+  negativeSpeechThreshold: 0.4,
+  redemptionMs: 150,
+
+  // 7. 如果你希望点“关闭语音输入”时也把尾巴提交，可以开这个
+  // submitUserSpeechOnPause: true,
+}
 
 type VoiceInputListenerOptions = {
   /**
@@ -68,15 +81,17 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
       try {
         const instance = await MicVAD.new({
           ...DEFAULT_VAD_OPTIONS,
+          ...FAST_VAD_PRESET,
           ...vadOptions,
           // 浏览器自己从麦克风拿流；如果你想自己传 MediaStream，可以用 stream 选项
           onSpeechStart: () => {
             if (cancelled) return
+            console.log('[useVoiceInputListener] 检测到用户开始说话')
             dispatch({ type: 'SET_USER_SPEAKING', payload: true })
           },
           onSpeechEnd: (audio: Float32Array) => {
             if (cancelled) return
-
+            console.log('[useVoiceInputListener] 检测到用户结束说话，音频长度：', audio.length)
             // 结束说话
             dispatch({ type: 'SET_USER_SPEAKING', payload: false })
 

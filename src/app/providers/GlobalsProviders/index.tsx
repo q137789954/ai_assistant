@@ -103,13 +103,11 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
    * 成功返回 true，失败/拒绝时记录状态并通过 layout 提前告知用户
    */
   const ensureMicrophonePermission = useCallback(async (): Promise<boolean> => {
-    console.log(isMicrophoneSupported());
     if (!isMicrophoneSupported()) {
       return false
     }
 
     const permissionState = await queryMicrophonePermission()
-    console.log('permissionState:', permissionState);
     if (permissionState === 'granted') {
       return true
     }
@@ -134,15 +132,12 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
    */
   const guardedDispatch = useCallback(
     (action: GlobalsAction) => {
-      console.log('Dispatching action:', action);
-      console.log('Current voiceInputEnabled state:', voiceInputEnabled);
       if (
         action.type === 'SET_VOICE_INPUT_ENABLED' &&
         action.payload &&
         !voiceInputEnabled
       ) {
         void (async () => {
-          console.log('Requesting microphone permission...');
           const hasPermission = await ensureMicrophonePermission()
           dispatch({ type: 'SET_VOICE_INPUT_ENABLED', payload: hasPermission })
         })()
