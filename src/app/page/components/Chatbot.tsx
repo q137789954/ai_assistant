@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
+import {VoiceInputToggle} from '@/app/components'
 
 type MessageRole = 'assistant' | 'user'
 
@@ -94,10 +95,7 @@ export default function Chatbot() {
             </button>
           </form>
           <div className="mt-2 flex items-center justify-between text-[0.65rem] text-slate-400">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-slate-400" />
-              语音输入
-            </div>
+            <VoiceInputToggle />
             <div className="flex gap-3">
               <button
                 type="button"
