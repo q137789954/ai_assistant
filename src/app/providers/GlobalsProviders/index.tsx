@@ -50,11 +50,13 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
    * 统一判断并请求麦克风权限，成功后返回 true，失败或不支持时返回 false
    */
   const ensureMicrophonePermission = useCallback(async (): Promise<boolean> => {
+    console.log(isMicrophoneSupported());
     if (!isMicrophoneSupported()) {
       return false
     }
 
     const permissionState = await queryMicrophonePermission()
+    console.log('permissionState:', permissionState);
     if (permissionState === 'granted') {
       return true
     }
