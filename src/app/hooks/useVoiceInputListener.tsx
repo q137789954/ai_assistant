@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useRef } from 'react'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
+import { requestMicrophoneStream } from '@/app/utils/microphone'
 
 type VoiceInputListenerOptions = {
   onAudioChunk?: (chunk: Blob) => void
@@ -11,15 +12,6 @@ type VoiceInputListenerOptions = {
   mediaConstraints?: MediaStreamConstraints
   recorderOptions?: MediaRecorderOptions
   recorderTimeslice?: number
-}
-
-// 封装对麦克风的访问请求，便于统一处理浏览器兼容性错误
-const requestMicrophone = async (constraints?: MediaStreamConstraints) => {
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-    throw new Error('浏览器不支持麦克风访问')
-  }
-
-  return await navigator.mediaDevices.getUserMedia(constraints ?? { audio: true })
 }
 
 /**
@@ -56,7 +48,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
     const startRecorder = async () => {
       try {
         // 请求系统麦克风权限，成功后返回流
-        const stream = await requestMicrophone(mediaConstraints)
+        const stream = await requestMicrophoneStream(mediaConstraints)
         if (!active) {
           stream.getTracks().forEach((track) => track.stop())
           return
