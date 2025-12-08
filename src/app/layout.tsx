@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import GlobalsProviders from "./providers/GlobalsProviders";
+import {MicrophonePermissionDialog} from "@/app/components/features";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <GlobalsProviders>{children}</GlobalsProviders>
+        <GlobalsProviders>
+          {children}
+          <MicrophonePermissionDialog />
+        </GlobalsProviders>
       </body>
     </html>
   );

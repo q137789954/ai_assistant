@@ -7,7 +7,7 @@ type VoiceInputToggleProps = {
   className?: string
 }
 
-export default function VoiceInputToggle({ className = '' }: VoiceInputToggleProps) {
+export function VoiceInputToggle({ className = '' }: VoiceInputToggleProps) {
   const globals = useContext(GlobalsContext)
 
   if (!globals) {

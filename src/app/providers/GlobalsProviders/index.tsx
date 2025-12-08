@@ -1,6 +1,13 @@
 'use client'
 
-import React, { createContext, useCallback, useEffect, useMemo, useReducer } from 'react'
+import React, {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useState,
+} from 'react'
 import type { GlobalsContextValue, GlobalsAction, GlobalsState } from './types'
 import {
   isMicrophoneSupported,
@@ -32,6 +39,8 @@ const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
 
 export default function GlobalsProviders({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  // 顶层管理麦克风权限相关提示框状态，由 layout 统一展示对应提示
+  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false)
 
   useEffect(() => {
     const updateDeviceType = () => {
@@ -62,6 +71,8 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     }
 
     if (permissionState === 'denied') {
+      // 权限被拒绝时通知 layout 展示说明框，避免在 Provider 里直接耦合 UI
+      setPermissionDialogOpen(true)
       return false
     }
 
@@ -72,7 +83,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     } catch {
       return false
     }
-  }, [])
+  }, [setPermissionDialogOpen])
 
   /**
    * 在 SET_VOICE_INPUT_ENABLED 为 true 时先行检查权限，确保只有授权后才切换为开启
@@ -103,12 +114,18 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     () => ({
       deviceType,
       voiceInputEnabled,
-      dispatch: guardedDispatch
+      dispatch: guardedDispatch,
+      permissionDialogOpen,
+      setPermissionDialogOpen,
     }),
-    [deviceType, voiceInputEnabled, guardedDispatch]
+    [
+      deviceType,
+      voiceInputEnabled,
+      guardedDispatch,
+      permissionDialogOpen,
+      setPermissionDialogOpen,
+    ]
   )
 
-  return (
-    <GlobalsContext.Provider value={value}>{children}</GlobalsContext.Provider>
-  )
+  return <GlobalsContext.Provider value={value}>{children}</GlobalsContext.Provider>
 }

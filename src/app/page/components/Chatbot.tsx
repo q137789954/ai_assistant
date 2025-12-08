@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
-import {VoiceInputToggle} from '@/app/components'
+import {VoiceInputToggle} from '@/app/components/features'
 
 type MessageRole = 'assistant' | 'user'
 

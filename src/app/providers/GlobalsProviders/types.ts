@@ -1,4 +1,4 @@
-import type { Dispatch } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 
 export type DeviceType = 'desktop' | 'mobile'
 
@@ -13,4 +13,6 @@ export type GlobalsAction =
 
 export interface GlobalsContextValue extends GlobalsState {
   dispatch: Dispatch<GlobalsAction>
+  permissionDialogOpen: boolean
+  setPermissionDialogOpen: Dispatch<SetStateAction<boolean>>
 }
