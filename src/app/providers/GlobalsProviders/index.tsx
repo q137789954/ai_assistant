@@ -1,16 +1,11 @@
 'use client'
 
 import React, { createContext, useEffect, useMemo, useReducer } from 'react'
-import type { GlobalsContextValue, DeviceType, GlobalsAction } from './types'
+import type { GlobalsContextValue, GlobalsAction, GlobalsState } from './types'
 
 export const GlobalsContext = createContext<GlobalsContextValue | undefined>(undefined)
 
 const MOBILE_BREAKPOINT = 768
-
-type GlobalsState = {
-  deviceType: DeviceType
-  voiceInputEnabled: boolean
-}
 
 const initialState: GlobalsState = {
   deviceType: 'desktop',
