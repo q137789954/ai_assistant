@@ -4,141 +4,117 @@ import { useContext, useEffect, useRef } from 'react'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 
 type VoiceInputListenerOptions = {
-  onResult?: (transcript: string) => void
+  onAudioChunk?: (chunk: Blob) => void
+  onAudioStart?: () => void
+  onAudioStop?: () => void
   onError?: (error: Error) => void
-  onStart?: () => void
-  onEnd?: () => void
+  mediaConstraints?: MediaStreamConstraints
+  recorderOptions?: MediaRecorderOptions
+  recorderTimeslice?: number
 }
 
-interface SpeechRecognitionAlternative {
-  transcript?: string
-}
-
-interface SpeechRecognitionResult {
-  [index: number]: SpeechRecognitionAlternative
-}
-
-interface SpeechRecognitionEvent {
-  results: SpeechRecognitionResult[]
-}
-
-interface SpeechRecognitionErrorEvent {
-  error: string
-}
-
-interface VoiceInputEventMap {
-  result: SpeechRecognitionEvent
-  error: SpeechRecognitionErrorEvent
-  start: Event
-  end: Event
-}
-
-interface SpeechRecognitionLike {
-  lang: string
-  interimResults: boolean
-  continuous: boolean
-  start: () => void
-  stop: () => void
-  addEventListener: <K extends keyof VoiceInputEventMap>(
-    type: K,
-    listener: (event: VoiceInputEventMap[K]) => void
-  ) => void
-  removeEventListener: <K extends keyof VoiceInputEventMap>(
-    type: K,
-    listener: (event: VoiceInputEventMap[K]) => void
-  ) => void
-}
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike
-
-const getSpeechRecognitionCtor = (): SpeechRecognitionCtor | undefined => {
-  if (typeof window === 'undefined') {
-    return undefined
+// 封装对麦克风的访问请求，便于统一处理浏览器兼容性错误
+const requestMicrophone = async (constraints?: MediaStreamConstraints) => {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error('浏览器不支持麦克风访问')
   }
 
-  const browserWindow = window as typeof window & {
-    SpeechRecognition?: SpeechRecognitionCtor
-    webkitSpeechRecognition?: SpeechRecognitionCtor
-  }
-
-  return browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition
+  return await navigator.mediaDevices.getUserMedia(constraints ?? { audio: true })
 }
 
+/**
+ * useVoiceInputListener
+ *
+ * 监听全局语音输入开关，一旦开启就请求麦克风权限，启动 MediaRecorder
+ * 并通过回调把音频块（Blob）传给调用方，同时在关闭或组件卸载时停止录制。
+ */
 export default function useVoiceInputListener(options: VoiceInputListenerOptions = {}) {
   const globals = useContext(GlobalsContext)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
-  const { onResult, onError, onStart, onEnd } = options
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const {
+    onAudioChunk,
+    onAudioStart,
+    onAudioStop,
+    onError,
+    mediaConstraints,
+    recorderOptions,
+    recorderTimeslice = 1000,
+  } = options
+
+  // 通过 globals 上下文读取语音输入开关，false 时直接跳过录音逻辑
+  const voiceInputEnabled = globals?.voiceInputEnabled ?? false
 
   useEffect(() => {
-    if (!globals) {
+    if (!voiceInputEnabled) {
       return
     }
 
-    const { voiceInputEnabled } = globals
-    const RecognitionCtor = getSpeechRecognitionCtor()
+    let active = true
+    let cleanup = () => {}
 
-    if (!RecognitionCtor) {
-      onError?.(new Error('当前浏览器不支持语音识别'))
-      return
-    }
-
-    if (!recognitionRef.current) {
-      recognitionRef.current = new RecognitionCtor()
-      recognitionRef.current.lang = 'zh-CN'
-      recognitionRef.current.interimResults = true
-      recognitionRef.current.continuous = true
-    }
-
-    const recognition = recognitionRef.current
-
-    const handleResult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .map((result) => result[0]?.transcript ?? '')
-        .join('')
-        .trim()
-
-        console.log('识别结果：', transcript)
-      if (transcript) {
-        onResult?.(transcript)
-      }
-    }
-
-    const handleError = (event: SpeechRecognitionErrorEvent) => {
-      onError?.(new Error(event.error))
-    }
-
-    const startHandler = (_event: Event) => onStart?.()
-    const endHandler = (_event: Event) => onEnd?.()
-
-    recognition.addEventListener('result', handleResult)
-    recognition.addEventListener('error', handleError)
-    recognition.addEventListener('start', startHandler)
-    recognition.addEventListener('end', endHandler)
-
-    if (voiceInputEnabled) {
+    const startRecorder = async () => {
       try {
-        recognition.start()
+        // 请求系统麦克风权限，成功后返回流
+        const stream = await requestMicrophone(mediaConstraints)
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        mediaStreamRef.current = stream
+        // 创建 MediaRecorder 并监听数据、开始、结束等事件
+        const recorder = new MediaRecorder(stream, recorderOptions)
+        mediaRecorderRef.current = recorder
+
+        const handleData = (event: BlobEvent) => {
+          if (event.data && event.data.size > 0) {
+            onAudioChunk?.(event.data)
+          }
+        }
+
+        const handleStart = () => onAudioStart?.()
+        const handleStop = () => onAudioStop?.()
+
+        recorder.addEventListener('dataavailable', handleData)
+        recorder.addEventListener('start', handleStart)
+        recorder.addEventListener('stop', handleStop)
+
+        recorder.start(recorderTimeslice)
+
+        cleanup = () => {
+          // 清理事件监听，停止录音器和关闭流
+          recorder.removeEventListener('dataavailable', handleData)
+          recorder.removeEventListener('start', handleStart)
+          recorder.removeEventListener('stop', handleStop)
+          if (recorder.state !== 'inactive') {
+            try {
+              recorder.stop()
+            } catch {
+              // ignore stop errors
+            }
+          }
+          stream.getTracks().forEach((track) => track.stop())
+        }
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('启动语音监听失败'))
-      }
-    } else {
-      try {
-        recognition.stop()
-      } catch {
-        // ignore stop errors when recognition is not active
+        onError?.(error instanceof Error ? error : new Error('录音权限不足或启动失败'))
       }
     }
+
+    void startRecorder()
 
     return () => {
-      recognition.removeEventListener('result', handleResult)
-      recognition.removeEventListener('error', handleError)
-      recognition.removeEventListener('start', startHandler)
-      recognition.removeEventListener('end', endHandler)
-      try {
-        recognition.stop()
-      } catch {
-        // ignore stop errors when recognition is not active
-      }
+      active = false
+      cleanup()
     }
-  }, [globals, onEnd, onError, onResult, onStart])
+  }, [
+    voiceInputEnabled,
+    onAudioChunk,
+    onAudioStart,
+    onAudioStop,
+    onError,
+    mediaConstraints,
+    recorderOptions,
+    recorderTimeslice,
+  ])
 }
