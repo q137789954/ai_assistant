@@ -5,6 +5,13 @@ import { MicVAD, type RealTimeVADOptions } from '@ricky0123/vad-web'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 import type { UserSpeechItem } from '@/app/providers/GlobalsProviders/types'
 
+// 默认指向 public/onnx-runtime 目录，保证 wasm/模型/worker 依赖都可通过静态路径访问
+const DEFAULT_VAD_ASSET_PATH = '/onnx-runtime/'
+const DEFAULT_VAD_OPTIONS: Partial<RealTimeVADOptions> = {
+  baseAssetPath: DEFAULT_VAD_ASSET_PATH,
+  onnxWASMBasePath: DEFAULT_VAD_ASSET_PATH,
+}
+
 type VoiceInputListenerOptions = {
   /**
    * 一次完整说话结束后的原始 PCM（16k Float32）
@@ -60,7 +67,8 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
       try {
         const instance = await MicVAD.new({
-          ...(vadOptions ?? {}),
+          ...DEFAULT_VAD_OPTIONS,
+          ...vadOptions,
           // 浏览器自己从麦克风拿流；如果你想自己传 MediaStream，可以用 stream 选项
           onSpeechStart: () => {
             if (cancelled) return
