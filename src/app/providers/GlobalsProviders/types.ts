@@ -2,6 +2,14 @@ import type { Dispatch, SetStateAction } from 'react'
 
 export type DeviceType = 'desktop' | 'mobile'
 
+
+export interface UserSpeechItem {
+  id: string              // 用 Date.now + 随机数就行
+  audio: Float32Array     // Silero/VAD 输出的 16k PCM
+  sampleRate: number      // 固定 16000
+  createdAt: number       // 时间戳，方便后面做过期清理等
+}
+
 export type GlobalsState = {
   deviceType: DeviceType
   voiceInputEnabled: boolean
@@ -12,14 +20,15 @@ export type GlobalsState = {
   /**
    * 保存还未被处理的用户语音内容，按照录入顺序排入队列
    */
-  pendingUserSpeechQueue: string[]
+  pendingUserSpeech: UserSpeechItem | null
+  pendingUserSpeechQueue: UserSpeechItem[]
 }
 
 export type GlobalsAction =
   | { type: 'SET_DEVICE_TYPE'; payload: DeviceType }
   | { type: 'SET_VOICE_INPUT_ENABLED'; payload: boolean }
   | { type: 'SET_USER_SPEAKING'; payload: boolean }
-  | { type: 'ENQUEUE_USER_SPEECH'; payload: string }
+  | { type: 'ENQUEUE_USER_SPEECH'; payload: UserSpeechItem }
   | { type: 'DEQUEUE_USER_SPEECH' }
   | { type: 'CLEAR_USER_SPEECH_QUEUE' }
 

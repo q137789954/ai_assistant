@@ -19,46 +19,53 @@ export const GlobalsContext = createContext<GlobalsContextValue | undefined>(und
 
 const MOBILE_BREAKPOINT = 768
 
+// 初始化全局状态，包含设备类型、语音输入开关以及用户语音队列相关信息
 const initialState: GlobalsState = {
   deviceType: 'desktop',
   voiceInputEnabled: false,
   isUserSpeaking: false,
   pendingUserSpeechQueue: [],
+  pendingUserSpeech: null,
 }
 
 const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
   switch (action.type) {
     case 'SET_DEVICE_TYPE':
+      // 根据窗口尺寸更新设备类型，仅在变化时触发
       return state.deviceType === action.payload ? state : { ...state, deviceType: action.payload }
     case 'SET_VOICE_INPUT_ENABLED':
+      // 语音输入开关切换，避免重复写入同一值
       return state.voiceInputEnabled === action.payload
         ? state
         : { ...state, voiceInputEnabled: action.payload }
     case 'SET_USER_SPEAKING':
-      // 同步更新用户是否正在输入语音的状态
+      // 标记当前是否处于说话阶段用于 UI 或任务判断
       return state.isUserSpeaking === action.payload
         ? state
         : { ...state, isUserSpeaking: action.payload }
     case 'ENQUEUE_USER_SPEECH':
-      // 将新的用户语音内容追加到未处理队列末尾
+      // 将新语音内容追加队列，并同步设置当前正在处理的条目
       return {
         ...state,
+        pendingUserSpeech: action.payload,
         pendingUserSpeechQueue: [...state.pendingUserSpeechQueue, action.payload],
       }
     case 'DEQUEUE_USER_SPEECH':
-      // 已处理的语音内容出队，确保队列不会在空时变更
+      // 当前语音处理完成后从队列移除并更新下一条
       if (state.pendingUserSpeechQueue.length === 0) {
         return state
       }
+      const nextQueue = state.pendingUserSpeechQueue.slice(1)
       return {
         ...state,
-        pendingUserSpeechQueue: state.pendingUserSpeechQueue.slice(1),
+        pendingUserSpeechQueue: nextQueue,
+        pendingUserSpeech: nextQueue[0] ?? null,
       }
     case 'CLEAR_USER_SPEECH_QUEUE':
-      // 清空所有待处理的语音内容
+      // 重置队列相关状态，避免 lingering 的防御性写入
       return state.pendingUserSpeechQueue.length === 0
         ? state
-        : { ...state, pendingUserSpeechQueue: [] }
+        : { ...state, pendingUserSpeechQueue: [], pendingUserSpeech: null }
     default:
       return state
   }
@@ -69,6 +76,9 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
   // 顶层管理麦克风权限相关提示框状态，由 layout 统一展示对应提示
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false)
 
+  /**
+   * 监听窗口尺寸，在设备类型变化时更新 state，便于各处根据设备分支逻辑
+   */
   useEffect(() => {
     const updateDeviceType = () => {
       const nextType = window.innerWidth < MOBILE_BREAKPOINT ? 'mobile' : 'desktop'
@@ -84,11 +94,13 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     deviceType,
     voiceInputEnabled,
     isUserSpeaking,
+    pendingUserSpeech,
     pendingUserSpeechQueue,
   } = state
 
   /**
-   * 统一判断并请求麦克风权限，成功后返回 true，失败或不支持时返回 false
+   * 封装麦克风权限判断：先检查支持与已有权限，必要时发起请求
+   * 成功返回 true，失败/拒绝时记录状态并通过 layout 提前告知用户
    */
   const ensureMicrophonePermission = useCallback(async (): Promise<boolean> => {
     console.log(isMicrophoneSupported());
@@ -118,7 +130,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
   }, [setPermissionDialogOpen])
 
   /**
-   * 在 SET_VOICE_INPUT_ENABLED 为 true 时先行检查权限，确保只有授权后才切换为开启
+   * 用来包裹 dispatch 的回调，处理在开启语音输入时的权限约束和异步逻辑
    */
   const guardedDispatch = useCallback(
     (action: GlobalsAction) => {
@@ -142,11 +154,13 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     [dispatch, ensureMicrophonePermission, voiceInputEnabled]
   )
 
+  // useMemo 让 context 只在相关依赖变化时重新创建，防止不必要的 rerender
   const value: GlobalsContextValue = useMemo(
     () => ({
       deviceType,
       voiceInputEnabled,
       isUserSpeaking,
+      pendingUserSpeech,
       pendingUserSpeechQueue,
       dispatch: guardedDispatch,
       permissionDialogOpen,
@@ -156,6 +170,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
       deviceType,
       voiceInputEnabled,
       isUserSpeaking,
+      pendingUserSpeech,
       pendingUserSpeechQueue,
       guardedDispatch,
       permissionDialogOpen,
