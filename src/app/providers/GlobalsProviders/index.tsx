@@ -21,7 +21,9 @@ const MOBILE_BREAKPOINT = 768
 
 const initialState: GlobalsState = {
   deviceType: 'desktop',
-  voiceInputEnabled: false
+  voiceInputEnabled: false,
+  isUserSpeaking: false,
+  pendingUserSpeechQueue: [],
 }
 
 const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
@@ -32,6 +34,31 @@ const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
       return state.voiceInputEnabled === action.payload
         ? state
         : { ...state, voiceInputEnabled: action.payload }
+    case 'SET_USER_SPEAKING':
+      // 同步更新用户是否正在输入语音的状态
+      return state.isUserSpeaking === action.payload
+        ? state
+        : { ...state, isUserSpeaking: action.payload }
+    case 'ENQUEUE_USER_SPEECH':
+      // 将新的用户语音内容追加到未处理队列末尾
+      return {
+        ...state,
+        pendingUserSpeechQueue: [...state.pendingUserSpeechQueue, action.payload],
+      }
+    case 'DEQUEUE_USER_SPEECH':
+      // 已处理的语音内容出队，确保队列不会在空时变更
+      if (state.pendingUserSpeechQueue.length === 0) {
+        return state
+      }
+      return {
+        ...state,
+        pendingUserSpeechQueue: state.pendingUserSpeechQueue.slice(1),
+      }
+    case 'CLEAR_USER_SPEECH_QUEUE':
+      // 清空所有待处理的语音内容
+      return state.pendingUserSpeechQueue.length === 0
+        ? state
+        : { ...state, pendingUserSpeechQueue: [] }
     default:
       return state
   }
@@ -53,7 +80,12 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     return () => window.removeEventListener('resize', updateDeviceType)
   }, [dispatch])
 
-  const { deviceType, voiceInputEnabled } = state
+  const {
+    deviceType,
+    voiceInputEnabled,
+    isUserSpeaking,
+    pendingUserSpeechQueue,
+  } = state
 
   /**
    * 统一判断并请求麦克风权限，成功后返回 true，失败或不支持时返回 false
@@ -114,6 +146,8 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     () => ({
       deviceType,
       voiceInputEnabled,
+      isUserSpeaking,
+      pendingUserSpeechQueue,
       dispatch: guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,
@@ -121,6 +155,8 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     [
       deviceType,
       voiceInputEnabled,
+      isUserSpeaking,
+      pendingUserSpeechQueue,
       guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,
