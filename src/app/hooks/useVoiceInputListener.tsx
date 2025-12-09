@@ -16,11 +16,15 @@ export const FAST_VAD_PRESET: Partial<RealTimeVADOptions> = {
   model: 'v5',
 
   // 2. 阈值稍微调“硬”一点，减少噪音误触发
-  // 默认 0.5 / 0.35，这里略调高
+  // 判断概率是否足够大以判定为语音的阈值
   positiveSpeechThreshold: 0.65,
+  // 判断概率是否足够小以判定为非语音的阈值
   negativeSpeechThreshold: 0.4,
-  redemptionMs: 150,
-  preSpeechPadMs: 150,
+  // 在判定语音片段结束前需要持续遇到的非语音帧的毫秒数
+  redemptionMs: 500,
+  // 在语音片段前补充的音频时长（毫秒）
+  preSpeechPadMs: 50,
+  // 语音片段的最短允许持续时长（毫秒）
   minSpeechMs: 100,
 
   // 7. 如果你希望点“关闭语音输入”时也把尾巴提交，可以开这个
@@ -120,7 +124,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
         vadRef.current = instance
         instance.start()
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('[useVoiceInputListener] 初始化 MicVAD 失败', e)
         onError?.(e instanceof Error ? e : new Error(String(e)))
 
