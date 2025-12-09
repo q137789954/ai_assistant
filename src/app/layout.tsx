@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import GlobalsProviders from "./providers/GlobalsProviders";
-import {MicrophonePermissionDialog} from "@/app/components/features";
+import WebSocketProviders from "./providers/WebSocketProviders";
+import { MicrophonePermissionDialog } from "@/app/components/features";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,14 +25,19 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const websocketUrl =
+    process.env.NEXT_PUBLIC_WEBSOCKET_URL ??
+    "ws://localhost:3000/api/ws";
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <GlobalsProviders>
-          {children}
-          <MicrophonePermissionDialog />
+          <WebSocketProviders url={websocketUrl}>
+            {children}
+            <MicrophonePermissionDialog />
+          </WebSocketProviders>
         </GlobalsProviders>
       </body>
     </html>
