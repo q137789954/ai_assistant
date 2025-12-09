@@ -11,6 +11,9 @@ type WebSocketPayload = {
   data?: Record<string, unknown>;
 };
 
+// Edge 运行时中可能不存在全局 WebSocket 构造函数，使用数值常量避免引用 undefined
+const READY_STATE_OPEN = 1;
+
 /**
  * 生成一个兼容 Edge/Node 的客户端 ID，主要用于日志与广播事件标识。
  */
@@ -30,7 +33,7 @@ const serializePayload = (payload: WebSocketPayload) => JSON.stringify(payload);
  * 确保在 WebSocket 处于 OPEN 状态时发送数据，不可用时会静默丢弃或清理连接。
  */
 const safeSend = (socket: EdgeWebSocket, payload: WebSocketPayload) => {
-  if (socket.readyState !== WebSocket.OPEN) {
+  if (socket.readyState !== READY_STATE_OPEN) {
     return false;
   }
 
@@ -52,7 +55,7 @@ const broadcast = (payload: WebSocketPayload, excludeId?: string) => {
     if (excludeId && clientId === excludeId) {
       continue;
     }
-    if (socket.readyState !== WebSocket.OPEN) {
+    if (socket.readyState !== READY_STATE_OPEN) {
       clients.delete(clientId);
       continue;
     }
@@ -131,17 +134,33 @@ const handleClientMessage = (clientId: string, rawValue: unknown) => {
  * 对外暴露的入口，用于在 Edge API 路由中处理每个 WebSocket 连接。
  */
 export const handleWebSocketConnection = (socket: EdgeWebSocket) => {
+  console.debug("webSocketService: 处理新的 WebSocket 连接");
   const clientId = createClientId();
   clients.set(clientId, socket);
+  console.debug("webSocketService: 新客户端连接", {
+    clientId,
+    activeClients: clients.size,
+  });
 
   socket.addEventListener("message", (event) => {
+    console.debug("webSocketService: 收到消息", {
+      clientId,
+      data: event.data,
+    });
     handleClientMessage(clientId, event.data);
   });
 
   const dispose = () => cleanupClient(clientId);
 
-  socket.addEventListener("close", () => dispose());
-  socket.addEventListener("error", () => dispose());
+  socket.addEventListener("close", () => {
+    console.debug("webSocketService: 连接关闭", { clientId });
+    dispose();
+    console.debug("webSocketService: 客户端移除后活跃数量", { activeClients: clients.size });
+  });
+  socket.addEventListener("error", () => {
+    console.error("webSocketService: 连接错误", { clientId });
+    dispose();
+  });
 
   socket.accept();
 
