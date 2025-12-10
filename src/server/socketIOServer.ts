@@ -1,4 +1,5 @@
+import "dotenv/config";
 import { startSocketServer } from "./socketIO/server";
 
-// 通过子模块封装具体逻辑后，此处仅触发服务启动。
+// 先加载环境变量配置，再唤起 socket 服务启动逻辑。
 startSocketServer();

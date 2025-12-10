@@ -16,6 +16,7 @@
     "@ricky0123/vad-web": "^0.0.30",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
     "next": "16.0.7",
     "onnxruntime-web": "^1.23.2",
     "pixi-live2d-display": "^0.4.0",
