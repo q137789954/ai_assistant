@@ -49,19 +49,26 @@ export interface ButtonProps
 /**
  * 封装 shadcn/button 语义，提供统一的 className 合并与 ref 转发。
  */
-const Button = React.forwardRef<React.ElementRef<typeof Slot>, ButtonProps>(
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, fullWidth, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button'
+    const classes = clsx(
+      buttonVariants({ variant, size, fullWidth }),
+      className
+    )
+
+    if (asChild) {
+      // 如果通过 Slot 作为父组件渲染，ref 需要匹配 Slot 的返回类型
+      return (
+        <Slot
+          className={classes}
+          ref={ref as React.ForwardedRef<React.ElementRef<typeof Slot>>}
+          {...props}
+        />
+      )
+    }
 
     return (
-      <Comp
-        className={clsx(
-          buttonVariants({ variant, size, fullWidth }),
-          className
-        )}
-        ref={ref}
-        {...props}
-      />
+      <button className={classes} ref={ref} {...props} />
     )
   }
 )

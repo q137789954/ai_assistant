@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import type { Application } from 'pixi.js'
 import type { Live2DModel } from 'pixi-live2d-display/cubism4'
 
 const MODEL_PATH = '/hiyori_free/runtime/hiyori_free_t08.model3.json'
@@ -13,7 +14,8 @@ export default function Live2D() {
     const container = containerRef.current
     if (!container) return
 
-    let app: import('pixi.js').Application<HTMLCanvasElement> | null = null
+    // 使用类型定义避免在运行时引入 pixi.js，保持动态导入的方式
+    let app: Application | null = null
     let isUnmounted = false
     const updateLayout = () => {
       const model = modelRef.current
@@ -42,7 +44,8 @@ export default function Live2D() {
         const live2d = await import('pixi-live2d-display/cubism4')
         if (isUnmounted) return
 
-        app = new PIXI.Application<HTMLCanvasElement>({
+        // 创建用于绘制 Live2D 的 PIXI 应用，采用容器尺寸自动适配
+        app = new PIXI.Application({
           resizeTo: container,
           backgroundAlpha: 0,
           antialias: true,
