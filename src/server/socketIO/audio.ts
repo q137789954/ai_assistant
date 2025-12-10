@@ -52,7 +52,7 @@ export const isVoiceChunkMeta = (value: unknown): value is VoiceChunkMeta => {
 };
 
 const tryBuildFloat32Array = (
-  buffer: ArrayBuffer,
+  buffer: ArrayBufferLike,
   byteOffset = 0,
   byteLength?: number,
 ): Float32Array | null => {
