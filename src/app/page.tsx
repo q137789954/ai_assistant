@@ -6,8 +6,8 @@ import Chatbot from "./page/components/Chatbot";
 import { useVoiceInputListener } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
-// import Wave from './page/components/Wave'
-// import Live2DClient from './page/components/Live2DClient'
+import Wave from './page/components/Wave'
+import Live2DClient from './page/components/Live2DClient'
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -20,6 +20,7 @@ export default function Home() {
     connect,
     disconnect,
     sendMessage,
+    emitEvent,
     subscribe,
   } = useWebSocketContext();
 
@@ -31,6 +32,25 @@ export default function Home() {
       }),
     );
   }, [sendMessage]);
+
+  /**
+   * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
+   */
+  const handleVoiceChunk = useCallback(
+    (audio: Float32Array) => {
+      const chunkMeta = {
+        chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        sampleRate: 16000,
+        timestamp: new Date().toISOString(),
+        length: audio.length,
+      };
+      const sent = emitEvent("voice-chunk", chunkMeta, audio);
+      if (!sent) {
+        console.warn("语音帧发送失败，请检查 WebSocket 连接状态");
+      }
+    },
+    [emitEvent],
+  );
 
   useEffect(() => {
     const unsubscribe = subscribe((event) => {
@@ -44,9 +64,7 @@ export default function Home() {
   }, [subscribe]);
 
   useVoiceInputListener({
-    onSpeechSegment() {
-      // console.log("本次说话帧数：", audio.length); // 采样率 16k
-    },
+    onSpeechSegment: handleVoiceChunk,
     onError(error) {
       console.error("VAD 错误：", error);
     },
@@ -64,8 +82,8 @@ export default function Home() {
 
   return (
     <main className="h-full w-full relative flex flex-col">
-      {/* <Wave className='shrink-0' height={100} fillColor="color-mix(in srgb, oklch(95% calc(var(--chromatic-chroma-50) * 0.5) var(--chromatic-hue)) 80%, oklch(100% 0 360))"/> */}
-      {/* <div className="w-full h-full shrink grow"><Live2DClient /></div> */}
+      <Wave className='shrink-0' height={100} fillColor="color-mix(in srgb, oklch(95% calc(var(--chromatic-chroma-50) * 0.5) var(--chromatic-hue)) 80%, oklch(100% 0 360))"/>
+      <div className="w-full h-full shrink grow"><Live2DClient /></div>
       {globals?.isUserSpeaking && (
         <div className="pointer-events-none absolute top-16 right-6 rounded-2xl border border-green-300/50 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600 shadow-lg">
           检测到用户说话中...

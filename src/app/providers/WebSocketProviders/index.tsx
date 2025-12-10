@@ -45,6 +45,7 @@ const WebSocketProviders = ({
     connect,
     disconnect,
     sendMessage,
+    emitEvent,
   } = useWebSocket(url, {
     autoConnect,
     onOpen,
@@ -69,6 +70,7 @@ const WebSocketProviders = ({
       connect,
       disconnect,
       sendMessage,
+      emitEvent,
       subscribe,
     }),
     [status, lastMessage, lastError, isSupported, connect, disconnect, sendMessage, subscribe],

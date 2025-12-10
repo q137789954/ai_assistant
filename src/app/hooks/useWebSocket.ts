@@ -178,6 +178,21 @@ const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => 
     [],
   );
 
+  /**
+   * 通用的 emit 接口，可以发送除 `message` 外的自定义事件（如 voice-chunk）。
+   */
+  const emitEvent = useCallback(
+    (eventName: string, ...payload: unknown[]) => {
+      if (!socketRef.current || !socketRef.current.connected) {
+        return false;
+      }
+
+      socketRef.current.emit(eventName, ...payload);
+      return true;
+    },
+    [],
+  );
+
   const value = useMemo(
     () => ({
       status,
@@ -187,8 +202,9 @@ const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => 
       connect,
       disconnect,
       sendMessage,
+      emitEvent,
     }),
-    [status, lastMessage, lastError, connect, disconnect, sendMessage],
+    [status, lastMessage, lastError, connect, disconnect, sendMessage, emitEvent],
   );
 
   return value;

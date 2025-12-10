@@ -17,6 +17,10 @@ export type WebSocketProviderContextValue = {
   connect: () => void;
   disconnect: () => void;
   sendMessage: (payload: string | ArrayBuffer | ArrayBufferView) => boolean;
+  /**
+   * 发送任意自定义事件
+   */
+  emitEvent: (eventName: string, ...payload: unknown[]) => boolean;
   subscribe: (listener: WebSocketMessageListener) => () => void;
 };
 
