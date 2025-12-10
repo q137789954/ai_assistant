@@ -20,10 +20,11 @@
     "onnxruntime-web": "^1.23.2",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
-    "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -34,7 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.7",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "tsx": "^4.13.1"
+    "tsx": "^4.13.1",
+    "typescript": "^5"
   }
 }

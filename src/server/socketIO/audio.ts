@@ -1,11 +1,12 @@
 import { Socket } from "socket.io";
 import { serializePayload } from "./utils";
 import { VoiceBucket, VoiceChunkMeta } from "./types";
+import { finalizeAliyunStream, streamAudioToAliyun } from "./aliyunASR";
 
 /**
  * 合并窗口时间，超过该时间仍未收到新的片段就会触发一次合并并发出事件。
  */
-const VOICE_MERGE_WINDOW_MS = 300;
+const VOICE_MERGE_WINDOW_MS = 200;
 
 /**
  * 每个客户端的语音段缓冲区，确保合并时能够获取所有片段与定时器控制。
@@ -114,7 +115,7 @@ const processMergedSpeechForASR = (
   });
 };
 
-const flushVoiceSegments = (clientId: string, socket: Socket, sampleRate: number) => {
+const flushVoiceSegments = async (clientId: string, socket: Socket, sampleRate: number) => {
   const bucket = voiceSegmentBuckets.get(clientId);
   if (!bucket) {
     return;
@@ -141,6 +142,15 @@ const flushVoiceSegments = (clientId: string, socket: Socket, sampleRate: number
   socket.emit("message", payload);
 
   processMergedSpeechForASR(clientId, mergedAudio, sampleRate);
+
+  const asrTranscript = await finalizeAliyunStream(clientId);
+  if (asrTranscript) {
+    console.info("aliyunASR: 转写完成，准备发给大语言模型", {
+      clientId,
+      transcript: asrTranscript,
+    });
+    // TODO: 在此处把 asrTranscript 转给大语言模型，并处理返回的命令或文本结果
+  }
 };
 
 /**
@@ -163,6 +173,8 @@ export const queueVoiceSegment = (
     return;
   }
 
+  void streamAudioToAliyun(clientId, normalized, meta.sampleRate);
+
   const bucket = ensureVoiceBucket(clientId);
   bucket.segments.push(normalized);
 
@@ -171,6 +183,6 @@ export const queueVoiceSegment = (
   }
 
   bucket.timer = setTimeout(() => {
-    flushVoiceSegments(clientId, socket, meta.sampleRate);
+    void flushVoiceSegments(clientId, socket, meta.sampleRate);
   }, VOICE_MERGE_WINDOW_MS);
 };
