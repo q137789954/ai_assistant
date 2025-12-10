@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { io, type Socket } from "socket.io-client";
 
 export type WebSocketStatus =
   | "idle"
@@ -12,27 +13,33 @@ export type WebSocketStatus =
 
 export type UseWebSocketOptions = {
   autoConnect?: boolean;
-  protocols?: string | string[];
   onOpen?: (event: Event) => void;
   onMessage?: (event: MessageEvent) => void;
   onClose?: (event: CloseEvent) => void;
   onError?: (event: Event) => void;
 };
 
-const isClientSide = typeof window !== "undefined" && "WebSocket" in window;
+const isClientSide = typeof window !== "undefined";
+
+/**
+ * 将任意 payload 转为 MessageEvent 实例，使得上层逻辑依然可以通过 event.data 读取文本。
+ */
+const buildMessageEvent = (payload: unknown) => {
+  const data =
+    typeof payload === "string"
+      ? payload
+      : typeof payload === "object"
+      ? JSON.stringify(payload)
+      : String(payload);
+  return new MessageEvent("message", {
+    data,
+  });
+};
 
 const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => {
-  const {
-    autoConnect = true,
-    protocols,
-    onOpen,
-    onMessage,
-    onClose,
-    onError,
-  } = options;
+  const { autoConnect = true, onOpen, onMessage, onClose, onError } = options;
 
-  const socketRef = useRef<WebSocket | null>(null);
-
+  const socketRef = useRef<Socket | null>(null);
   const listenersRef = useRef({
     onOpen,
     onMessage,
@@ -54,69 +61,79 @@ const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => 
   }, [onOpen, onMessage, onClose, onError]);
 
   /**
-   * 只负责真正创建 WebSocket + 绑定事件，不直接 setState，
-   * 这样可以安全地在 useEffect 里调用。
+   * 使用 socket.io-client 创建连接并绑定所有生命周期回调。
    */
   const internalConnect = useCallback(() => {
-    if (!isClientSide) return;
-    if (!url) return;
-
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+    if (!isClientSide || !url) {
       return;
     }
 
-    const socket = protocols
-      ? new WebSocket(url, protocols)
-      : new WebSocket(url);
+    if (socketRef.current) {
+      return;
+    }
 
-    socket.addEventListener("open", (event) => {
-      setStatus("open");
-      setLastError(null);
-      listenersRef.current.onOpen?.(event);
+    const socket = io(url, {
+      autoConnect: false,
+      transports: ["websocket"],
     });
 
-    socket.addEventListener("message", (event) => {
+    socket.on("connect", () => {
+      setStatus("open");
+      setLastError(null);
+      listenersRef.current.onOpen?.(new Event("open"));
+    });
+
+    socket.on("message", (payload) => {
+      const event = buildMessageEvent(payload);
       setLastMessage(event);
       listenersRef.current.onMessage?.(event);
     });
 
-    socket.addEventListener("close", (event) => {
+    socket.on("disconnect", (reason) => {
+      const closeEvent = new CloseEvent("close", {
+        reason,
+        wasClean: reason !== "transport close",
+        code: 1000,
+      });
       setStatus("closed");
-      listenersRef.current.onClose?.(event);
-      // 确保只清掉当前这条 socket
+      listenersRef.current.onClose?.(closeEvent);
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
     });
 
-    socket.addEventListener("error", (event) => {
+    socket.on("error", () => {
+      const errorEvent = new Event("error");
       setStatus("error");
-      setLastError(event);
-      listenersRef.current.onError?.(event);
+      setLastError(errorEvent);
+      listenersRef.current.onError?.(errorEvent);
+    });
+
+    socket.on("connect_error", () => {
+      const errorEvent = new Event("error");
+      setStatus("error");
+      setLastError(errorEvent);
+      listenersRef.current.onError?.(errorEvent);
     });
 
     socketRef.current = socket;
-  }, [url, protocols]);
+    socket.connect();
+  }, [url]);
 
   /**
-   * 只负责真正调用 close，不直接 setState。
+   * 主动断开当前连接并清理引用。
    */
   const internalDisconnect = useCallback(() => {
-    if (!socketRef.current) return;
-
-    if (socketRef.current.readyState === WebSocket.CLOSED) {
-      // 已经是 closed，事件也触发过了，这里只清理引用即可
-      socketRef.current = null;
+    if (!socketRef.current) {
       return;
     }
 
-    socketRef.current.close();
-    // status 在 close 事件回调里更新为 'closed'
+    socketRef.current.disconnect();
+    socketRef.current = null;
   }, []);
 
   /**
-   * 暴露给组件用的 connect：可以设置为 "connecting"，然后走真正的连接逻辑。
-   * 注意：这个函数不会被 effect 调用，所以不会触发刚才那个 lint 规则。
+   * 向外暴露的 connect，可在 UI 中触发并首先设置状态。
    */
   const connect = useCallback(() => {
     setStatus("connecting");
@@ -124,7 +141,7 @@ const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => 
   }, [internalConnect]);
 
   /**
-   * 暴露给组件用的 disconnect：设置为 "closing"，然后走真正的断开逻辑。
+   * 向外暴露的 disconnect，用于主动释放 socket。
    */
   const disconnect = useCallback(() => {
     setStatus("closing");
@@ -132,8 +149,7 @@ const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => 
   }, [internalDisconnect]);
 
   /**
-   * autoConnect 逻辑：在 effect 里只调用 “不改 state 的内部版本”，
-   * 状态变化全部交给事件回调和外部动作来完成。
+   * autoConnect 逻辑：在具备 URL 时自动建立连接，卸载时 clean-up。
    */
   useEffect(() => {
     if (!autoConnect || !url) {
@@ -145,20 +161,24 @@ const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => 
     return () => {
       internalDisconnect();
     };
-  }, [url, autoConnect, protocols, internalConnect, internalDisconnect]);
+  }, [autoConnect, url, internalConnect, internalDisconnect]);
 
+  /**
+   * 通过 socket.io 发送 `message` 事件，返回是否成功。
+   */
   const sendMessage = useCallback(
     (payload: string | ArrayBuffer | ArrayBufferView) => {
-      if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+      if (!socketRef.current || !socketRef.current.connected) {
         return false;
       }
-      socketRef.current.send(payload);
+
+      socketRef.current.emit("message", payload);
       return true;
     },
     [],
   );
 
-  const memoized = useMemo(
+  const value = useMemo(
     () => ({
       status,
       lastMessage,
@@ -171,7 +191,7 @@ const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => 
     [status, lastMessage, lastError, connect, disconnect, sendMessage],
   );
 
-  return memoized;
+  return value;
 };
 
 export default useWebSocket;

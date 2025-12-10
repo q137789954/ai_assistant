@@ -10,9 +10,15 @@ const Live2D = dynamic(() => import('./Live2D'), {
 
 const SCRIPT_SRC = '/live2d/live2dcubismcore.min.js'
 
+/**
+ * 扩展浏览器 window，声明可能挂载的 Live2D Core，全局仅用于类型提示。
+ */
+type Live2DWindow = Window & { Live2DCubismCore?: unknown }
+
 function loadLive2DCore() {
   if (typeof window === 'undefined') return Promise.reject(new Error('浏览器环境需要 Live2D Core'))
-  if ((window as any).Live2DCubismCore) return Promise.resolve()
+  const live2dWindow = window as Live2DWindow
+  if (live2dWindow.Live2DCubismCore) return Promise.resolve()
 
   const existing = document.querySelector<HTMLScriptElement>(`script[data-live2d-core]`)
   if (existing) {

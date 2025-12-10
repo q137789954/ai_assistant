@@ -44,7 +44,7 @@ export default function Home() {
   }, [subscribe]);
 
   useVoiceInputListener({
-    onSpeechSegment(audio) {
+    onSpeechSegment() {
       // console.log("本次说话帧数：", audio.length); // 采样率 16k
     },
     onError(error) {

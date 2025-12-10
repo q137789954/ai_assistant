@@ -18,7 +18,6 @@ export const WebSocketContext = createContext<WebSocketProviderContextValue | un
 const WebSocketProviders = ({
   children,
   url,
-  protocols,
   autoConnect = true,
   onOpen,
   onClose,
@@ -48,7 +47,6 @@ const WebSocketProviders = ({
     sendMessage,
   } = useWebSocket(url, {
     autoConnect,
-    protocols,
     onOpen,
     onMessage: handleMessage,
     onClose,

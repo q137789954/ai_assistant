@@ -7,7 +7,8 @@
     "build": "next build",
     "build:no_lint": "SKIP_ESLINT=1 NEXT_SKIP_TYPE_CHECK=1 next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "socket-server": "tsx src/server/socketIOServer.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -19,6 +20,8 @@
     "onnxruntime-web": "^1.23.2",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
@@ -31,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.7",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "tsx": "^4.13.1"
   }
 }

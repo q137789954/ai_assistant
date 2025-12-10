@@ -34,3 +34,11 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## WebSocket 服务
+
+为了规避 Edge Serverless 对长连接的限制，本项目将实时通信单独拆出为一个基于 `socket.io` 的 Node 服务。使用时可以：
+
+1. 运行 `pnpm socket-server` 启动 `socket.io` 服务（默认监听 `4000` 端口，可通过 `SOCKET_SERVER_PORT` 环境变量调整）。
+2. 启动 Next.js 项目 `pnpm dev`，前端会通过 `NEXT_PUBLIC_SOCKET_SERVER_URL`（默认 `http://localhost:4000`）连接到该服务。
+3. 如需跨域，可以通过 `SOCKET_SERVER_CORS_ORIGIN` 定制允许的来源；在生产环境把 `NEXT_PUBLIC_SOCKET_SERVER_URL` 指向部署后的 socket 服务地址即可。

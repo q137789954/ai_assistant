@@ -26,8 +26,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const websocketUrl =
+    process.env.NEXT_PUBLIC_SOCKET_SERVER_URL ??
     process.env.NEXT_PUBLIC_WEBSOCKET_URL ??
-    "/api/ws";
+    "http://localhost:4000";
   return (
     <html lang="en">
       <body

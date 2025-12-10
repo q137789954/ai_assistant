@@ -26,7 +26,6 @@ export type WebSocketProviderContextValue = {
 export type WebSocketProviderProps = {
   children: ReactNode;
   url: string;
-  protocols?: string | string[];
   autoConnect?: boolean;
   onOpen?: (event: Event) => void;
   onClose?: (event: CloseEvent) => void;
