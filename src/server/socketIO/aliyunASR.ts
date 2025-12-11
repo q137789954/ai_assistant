@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createHmac, randomUUID } from "node:crypto";
 import WebSocket from "ws";
+import { getAliyunConfig, getAliyunToken, type AliyunConfig } from "./aliyunToken";
 
 /**
  * 创建一个简单的 deferred，用于在异步事件里暴露 resolve 方法。
@@ -11,34 +11,6 @@ const createDeferred = <T>() => {
     resolve = res;
   });
   return { promise, resolve };
-};
-
-/**
- * 定义当前服务所需的阿里云 ASR 配置变量，以便随时调整。
- */
-const getAliyunConfig = () => {
-  const accessKeyId = process.env.ALIYUN_ASR_ACCESS_KEY_ID;
-  const accessKeySecret = process.env.ALIYUN_ASR_ACCESS_KEY_SECRET;
-  const appKey = process.env.ALIYUN_ASR_APP_KEY;
-  const endpoint = process.env.ALIYUN_ASR_ENDPOINT || "nls-gateway.cn-shanghai.aliyuncs.com";
-  const rawPath = process.env.ALIYUN_ASR_PATH || "/stream/v1/ir";
-  const format = process.env.ALIYUN_ASR_FORMAT || "pcm";
-  const version = process.env.ALIYUN_ASR_VERSION || "2019-02-28";
-
-  if (!accessKeyId || !accessKeySecret || !appKey) {
-    throw new Error("缺少阿里云 ASR 的认证配置，请在 .env 中补全 ALIYUN_ASR_ACCESS_KEY_ID/SECRET/APP_KEY");
-  }
-
-  const path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
-  return {
-    accessKeyId,
-    accessKeySecret,
-    appKey,
-    endpoint,
-    path,
-    format,
-    version,
-  };
 };
 
 /**
@@ -70,38 +42,15 @@ const float32ToInt16 = (input: Float32Array) => {
   return output;
 };
 
-/**
- * 按照阿里云 OpenAPI 的规范对字符进行 percent encode。
- */
-const percentEncode = (value: string) =>
-  encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
-
-/**
- * 基于当前配置生成 WebSocket 的鉴权链接，包括时间戳、随机数和签名。
- */
-const buildWebSocketUrl = (config: ReturnType<typeof getAliyunConfig>, sampleRate: number) => {
-  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const params: Record<string, string> = {
-    AccessKeyId: config.accessKeyId,
-    AppKey: config.appKey,
-    Format: "json",
-    SampleRate: String(sampleRate),
-    SignatureMethod: "HMAC-SHA1",
-    SignatureNonce: randomUUID(),
-    SignatureVersion: "1.0",
-    Timestamp: timestamp,
-    Version: config.version,
-  };
-
-  const canonicalized = Object.keys(params)
-    .sort()
-    .map((key) => `${percentEncode(key)}=${percentEncode(params[key])}`)
-    .join("&");
-
-  const stringToSign = ["GET", config.endpoint, config.path, canonicalized].join("\n");
-  const signature = createHmac("sha1", `${config.accessKeySecret}&`).update(stringToSign).digest("base64");
-
-  return `wss://${config.endpoint}${config.path}?${canonicalized}&Signature=${percentEncode(signature)}`;
+const buildWebSocketUrl = (config: AliyunConfig, sampleRate: number, token: string) => {
+  const params = new URLSearchParams({
+    appkey: config.appKey,
+    token,
+    format: config.format,
+    sample_rate: String(sampleRate),
+  });
+  // 临时 Token 鉴权，仅需携带 AppKey、token 与样本信息即可完成连接。
+  return `wss://${config.endpoint}${config.path}?${params.toString()}`;
 };
 
 /**
@@ -207,7 +156,14 @@ const ensureAliyunSession = async (clientId: string, sampleRate: number) => {
   }
 
   const config = getAliyunConfig();
-  const url = buildWebSocketUrl(config, sampleRate);
+  let token: string;
+  try {
+    token = await getAliyunToken(config);
+  } catch (error) {
+    console.error("aliyunASR: 获取阿里云 Token 失败", error);
+    throw error;
+  }
+  const url = buildWebSocketUrl(config, sampleRate, token);
   const socket = new WebSocket(url, { perMessageDeflate: false });
   const deferred = createDeferred<string | null>();
   const ready = new Promise<void>((resolve, reject) => {
