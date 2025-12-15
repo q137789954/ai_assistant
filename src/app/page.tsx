@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { signIn, signOut, useSession } from "next-auth/react";
 
 import Chatbot from "./page/components/Chatbot";
 import { useVoiceInputListener } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
-import Wave from './page/components/Wave'
-import Live2DClient from './page/components/Live2DClient'
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const [messageLog, setMessageLog] = useState<string[]>([]);
+  const { data: session, status: authStatus } = useSession();
 
   const {
     status,
@@ -82,6 +82,32 @@ export default function Home() {
 
   return (
     <main className="h-full w-full relative flex flex-col">
+      {/* 右上角：登录/登出入口（便于快速验证登录注册功能） */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        {authStatus === "authenticated" ? (
+          <>
+            <span className="rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs text-slate-700 shadow-sm">
+              {session.user?.name || session.user?.email || "已登录"}
+            </span>
+            <button
+              type="button"
+              className="rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-500"
+              onClick={() => signOut({ callbackUrl: "/" })}
+            >
+              退出
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-500"
+            onClick={() => signIn(undefined, { callbackUrl: "/" })}
+          >
+            登录
+          </button>
+        )}
+      </div>
+
       {/* <Wave className='shrink-0' height={100} fillColor="color-mix(in srgb, oklch(95% calc(var(--chromatic-chroma-50) * 0.5) var(--chromatic-hue)) 80%, oklch(100% 0 360))"/> */}
       {/* <div className="w-full h-full shrink grow"><Live2DClient /></div> */}
       {globals?.isUserSpeaking && (

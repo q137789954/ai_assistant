@@ -1,0 +1,80 @@
+// Prisma 数据模型定义
+// - 使用 PostgreSQL 作为数据库
+// - 兼容 next-auth 的 PrismaAdapter 默认表结构（User/Account/Session/VerificationToken）
+// - 额外增加 `passwordHash` 字段，用于“账号密码”注册/登录（Credentials Provider）
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  /// 主键：next-auth 推荐使用字符串 ID（cuid）
+  id            String    @id @default(cuid())
+  name          String?
+  /// 邮箱（账号密码登录会用到）；OAuth 登录也会写入 email
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  /// 本项目扩展字段：密码哈希（OAuth 用户可为空）
+  passwordHash  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+}
+
+model Account {
+  /// 主键：使用 cuid，便于跨数据库兼容
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+
+  refresh_token String?
+  access_token  String?
+  expires_at    Int?
+  token_type    String?
+  scope         String?
+  id_token      String?
+  session_state String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+

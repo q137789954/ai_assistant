@@ -4,6 +4,7 @@ import "./globals.css";
 import GlobalsProviders from "./providers/GlobalsProviders";
 import WebSocketProviders from "./providers/WebSocketProviders";
 import { MicrophonePermissionDialog } from "@/app/components/features";
+import AuthProviders from "@/app/providers/AuthProviders";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,12 +35,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <GlobalsProviders>
-          <WebSocketProviders url={websocketUrl}>
-            {children}
-            <MicrophonePermissionDialog />
-          </WebSocketProviders>
-        </GlobalsProviders>
+        <AuthProviders>
+          <GlobalsProviders>
+            <WebSocketProviders url={websocketUrl}>
+              {children}
+              <MicrophonePermissionDialog />
+            </WebSocketProviders>
+          </GlobalsProviders>
+        </AuthProviders>
       </body>
     </html>
   );

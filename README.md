@@ -42,3 +42,30 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 1. 运行 `pnpm socket-server` 启动 `socket.io` 服务（默认监听 `4000` 端口，可通过 `SOCKET_SERVER_PORT` 环境变量调整）。
 2. 启动 Next.js 项目 `pnpm dev`，前端会通过 `NEXT_PUBLIC_SOCKET_SERVER_URL`（默认 `http://localhost:4000`）连接到该服务。
 3. 如需跨域，可以通过 `SOCKET_SERVER_CORS_ORIGIN` 定制允许的来源；在生产环境把 `NEXT_PUBLIC_SOCKET_SERVER_URL` 指向部署后的 socket 服务地址即可。
+
+## 登录注册（next-auth + Prisma + PostgreSQL）
+
+### 1) 环境变量
+
+请在 `.env` 中确保已配置（参考 `.env.example`）：
+
+- `DATABASE_URL`：PostgreSQL 连接串
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`：Google OAuth Client
+- `NEXTAUTH_URL`：本地一般为 `http://localhost:3000`
+- `NEXTAUTH_SECRET`：随机长字符串（建议 `openssl rand -base64 48` 生成）
+
+Google Console 里需要配置回调地址（Redirect URI）：
+
+- `http://localhost:3000/api/auth/callback/google`
+
+### 2) 初始化数据库（Prisma）
+
+```bash
+pnpm install
+pnpm exec prisma migrate dev --name init
+```
+
+### 3) 使用方式
+
+- 登录页：`/login`
+- 注册页：`/register`
