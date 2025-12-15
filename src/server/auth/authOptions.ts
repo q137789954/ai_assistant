@@ -23,6 +23,37 @@ export const authOptions: NextAuthOptions = {
    */
   secret: process.env.NEXTAUTH_SECRET,
 
+  /**
+   * 允许 next-auth 信任当前请求的 Host 信息
+   * - 在一些新版本 Next/代理环境下，未开启可能会导致构建回调 URL/issuer 时失败，进而出现 OAuthSignin
+   */
+  trustHost: true,
+
+  /**
+   * 开发环境开启调试日志，便于排查 OAuthSignin 等问题
+   * - 你可以在 `pnpm dev` 的终端里看到 next-auth 的详细报错
+   */
+  debug: process.env.NODE_ENV === "development",
+
+  /**
+   * 自定义 logger：把 next-auth 内部错误输出到控制台
+   * - 当遇到 /login?error=OAuthSignin 时，这里通常会给出更具体的原因（例如 clientId 缺失、回调地址不匹配等）
+   */
+  logger: {
+    error(code, metadata) {
+      // eslint-disable-next-line no-console
+      console.error("[next-auth][error]", code, metadata);
+    },
+    warn(code) {
+      // eslint-disable-next-line no-console
+      console.warn("[next-auth][warn]", code);
+    },
+    debug(code, metadata) {
+      // eslint-disable-next-line no-console
+      console.debug("[next-auth][debug]", code, metadata);
+    },
+  },
+
   session: {
     /**
      * 使用数据库会话（Session 表）
@@ -44,6 +75,15 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      /**
+       * 适当放宽请求超时时间
+       * - 你当前的报错是：outgoing request timed out after 3500ms
+       * - 这通常发生在本机/服务器访问 Google 的 OAuth/OpenID 端点不稳定或被阻断时
+       * - 提高 timeout 只能缓解“网络慢”的情况；如果网络被墙/无法访问，需要配置代理或 VPN
+       */
+      httpOptions: {
+        timeout: 15000,
+      },
     }),
 
     /**
@@ -101,4 +141,3 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
-

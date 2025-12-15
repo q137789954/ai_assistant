@@ -16,6 +16,7 @@ export default function LoginPage() {
     () => searchParams.get("callbackUrl") || "/",
     [searchParams],
   );
+  const authError = useMemo(() => searchParams.get("error"), [searchParams]);
 
   const { status } = useSession();
   const [email, setEmail] = useState("");
@@ -56,6 +57,16 @@ export default function LoginPage() {
       <p className="mt-2 text-sm text-slate-600">
         使用 Google 或账号密码登录。
       </p>
+
+      {authError && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="font-medium">登录错误：{authError}</p>
+          <p className="mt-1 text-xs text-amber-700">
+            常见原因：Google OAuth 回调地址未在 Google Console 配置、或
+            `NEXTAUTH_URL` 与当前访问域名不一致。
+          </p>
+        </div>
+      )}
 
       <button
         type="button"
