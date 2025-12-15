@@ -49,6 +49,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("voice-chunk", (meta, audio) => {
+    console.log("socketIOServer: 收到语音片段", { clientId, meta });
     queueVoiceSegment(clientId, socket, meta, audio);
   });
 
