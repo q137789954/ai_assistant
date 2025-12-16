@@ -162,9 +162,12 @@ export default function Home() {
         )}
       </div>
 
-      <div className="absolute bottom-4 right-4 w-120 h-dvh py-16 pointer-events-auto">
-        <Chatbot />
-      </div>
+      {/* 根据全局配置控制 Chatbot 是否渲染，默认保持隐藏 */}
+      {globals?.chatbotVisible && (
+        <div className="absolute bottom-4 right-4 w-120 h-dvh py-16 pointer-events-auto">
+          <Chatbot />
+        </div>
+      )}
     </main>
   );
 }

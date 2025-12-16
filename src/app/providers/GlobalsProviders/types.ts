@@ -22,6 +22,10 @@ export type GlobalsState = {
    */
   pendingUserSpeech: UserSpeechItem | null
   pendingUserSpeechQueue: UserSpeechItem[]
+  /**
+   * 控制 Chatbot 组件在主页面的是否展示状态，默认不显示
+   */
+  chatbotVisible: boolean
 }
 
 export type GlobalsAction =
@@ -31,6 +35,7 @@ export type GlobalsAction =
   | { type: 'ENQUEUE_USER_SPEECH'; payload: UserSpeechItem }
   | { type: 'DEQUEUE_USER_SPEECH' }
   | { type: 'CLEAR_USER_SPEECH_QUEUE' }
+  | { type: 'SET_CHATBOT_VISIBILITY'; payload: boolean }
 
 export interface GlobalsContextValue extends GlobalsState {
   dispatch: Dispatch<GlobalsAction>

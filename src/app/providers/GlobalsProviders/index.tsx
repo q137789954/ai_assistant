@@ -26,6 +26,7 @@ const initialState: GlobalsState = {
   isUserSpeaking: false,
   pendingUserSpeechQueue: [],
   pendingUserSpeech: null,
+  chatbotVisible: false,
 }
 
 const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
@@ -66,6 +67,11 @@ const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
       return state.pendingUserSpeechQueue.length === 0
         ? state
         : { ...state, pendingUserSpeechQueue: [], pendingUserSpeech: null }
+    case 'SET_CHATBOT_VISIBILITY':
+      // 控制 Chatbot 组件显示状态，避免重复派发相同值
+      return state.chatbotVisible === action.payload
+        ? state
+        : { ...state, chatbotVisible: action.payload }
     default:
       return state
   }
@@ -96,6 +102,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     isUserSpeaking,
     pendingUserSpeech,
     pendingUserSpeechQueue,
+    chatbotVisible,
   } = state
 
   /**
@@ -157,6 +164,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
       isUserSpeaking,
       pendingUserSpeech,
       pendingUserSpeechQueue,
+      chatbotVisible,
       dispatch: guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,
@@ -167,6 +175,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
       isUserSpeaking,
       pendingUserSpeech,
       pendingUserSpeechQueue,
+      chatbotVisible,
       guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,
