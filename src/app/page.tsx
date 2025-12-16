@@ -109,7 +109,6 @@ export default function Home() {
       </div>
 
       {/* <Wave className='shrink-0' height={100} fillColor="color-mix(in srgb, oklch(95% calc(var(--chromatic-chroma-50) * 0.5) var(--chromatic-hue)) 80%, oklch(100% 0 360))"/> */}
-      {/* <div className="w-full h-full shrink grow"><Live2DClient /></div> */}
       {globals?.isUserSpeaking && (
         <div className="pointer-events-none absolute top-16 right-6 rounded-2xl border border-green-300/50 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600 shadow-lg">
           检测到用户说话中...
