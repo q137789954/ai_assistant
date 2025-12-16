@@ -82,13 +82,14 @@ export default function GrokTestPage() {
 
   const callGrokApi = useCallback(
     async (params: { message: string; reset?: boolean }) => {
-      // 1) 组织请求体
+      // 1) 组织请求体（流式输出：stream=true，服务端返回 SSE）
       const body: Record<string, unknown> = {
         message: params.message,
         // conversationId：如果为空则不传，让服务端创建新会话
         ...(conversationId ? { conversationId } : {}),
         systemPrompt,
         model,
+        stream: true,
       };
 
       // temperature：只有当用户输入了数字时才传
@@ -111,22 +112,122 @@ export default function GrokTestPage() {
         body: JSON.stringify(body),
       });
 
-      const payload = (await response.json().catch(() => null)) as
-        | GlobalResponse<GrokApiData>
-        | null;
-
-      // 3) 统一错误处理：兼容 withGlobalResponse 的 message
-      if (!response.ok || !payload?.success) {
-        throw new Error(payload?.message ?? "调用 Grok 接口失败");
+      // 2) 预期返回 SSE
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("text/event-stream")) {
+        // 兼容：如果服务端没走流式，尝试按 JSON 解析，给出更友好的错误
+        const payload = (await response.json().catch(() => null)) as
+          | GlobalResponse<GrokApiData>
+          | null;
+        throw new Error(payload?.message ?? "接口未返回 SSE（text/event-stream）");
       }
 
-      if (!payload.data?.conversationId) {
-        throw new Error("接口返回缺少 conversationId");
+      if (!response.ok) {
+        throw new Error("调用 Grok 接口失败");
       }
 
-      return payload.data;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("浏览器不支持流式读取（Response.body 为空）");
+      }
+
+      // 3) 读取 SSE：event/meta|delta|done|error
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      // 首先创建一个“占位的 assistant 消息”，后续持续追加 delta
+      const assistantId = safeRandomId();
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: "assistant", content: "" },
+      ]);
+      scrollToBottom();
+
+      const appendAssistantDelta = (delta: string) => {
+        if (!delta) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId ? { ...m, content: m.content + delta } : m,
+          ),
+        );
+      };
+
+      const parseAndHandleSseBlock = (block: string) => {
+        // block 形如：
+        // event: delta
+        // data: {"delta":"..."}
+        const lines = block
+          .split("\n")
+          .map((l) => l.trimEnd())
+          .filter(Boolean);
+
+        let eventName = "";
+        const dataLines: string[] = [];
+
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            eventName = line.slice("event:".length).trim();
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice("data:".length).trim());
+          }
+        }
+
+        const dataText = dataLines.join("\n");
+
+        if (!eventName) {
+          return;
+        }
+
+        if (eventName === "meta") {
+          const parsed = JSON.parse(dataText) as { conversationId?: string };
+          if (parsed.conversationId) {
+            setConversationId(parsed.conversationId);
+          }
+          return;
+        }
+
+        if (eventName === "delta") {
+          const parsed = JSON.parse(dataText) as { delta?: string };
+          if (parsed.delta) {
+            appendAssistantDelta(parsed.delta);
+            scrollToBottom();
+          }
+          return;
+        }
+
+        if (eventName === "error") {
+          const parsed = JSON.parse(dataText) as { message?: string };
+          throw new Error(parsed.message ?? "服务端流式返回错误");
+        }
+
+        // done：不需要特殊处理
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE 事件以空行分隔（\n\n）
+        while (true) {
+          const separatorIndex = buffer.indexOf("\n\n");
+          if (separatorIndex === -1) break;
+          const block = buffer.slice(0, separatorIndex);
+          buffer = buffer.slice(separatorIndex + 2);
+          if (!block.trim()) continue;
+          parseAndHandleSseBlock(block);
+        }
+      }
+
+      // 4) 流读完后，返回一个“近似结果”（仅用于需要时）
+      // - 流式场景下 reply 已在 UI 中拼接完成，这里只返回 conversationId
+      return {
+        conversationId: conversationId || "",
+        reply: "",
+      };
     },
-    [conversationId, model, systemPrompt, temperature],
+    [conversationId, model, scrollToBottom, systemPrompt, temperature],
   );
 
   const handleSend = useCallback(
@@ -149,20 +250,8 @@ export default function GrokTestPage() {
       scrollToBottom();
 
       try {
-        // 2) 调用后端 Grok 接口
-        const data = await callGrokApi({ message: text });
-
-        // 3) 保存/更新 conversationId（用于后续“上下文记忆”）
-        setConversationId(data.conversationId);
-
-        // 4) 将助手回复追加到 UI
-        const assistantMessage: ChatMessage = {
-          id: safeRandomId(),
-          role: "assistant",
-          content: data.reply || "(空回复)",
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
-        scrollToBottom();
+        // 2) 调用后端 Grok 接口（流式：会在 callGrokApi 内创建 assistant 占位并持续追加 delta）
+        await callGrokApi({ message: text });
       } catch (err) {
         setError(err instanceof Error ? err.message : "发生未知错误");
       } finally {
@@ -184,17 +273,7 @@ export default function GrokTestPage() {
     setError("");
     setLoading(true);
     try {
-      // 发送一条“空消息”不合理，所以这里用一个固定的指令型消息，同时带 reset=true
-      // - 这样可以测试：服务端先清空会话，再根据该消息生成回复（并建立新的上下文）
-      const data = await callGrokApi({
-        message: "请确认你已清空之前的对话上下文，并从头开始。",
-        reset: true,
-      });
-
-      // reset 后会话 ID 可能保持不变（取决于服务端实现），这里以返回为准
-      setConversationId(data.conversationId);
-
-      // 清空 UI 历史，只保留开场提示 + 本次系统确认
+      // 先清空 UI 历史，只保留开场提示（避免被后续流式追加时覆盖）
       setMessages([
         {
           id: safeRandomId(),
@@ -202,19 +281,20 @@ export default function GrokTestPage() {
           content:
             "已请求重置上下文。接下来发送的消息将从新的上下文开始（取决于服务端存储策略）。",
         },
-        {
-          id: safeRandomId(),
-          role: "assistant",
-          content: data.reply || "(空回复)",
-        },
       ]);
-      scrollToBottom();
+
+      // 发送一条“空消息”不合理，所以这里用一个固定的指令型消息，同时带 reset=true
+      // - 这样可以测试：服务端先清空会话，再根据该消息生成回复（并建立新的上下文）
+      await callGrokApi({
+        message: "请确认你已清空之前的对话上下文，并从头开始。",
+        reset: true,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "发生未知错误");
     } finally {
       setLoading(false);
     }
-  }, [callGrokApi, conversationId, scrollToBottom]);
+  }, [callGrokApi, conversationId]);
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-10">
@@ -357,4 +437,3 @@ export default function GrokTestPage() {
     </div>
   );
 }
-

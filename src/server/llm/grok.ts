@@ -3,6 +3,7 @@ import type {
   ChatCompletion,
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
+import type { ChatCompletionChunk } from "openai/resources/chat/completions";
 import { randomUUID } from "crypto";
 
 /**
@@ -278,4 +279,88 @@ export async function grokChat(input: GrokChatInput): Promise<GrokChatResult> {
   conv.updatedAt = Date.now();
 
   return { conversationId: conv.id, reply, raw };
+}
+
+export type GrokChatStreamInput = GrokChatInput & {
+  /**
+   * 流式输出时是否启用
+   * - 该字段主要用于上层 API 更直观；实际在本函数中默认就是 stream=true
+   */
+  stream?: true;
+};
+
+/**
+ * 与 Grok 对话（流式输出 + 上下文记忆）
+ * ------------------------------------------------------------
+ * 使用方式：
+ * - for await (const delta of grokChatStream(...)) { ... }
+ *
+ * 上下文写入策略：
+ * - 为避免“失败污染对话”，这里在完整流结束后才把 user/assistant 写回历史。
+ * - 如果你更希望在开始时就写入 user（例如用于并发占位），可改为先写入 user，再在异常时回滚。
+ */
+export async function* grokChatStream(
+  input: GrokChatStreamInput,
+): AsyncGenerator<{
+  conversationId: string;
+  delta: string;
+}> {
+  const userMessage = input.userMessage?.trim() ?? "";
+  if (!userMessage) {
+    throw new Error("userMessage 不能为空");
+  }
+
+  const conv = getOrCreateConversation({
+    conversationId: input.conversationId,
+    systemPrompt: input.systemPrompt,
+  });
+
+  /**
+   * 先产出一次“空 delta”，用于上层尽早拿到 conversationId（例如 SSE meta 事件）
+   * - 上层收到后可忽略 delta===""，仅使用 conversationId
+   */
+  yield { conversationId: conv.id, delta: "" };
+
+  // 构造本轮要发给模型的 messages：system + history + 本轮 user
+  const requestMessages: ChatCompletionMessageParam[] = [
+    { role: "system", content: conv.systemPrompt },
+    ...conv.messages,
+    { role: "user", content: userMessage },
+  ];
+
+  const client = getGrokClient();
+
+  // OpenAI SDK 的 stream 模式会返回一个可 async-iterate 的流
+  const stream = (await client.chat.completions.create({
+    model: input.model?.trim() || DEFAULT_GROK_MODEL,
+    messages: requestMessages,
+    temperature: input.temperature,
+    stream: true,
+  })) as AsyncIterable<ChatCompletionChunk>;
+
+  let fullReply = "";
+
+  try {
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (!delta) {
+        continue;
+      }
+      fullReply += delta;
+      yield { conversationId: conv.id, delta };
+    }
+
+    // 流结束后写入“对话记忆”
+    conv.messages.push({ role: "user", content: userMessage });
+    conv.messages.push({ role: "assistant", content: fullReply });
+
+    // 控制单个对话的最大消息数量：只保留最近 MAX_MESSAGES 条（从尾部保留）
+    if (conv.messages.length > MAX_MESSAGES) {
+      conv.messages = conv.messages.slice(conv.messages.length - MAX_MESSAGES);
+    }
+    conv.updatedAt = Date.now();
+  } catch (error) {
+    // 不写入历史，直接抛出，让上层决定如何处理
+    throw error;
+  }
 }
