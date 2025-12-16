@@ -6,6 +6,8 @@ import type {
 import type { ChatCompletionChunk } from "openai/resources/chat/completions";
 import { randomUUID } from "crypto";
 
+import { prisma } from "@/server/db/prisma";
+
 /**
  * Grok（xAI）服务端适配层
  * ------------------------------------------------------------
@@ -15,10 +17,9 @@ import { randomUUID } from "crypto";
  * 3) 供 Next.js API Route 直接调用
  *
  * 重要说明（上下文记忆的落地方式）：
- * - 这里使用“进程内内存 Map”实现，适合本地开发/单实例部署。
- * - 在 Serverless/多实例/水平扩展场景下，进程会被频繁重启/多份副本，
- *   这会导致对话上下文丢失或不一致。
- * - 生产建议：把对话历史存到 Redis/数据库（Prisma）等外部存储，再按 conversationId 取回。
+ * - 这里使用“数据库（Prisma/PostgreSQL）”进行持久化存储，避免进程重启丢上下文。
+ * - conversationId 作为会话唯一标识：前端每次带上即可续写上下文。
+ * - 为避免单次请求上下文过长，这里默认只取最近 MAX_MESSAGES 条消息。
  */
 
 /**
@@ -48,32 +49,8 @@ export const DEFAULT_SYSTEM_PROMPT =
 /**
  * 对话记忆相关的默认配置
  * - MAX_MESSAGES：单个对话最多保留多少条消息（user+assistant 总数）
- * - TTL_MS：对话多长时间未更新就过期（毫秒）
- * - MAX_CONVERSATIONS：最多保留多少个对话，避免内存无限增长
  */
 const MAX_MESSAGES = 40;
-const TTL_MS = 1000 * 60 * 60; // 1 小时
-const MAX_CONVERSATIONS = 200;
-
-/**
- * 服务端保存的对话结构
- */
-type StoredConversation = {
-  id: string;
-  systemPrompt: string;
-  /**
-   * 这里存“历史对话”（不含 system）
-   * - 每次请求会把 system + history + newUser 拼起来发给模型
-   */
-  messages: ChatCompletionMessageParam[];
-  createdAt: number;
-  updatedAt: number;
-};
-
-/**
- * 进程内对话缓存
- */
-const conversationStore = new Map<string, StoredConversation>();
 
 /**
  * 单例 Grok Client（OpenAI SDK 兼容）
@@ -104,96 +81,154 @@ function getGrokClient() {
 }
 
 /**
- * 清理过期/超量的对话，避免内存无限增长
- * - 每次 get/写入前调用一次即可（O(n)，但 n 默认最多 200）
+ * 简单校验 conversationId 是否“像一个 UUID”
+ * - 数据库存储用 TEXT，不强制 UUID 类型
+ * - 这里做弱校验，避免把奇怪的字符串当作主键导致潜在滥用（例如超长字符串）
  */
-function cleanupConversationStore(now = Date.now()) {
-  // 1) 先清理过期
-  for (const [id, conv] of conversationStore.entries()) {
-    if (now - conv.updatedAt > TTL_MS) {
-      conversationStore.delete(id);
-    }
-  }
-
-  // 2) 再限制总数量（按 updatedAt 从旧到新删）
-  if (conversationStore.size <= MAX_CONVERSATIONS) {
-    return;
-  }
-
-  const entries = Array.from(conversationStore.entries()).sort(
-    (a, b) => a[1].updatedAt - b[1].updatedAt,
+function isUuidLike(value: string) {
+  // 允许大小写；仅判断 8-4-4-4-12 的基本形态
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value,
   );
-  const overflow = entries.length - MAX_CONVERSATIONS;
-  for (let i = 0; i < overflow; i += 1) {
-    conversationStore.delete(entries[i]![0]);
-  }
 }
 
 /**
  * 获取或创建一个对话
  * - 如果未传 conversationId，则自动生成并创建新对话
+ * - 会从数据库读取最近 MAX_MESSAGES 条历史消息
  */
-function getOrCreateConversation(params: {
+async function getOrCreateConversation(params: {
   conversationId?: string;
   systemPrompt?: string;
-}): StoredConversation {
-  cleanupConversationStore();
+  model?: string;
+  temperature?: number;
+}): Promise<{
+  id: string;
+  systemPrompt: string;
+  messages: ChatCompletionMessageParam[];
+}> {
+  /**
+   * 1) 规范化 conversationId
+   * - 为空：生成新 UUID
+   * - 非 UUID 形态：忽略，生成新 UUID（避免 DB 主键被滥用）
+   */
+  const incomingId =
+    typeof params.conversationId === "string" ? params.conversationId.trim() : "";
+  const id = incomingId && isUuidLike(incomingId) ? incomingId : randomUUID();
 
-  const id = params.conversationId?.trim() || randomUUID();
-  const existed = conversationStore.get(id);
-  if (existed) {
-    // 如果调用方“明确传了 systemPrompt”，且对话还没开始，可以更新系统提示词
-    if (
-      typeof params.systemPrompt === "string" &&
-      existed.messages.length === 0
-    ) {
-      existed.systemPrompt =
-        params.systemPrompt.trim() || DEFAULT_SYSTEM_PROMPT;
-      existed.updatedAt = Date.now();
-    }
-    return existed;
-  }
+  /**
+   * 2) 读取/创建会话
+   * - 如果会话不存在则创建
+   * - 如果会话存在且“还没有任何消息”，允许更新 systemPrompt（避免中途风格突变）
+   */
+  const existed = await prisma.conversation.findUnique({
+    where: { id },
+    select: { id: true, systemPrompt: true },
+  });
 
-  const systemPrompt =
+  const nextSystemPrompt =
     typeof params.systemPrompt === "string" && params.systemPrompt.trim()
       ? params.systemPrompt.trim()
       : DEFAULT_SYSTEM_PROMPT;
 
-  const created: StoredConversation = {
+  if (!existed) {
+    await prisma.conversation.create({
+      data: {
+        id,
+        systemPrompt: nextSystemPrompt,
+        model: params.model?.trim() || null,
+        temperature: typeof params.temperature === "number" ? params.temperature : null,
+      },
+    });
+  } else if (
+    typeof params.systemPrompt === "string" &&
+    params.systemPrompt.trim()
+  ) {
+    const count = await prisma.conversationMessage.count({
+      where: { conversationId: id },
+    });
+    if (count === 0 && existed.systemPrompt !== nextSystemPrompt) {
+      await prisma.conversation.update({
+        where: { id },
+        data: { systemPrompt: nextSystemPrompt },
+      });
+    }
+  }
+
+  // 3) 读取最近的历史消息（只取必要字段）
+  const rows = await prisma.conversationMessage.findMany({
+    where: { conversationId: id },
+    orderBy: { createdAt: "desc" },
+    take: MAX_MESSAGES,
+    select: { role: true, content: true },
+  });
+
+  // Prisma take+desc 需要反转，保证从旧到新
+  const history = rows
+    .slice()
+    .reverse()
+    .map((row) => {
+      // 将 DB 枚举映射到 OpenAI SDK 角色字符串
+      const role =
+        row.role === "USER"
+          ? "user"
+          : row.role === "ASSISTANT"
+          ? "assistant"
+          : row.role === "SYSTEM"
+          ? "system"
+          : "tool";
+      return { role, content: row.content } as ChatCompletionMessageParam;
+    });
+
+  return {
     id,
-    systemPrompt,
-    messages: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    systemPrompt: existed?.systemPrompt ?? nextSystemPrompt,
+    messages: history,
   };
-  conversationStore.set(id, created);
-  return created;
 }
 
 /**
  * 公开：清空某个对话（用于“重置上下文”）
  */
-export function resetGrokConversation(conversationId: string) {
+export async function resetGrokConversation(conversationId: string) {
   const id = conversationId.trim();
   if (!id) {
     return;
   }
-  conversationStore.delete(id);
+  // 删除消息，但保留会话本身（便于前端继续沿用 conversationId）
+  await prisma.conversationMessage.deleteMany({ where: { conversationId: id } });
+  // 触发 updatedAt 更新，便于按时间排序/观测
+  await prisma.conversation.update({
+    where: { id },
+    data: { model: null, temperature: null },
+  }).catch(() => {
+    // 会话不存在时无需报错（与旧实现保持兼容：delete 一个不存在的 id 也应“静默成功”）
+  });
 }
 
 /**
  * 公开：仅用于调试/观测（不要在生产把完整上下文返回给前端）
  */
-export function getGrokConversationSnapshot(conversationId: string) {
+export async function getGrokConversationSnapshot(conversationId: string) {
   const id = conversationId.trim();
-  const conv = conversationStore.get(id);
-  if (!conv) {
-    return null;
-  }
+  if (!id) return null;
+
+  const conv = await prisma.conversation.findUnique({
+    where: { id },
+    select: { id: true, systemPrompt: true, createdAt: true, updatedAt: true },
+  });
+  if (!conv) return null;
+
+  const messages = await prisma.conversationMessage.findMany({
+    where: { conversationId: id },
+    orderBy: { createdAt: "asc" },
+    select: { role: true, content: true, createdAt: true },
+  });
+
   return {
     id: conv.id,
     systemPrompt: conv.systemPrompt,
-    messages: conv.messages,
+    messages,
     createdAt: conv.createdAt,
     updatedAt: conv.updatedAt,
   };
@@ -247,9 +282,11 @@ export async function grokChat(input: GrokChatInput): Promise<GrokChatResult> {
     throw new Error("userMessage 不能为空");
   }
 
-  const conv = getOrCreateConversation({
+  const conv = await getOrCreateConversation({
     conversationId: input.conversationId,
     systemPrompt: input.systemPrompt,
+    model: input.model,
+    temperature: input.temperature,
   });
 
   // 构造本轮要发给模型的 messages：system + history + 本轮 user
@@ -268,15 +305,34 @@ export async function grokChat(input: GrokChatInput): Promise<GrokChatResult> {
 
   const reply = raw.choices[0]?.message?.content ?? "";
 
-  // 只有在成功拿到回复后，才写入“对话记忆”（避免失败污染上下文）
-  conv.messages.push({ role: "user", content: userMessage });
-  conv.messages.push({ role: "assistant", content: reply });
-
-  // 控制单个对话的最大消息数量：只保留最近 MAX_MESSAGES 条（从尾部保留）
-  if (conv.messages.length > MAX_MESSAGES) {
-    conv.messages = conv.messages.slice(conv.messages.length - MAX_MESSAGES);
-  }
-  conv.updatedAt = Date.now();
+  /**
+   * 只有在成功拿到回复后，才写入数据库（避免失败污染上下文）
+   * - user/assistant 两条消息同一事务写入
+   * - 同时更新会话的 model/temperature，并触发 updatedAt
+   */
+  await prisma.$transaction([
+    prisma.conversationMessage.create({
+      data: {
+        conversationId: conv.id,
+        role: "USER",
+        content: userMessage,
+      },
+    }),
+    prisma.conversationMessage.create({
+      data: {
+        conversationId: conv.id,
+        role: "ASSISTANT",
+        content: reply,
+      },
+    }),
+    prisma.conversation.update({
+      where: { id: conv.id },
+      data: {
+        model: input.model?.trim() || null,
+        temperature: typeof input.temperature === "number" ? input.temperature : null,
+      },
+    }),
+  ]);
 
   return { conversationId: conv.id, reply, raw };
 }
@@ -310,9 +366,11 @@ export async function* grokChatStream(
     throw new Error("userMessage 不能为空");
   }
 
-  const conv = getOrCreateConversation({
+  const conv = await getOrCreateConversation({
     conversationId: input.conversationId,
     systemPrompt: input.systemPrompt,
+    model: input.model,
+    temperature: input.temperature,
   });
 
   /**
@@ -351,14 +409,30 @@ export async function* grokChatStream(
     }
 
     // 流结束后写入“对话记忆”
-    conv.messages.push({ role: "user", content: userMessage });
-    conv.messages.push({ role: "assistant", content: fullReply });
-
-    // 控制单个对话的最大消息数量：只保留最近 MAX_MESSAGES 条（从尾部保留）
-    if (conv.messages.length > MAX_MESSAGES) {
-      conv.messages = conv.messages.slice(conv.messages.length - MAX_MESSAGES);
-    }
-    conv.updatedAt = Date.now();
+    await prisma.$transaction([
+      prisma.conversationMessage.create({
+        data: {
+          conversationId: conv.id,
+          role: "USER",
+          content: userMessage,
+        },
+      }),
+      prisma.conversationMessage.create({
+        data: {
+          conversationId: conv.id,
+          role: "ASSISTANT",
+          content: fullReply,
+        },
+      }),
+      prisma.conversation.update({
+        where: { id: conv.id },
+        data: {
+          model: input.model?.trim() || null,
+          temperature:
+            typeof input.temperature === "number" ? input.temperature : null,
+        },
+      }),
+    ]);
   } catch (error) {
     // 不写入历史，直接抛出，让上层决定如何处理
     throw error;

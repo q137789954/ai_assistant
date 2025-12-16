@@ -29,6 +29,10 @@ model User {
 
   accounts Account[]
   sessions Session[]
+
+  /// 用户关联的 LLM 会话（可选）
+  /// - 目前接口未强制鉴权；未来若绑定用户，可通过该关系查询历史会话
+  conversations Conversation[]
 }
 
 model Account {
@@ -78,3 +82,59 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+/// LLM 会话（Conversation）
+/// - 用于持久化保存“与大语言模型的对话记录”
+/// - 目前主要服务于 `/api/llm/grok`（Grok/xAI）接口
+model Conversation {
+  /// 主键：使用字符串，兼容现有前端传入的 conversationId（通常为 UUID）
+  id String @id
+
+  /// 可选：关联登录用户
+  /// - 如果接口未来加鉴权/绑定用户，可写入 userId
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// 系统提示词（system prompt）
+  /// - 设计上每个会话固定一份，便于回放/审计
+  systemPrompt String @db.Text
+
+  /// 最近一次调用使用的模型名（可选）
+  model String?
+  /// 最近一次调用使用的温度（可选）
+  temperature Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ConversationMessage[]
+
+  @@index([userId])
+  @@index([updatedAt])
+}
+
+/// 会话消息角色（与 OpenAI ChatCompletion 的 role 对齐）
+enum ConversationMessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+  TOOL
+}
+
+/// LLM 会话消息（ConversationMessage）
+/// - 仅存储 role + content（最小可用集合）
+/// - 需要扩展 usage/finish_reason 等元信息时，可再加 JSON 字段
+model ConversationMessage {
+  /// 主键：cuid 便于跨数据库兼容
+  id String @id @default(cuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role    ConversationMessageRole
+  content String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+}

@@ -78,7 +78,7 @@ export async function POST(request: Request) {
 
   if (reset && conversationId) {
     // reset=true 且给了 conversationId：清空上下文
-    resetGrokConversation(conversationId);
+    await resetGrokConversation(conversationId);
   }
 
   if (!message) {
