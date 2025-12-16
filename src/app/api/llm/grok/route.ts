@@ -3,9 +3,9 @@ import {
   grokChat,
   grokChatStream,
   resetGrokConversation,
-  DEFAULT_GROK_MODEL,
   DEFAULT_SYSTEM_PROMPT,
-} from "@/server/llm/grok";
+} from "@/server/llm/grokConversation";
+import { DEFAULT_GROK_MODEL } from "@/server/llm/grok";
 
 /**
  * Grok 聊天接口（给前端调用）
