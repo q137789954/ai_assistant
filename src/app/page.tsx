@@ -4,9 +4,13 @@ import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 
 import Chatbot from "./page/components/Chatbot";
+import AvatarCommandInput from "./page/AvatarCommandInput";
+import {VoiceInputToggle} from '@/app/components/features'
 import { useVoiceInputListener } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
+import { Button } from "./components/ui";
+import { MessageSquareMore } from "lucide-react";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -168,6 +172,16 @@ export default function Home() {
           <Chatbot />
         </div>
       )}
+      <div className="absolute bottom-4 left-6 right-6">
+        <div className="w-full flex gap-2">
+            <VoiceInputToggle />
+           <AvatarCommandInput />
+           <Button className="flex gap-2" size='lg' variant='outline'>
+            <MessageSquareMore />
+            <span>Text</span>
+           </Button>
+        </div>
+      </div>
     </main>
   );
 }
