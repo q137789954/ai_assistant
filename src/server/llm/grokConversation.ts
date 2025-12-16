@@ -5,7 +5,6 @@ import type {
 import type { ChatCompletionChunk } from "openai/resources/chat/completions";
 import { randomUUID } from "crypto";
 
-import { prisma } from "@/server/db/prisma";
 import {
   DEFAULT_GROK_MODEL,
   grokCreateChatCompletion,
@@ -13,11 +12,16 @@ import {
 } from "@/server/llm/grok";
 
 /**
- * Grok“会话层”（持久化 + 上下文拼装）
+ * Grok“会话层”（轻量持久化 + 上下文拼装）
  * ------------------------------------------------------------
  * 职责边界：
- * - 负责：conversationId 管理、数据库持久化、历史消息读取、systemPrompt 策略、上下文裁剪
+ * - 负责：conversationId 管理、（仅进程内）持久化、systemPrompt 策略、上下文裁剪与拼装
  * - 不负责：Grok SDK 的初始化与调用（由 `src/server/llm/grok.ts` 负责）
+ *
+ * 重要说明（按你的需求“暂时只需要本次会话上下文”）：
+ * - 这里不会再从数据库查询“以前会话”的历史消息；
+ * - 上下文记忆仅保存在服务端进程内存中（Map），仅覆盖“本次服务运行期/本次会话”；
+ * - 若部署在 Serverless/多实例环境，进程内存不保证跨实例一致；需要真正持久化时再切回 DB 即可。
  */
 
 /**
@@ -34,6 +38,74 @@ export const DEFAULT_SYSTEM_PROMPT =
 const MAX_MESSAGES = 40;
 
 /**
+ * 单个进程内的“会话记忆”存储结构
+ * - 角色枚举沿用 Prisma schema 的定义（SYSTEM/USER/ASSISTANT/TOOL）
+ * - 这样 `getGrokConversationSnapshot` 返回值能尽量保持与 DB 版本一致，减少上层改动
+ */
+type ConversationMessageRole = "SYSTEM" | "USER" | "ASSISTANT" | "TOOL";
+
+type StoredConversationMessage = {
+  role: ConversationMessageRole;
+  content: string;
+  createdAt: Date;
+};
+
+type StoredConversation = {
+  id: string;
+  systemPrompt: string;
+  messages: StoredConversationMessage[];
+  model: string | null;
+  temperature: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/**
+ * 进程内会话缓存（LRU-ish）
+ * - Map 的插入顺序可用于实现简单的“最近最少使用”淘汰策略
+ * - 每次访问会通过 delete+set 刷新到队尾
+ */
+const conversationStore = new Map<string, StoredConversation>();
+
+/**
+ * 为避免开发时反复调用导致内存无限增长，这里加一个最大会话数限制
+ * - 超过后会淘汰最老的会话（Map 首个 key）
+ * - 这是“临时仅本次会话”的方案，生产可根据实际情况调整或改为 DB
+ */
+const MAX_CONVERSATIONS = 200;
+
+function normalizeIncomingConversationId(conversationId?: string) {
+  const incomingId =
+    typeof conversationId === "string" ? conversationId.trim() : "";
+  return incomingId && isUuidLike(incomingId) ? incomingId : randomUUID();
+}
+
+function touchConversation(conv: StoredConversation) {
+  // 通过刷新插入顺序实现简单 LRU
+  conversationStore.delete(conv.id);
+  conversationStore.set(conv.id, conv);
+
+  while (conversationStore.size > MAX_CONVERSATIONS) {
+    const oldestKey = conversationStore.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    conversationStore.delete(oldestKey);
+  }
+}
+
+function toChatRole(role: ConversationMessageRole): ChatCompletionMessageParam["role"] {
+  if (role === "SYSTEM") return "system";
+  if (role === "USER") return "user";
+  if (role === "ASSISTANT") return "assistant";
+  return "tool";
+}
+
+function clampHistoryMessages(messages: StoredConversationMessage[]) {
+  // 只保留最近 MAX_MESSAGES 条（不含 system）
+  if (messages.length <= MAX_MESSAGES) return messages;
+  return messages.slice(messages.length - MAX_MESSAGES);
+}
+
+/**
  * 简单校验 conversationId 是否“像一个 UUID”
  * - 数据库存储用 TEXT，不强制 UUID 类型
  * - 这里做弱校验，避免把奇怪的字符串当作主键导致潜在滥用（例如超长字符串）
@@ -46,9 +118,9 @@ function isUuidLike(value: string) {
 }
 
 /**
- * 获取或创建一个对话（DB）
+ * 获取或创建一个对话（进程内）
  * - 如果未传 conversationId 或不符合 UUID 形态，则自动生成新 UUID
- * - 从数据库读取最近 MAX_MESSAGES 条历史消息
+ * - 不再从数据库读取历史消息，只使用进程内缓存的“本次会话上下文”
  */
 async function getOrCreateConversation(params: {
   conversationId?: string;
@@ -60,85 +132,57 @@ async function getOrCreateConversation(params: {
   systemPrompt: string;
   messages: ChatCompletionMessageParam[];
 }> {
-  /**
-   * 1) 规范化 conversationId
-   * - 为空：生成新 UUID
-   * - 非 UUID 形态：忽略，生成新 UUID（避免 DB 主键被滥用）
-   */
-  const incomingId =
-    typeof params.conversationId === "string" ? params.conversationId.trim() : "";
-  const id = incomingId && isUuidLike(incomingId) ? incomingId : randomUUID();
+  // 1) 规范化 conversationId
+  const id = normalizeIncomingConversationId(params.conversationId);
 
-  /**
-   * 2) 读取/创建会话
-   * - 如果会话不存在则创建
-   * - 如果会话存在且“还没有任何消息”，允许更新 systemPrompt（避免中途风格突变）
-   */
-  const existed = await prisma.conversation.findUnique({
-    where: { id },
-    select: { id: true, systemPrompt: true },
-  });
-
+  // 2) systemPrompt 策略（与 DB 版保持一致：默认提示词 + “空历史时允许更新”）
   const nextSystemPrompt =
     typeof params.systemPrompt === "string" && params.systemPrompt.trim()
       ? params.systemPrompt.trim()
       : DEFAULT_SYSTEM_PROMPT;
 
+  const existed = conversationStore.get(id);
+  const now = new Date();
+
+  let conv: StoredConversation;
   if (!existed) {
-    await prisma.conversation.create({
-      data: {
-        id,
-        systemPrompt: nextSystemPrompt,
-        model: params.model?.trim() || null,
-        temperature:
-          typeof params.temperature === "number" ? params.temperature : null,
-      },
-    });
-  } else if (
-    typeof params.systemPrompt === "string" &&
-    params.systemPrompt.trim()
-  ) {
-    const count = await prisma.conversationMessage.count({
-      where: { conversationId: id },
-    });
-    if (count === 0 && existed.systemPrompt !== nextSystemPrompt) {
-      await prisma.conversation.update({
-        where: { id },
-        data: { systemPrompt: nextSystemPrompt },
-      });
-    }
+    conv = {
+      id,
+      systemPrompt: nextSystemPrompt,
+      messages: [],
+      model: params.model?.trim() || null,
+      temperature: typeof params.temperature === "number" ? params.temperature : null,
+      createdAt: now,
+      updatedAt: now,
+    };
+  } else {
+    // 旧会话：仅在“还没有任何消息”时允许更新 systemPrompt，避免中途风格突变
+    const allowUpdateSystemPrompt =
+      existed.messages.length === 0 &&
+      typeof params.systemPrompt === "string" &&
+      params.systemPrompt.trim();
+    conv = {
+      ...existed,
+      systemPrompt: allowUpdateSystemPrompt ? nextSystemPrompt : existed.systemPrompt,
+      model: params.model?.trim() || existed.model,
+      temperature:
+        typeof params.temperature === "number" ? params.temperature : existed.temperature,
+      updatedAt: now,
+    };
   }
 
-  /**
-   * 3) 读取最近的历史消息（只取必要字段）
-   * - take+desc 后需要反转，保证返回从旧到新
-   */
-  const rows = await prisma.conversationMessage.findMany({
-    where: { conversationId: id },
-    orderBy: { createdAt: "desc" },
-    take: MAX_MESSAGES,
-    select: { role: true, content: true },
-  });
+  // 3) 裁剪历史消息（只用进程内缓存）
+  conv.messages = clampHistoryMessages(conv.messages);
+  touchConversation(conv);
 
-  const history = rows
-    .slice()
-    .reverse()
-    .map((row) => {
-      // 将 DB 枚举映射到 OpenAI SDK 角色字符串
-      const role =
-        row.role === "USER"
-          ? "user"
-          : row.role === "ASSISTANT"
-          ? "assistant"
-          : row.role === "SYSTEM"
-          ? "system"
-          : "tool";
-      return { role, content: row.content } as ChatCompletionMessageParam;
-    });
+  const history: ChatCompletionMessageParam[] = conv.messages.map((msg) => ({
+    role: toChatRole(msg.role),
+    content: msg.content,
+  })) as ChatCompletionMessageParam[];
 
   return {
     id,
-    systemPrompt: existed?.systemPrompt ?? nextSystemPrompt,
+    systemPrompt: conv.systemPrompt,
     messages: history,
   };
 }
@@ -153,17 +197,21 @@ export async function resetGrokConversation(conversationId: string) {
     return;
   }
 
-  await prisma.conversationMessage.deleteMany({ where: { conversationId: id } });
+  const existed = conversationStore.get(id);
+  if (!existed) {
+    // 与旧实现保持兼容：reset 一个不存在的 id 也应“静默成功”
+    return;
+  }
 
-  // 触发 updatedAt 更新，便于按时间排序/观测
-  await prisma.conversation
-    .update({
-      where: { id },
-      data: { model: null, temperature: null },
-    })
-    .catch(() => {
-      // 会话不存在时无需报错（与旧实现保持兼容：delete 一个不存在的 id 也应“静默成功”）
-    });
+  const now = new Date();
+  const next: StoredConversation = {
+    ...existed,
+    messages: [],
+    model: null,
+    temperature: null,
+    updatedAt: now,
+  };
+  touchConversation(next);
 }
 
 /**
@@ -173,22 +221,14 @@ export async function getGrokConversationSnapshot(conversationId: string) {
   const id = conversationId.trim();
   if (!id) return null;
 
-  const conv = await prisma.conversation.findUnique({
-    where: { id },
-    select: { id: true, systemPrompt: true, createdAt: true, updatedAt: true },
-  });
+  const conv = conversationStore.get(id);
   if (!conv) return null;
-
-  const messages = await prisma.conversationMessage.findMany({
-    where: { conversationId: id },
-    orderBy: { createdAt: "asc" },
-    select: { role: true, content: true, createdAt: true },
-  });
 
   return {
     id: conv.id,
     systemPrompt: conv.systemPrompt,
-    messages,
+    // 返回结构尽量贴近 DB 版（role + content + createdAt）
+    messages: conv.messages.slice().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
     createdAt: conv.createdAt,
     updatedAt: conv.updatedAt,
   };
@@ -264,34 +304,26 @@ export async function grokChat(input: GrokChatInput): Promise<GrokChatResult> {
   const reply = raw.choices[0]?.message?.content ?? "";
 
   /**
-   * 只有在成功拿到回复后，才写入数据库（避免失败污染上下文）
-   * - user/assistant 两条消息同一事务写入
-   * - 同时更新会话的 model/temperature，并触发 updatedAt
+   * 只有在成功拿到回复后，才写入“进程内上下文”（避免失败污染上下文）
+   * - 这里不会写数据库，仅用于“本次会话”的上下文续写
    */
-  await prisma.$transaction([
-    prisma.conversationMessage.create({
-      data: {
-        conversationId: conv.id,
-        role: "USER",
-        content: userMessage,
-      },
-    }),
-    prisma.conversationMessage.create({
-      data: {
-        conversationId: conv.id,
-        role: "ASSISTANT",
-        content: reply,
-      },
-    }),
-    prisma.conversation.update({
-      where: { id: conv.id },
-      data: {
-        model: input.model?.trim() || null,
-        temperature:
-          typeof input.temperature === "number" ? input.temperature : null,
-      },
-    }),
-  ]);
+  const existed = conversationStore.get(conv.id);
+  if (existed) {
+    const now = new Date();
+    const nextMessages = clampHistoryMessages([
+      ...existed.messages,
+      { role: "USER", content: userMessage, createdAt: now },
+      { role: "ASSISTANT", content: reply, createdAt: now },
+    ]);
+    const next: StoredConversation = {
+      ...existed,
+      messages: nextMessages,
+      model: input.model?.trim() || null,
+      temperature: typeof input.temperature === "number" ? input.temperature : null,
+      updatedAt: now,
+    };
+    touchConversation(next);
+  }
 
   return { conversationId: conv.id, reply, raw };
 }
@@ -362,33 +394,26 @@ export async function* grokChatStream(
       yield { conversationId: conv.id, delta };
     }
 
-    await prisma.$transaction([
-      prisma.conversationMessage.create({
-        data: {
-          conversationId: conv.id,
-          role: "USER",
-          content: userMessage,
-        },
-      }),
-      prisma.conversationMessage.create({
-        data: {
-          conversationId: conv.id,
-          role: "ASSISTANT",
-          content: fullReply,
-        },
-      }),
-      prisma.conversation.update({
-        where: { id: conv.id },
-        data: {
-          model: input.model?.trim() || null,
-          temperature:
-            typeof input.temperature === "number" ? input.temperature : null,
-        },
-      }),
-    ]);
+    // 流式结束后，再落入“进程内上下文”，避免中途失败污染对话
+    const existed = conversationStore.get(conv.id);
+    if (existed) {
+      const now = new Date();
+      const nextMessages = clampHistoryMessages([
+        ...existed.messages,
+        { role: "USER", content: userMessage, createdAt: now },
+        { role: "ASSISTANT", content: fullReply, createdAt: now },
+      ]);
+      const next: StoredConversation = {
+        ...existed,
+        messages: nextMessages,
+        model: input.model?.trim() || null,
+        temperature: typeof input.temperature === "number" ? input.temperature : null,
+        updatedAt: now,
+      };
+      touchConversation(next);
+    }
   } catch (error) {
     // 不写入历史，直接抛出，让上层决定如何处理
     throw error;
   }
 }
-
