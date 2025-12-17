@@ -1,118 +1,15 @@
-// Prisma 数据模型定义
-// - 使用 PostgreSQL 作为数据库
-// - 兼容 next-auth 的 PrismaAdapter 默认表结构（User/Account/Session/VerificationToken）
-// - 额外增加 `passwordHash` 字段，用于“账号密码”注册/登录（Credentials Provider）
-
+/// Prisma Client 生成器，负责根据 schema 自动生成类型安全的客户端代码
 generator client {
   provider = "prisma-client-js"
 }
 
+/// 数据源配置，使用 PostgreSQL 并通过环境变量读取连接字符串
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model User {
-  /// 主键：next-auth 推荐使用字符串 ID（cuid）
-  id            String    @id @default(cuid())
-  name          String?
-  /// 邮箱（账号密码登录会用到）；OAuth 登录也会写入 email
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-
-  /// 本项目扩展字段：密码哈希（OAuth 用户可为空）
-  passwordHash  String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  accounts Account[]
-  sessions Session[]
-
-  /// 用户关联的 LLM 会话（可选）
-  /// - 目前接口未强制鉴权；未来若绑定用户，可通过该关系查询历史会话
-  conversations Conversation[]
-}
-
-model Account {
-  /// 主键：使用 cuid，便于跨数据库兼容
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-
-  refresh_token String?
-  access_token  String?
-  expires_at    Int?
-  token_type    String?
-  scope         String?
-  id_token      String?
-  session_state String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-/// LLM 会话（Conversation）
-/// - 用于持久化保存“与大语言模型的对话记录”
-/// - 目前主要服务于 `/api/llm/grok`（Grok/xAI）接口
-model Conversation {
-  /// 主键：使用字符串，兼容现有前端传入的 conversationId（通常为 UUID）
-  id String @id
-
-  /// 可选：关联登录用户
-  /// - 如果接口未来加鉴权/绑定用户，可写入 userId
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  /// 系统提示词（system prompt）
-  /// - 设计上每个会话固定一份，便于回放/审计
-  systemPrompt String @db.Text
-
-  /// 最近一次调用使用的模型名（可选）
-  model String?
-  /// 最近一次调用使用的温度（可选）
-  temperature Float?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  messages ConversationMessage[]
-
-  @@index([userId])
-  @@index([updatedAt])
-}
-
-/// 会话消息角色（与 OpenAI ChatCompletion 的 role 对齐）
+/// 会话消息角色枚举，用于区分系统/用户/助手/工具来源
 enum ConversationMessageRole {
   SYSTEM
   USER
@@ -120,21 +17,135 @@ enum ConversationMessageRole {
   TOOL
 }
 
-/// LLM 会话消息（ConversationMessage）
-/// - 仅存储 role + content（最小可用集合）
-/// - 需要扩展 usage/finish_reason 等元信息时，可再加 JSON 字段
+/// 用户核心信息表，存储登录所需的基本字段
+model User {
+  /// 唯一主键字符串，由业务层生成后写入
+  id            String    @id @db.Text
+  /// 用户的展示名称，可选
+  name          String?   @db.Text
+  /// 用户邮箱，可选但确保全局唯一
+  email         String?   @unique(map: "User_email_key") @db.Text
+  /// 邮箱验证时间戳，允许为空
+  emailVerified DateTime? @db.Timestamp(3)
+  /// 头像链接，可选
+  image         String?   @db.Text
+  /// 密码哈希，可选，用于本地登录方案
+  passwordHash  String?   @db.Text
+  /// 记录创建时间，默认当前时间
+  createdAt     DateTime  @default(now()) @db.Timestamp(3)
+  /// 更新时间，需要由业务自行更新
+  updatedAt     DateTime  @db.Timestamp(3)
+
+  /// 关联的账户记录列表
+  accounts      Account[]
+  /// 关联的会话记录列表
+  sessions      Session[]
+  /// 关联的对话记录列表
+  conversations Conversation[]
+
+  @@map("User")
+}
+
+/// 第三方 OAuth / 本地账号绑定表，关联 User
+model Account {
+  id                String   @id @db.Text
+  /// 所属用户 ID
+  userId            String   @db.Text
+  /// 账户类型（例如 oauth）
+  type              String   @db.Text
+  /// 提供商名称（如 google）
+  provider          String   @db.Text
+  /// 第三方账号 ID
+  providerAccountId String   @db.Text
+  /// 刷新令牌
+  refreshToken      String?  @map("refresh_token") @db.Text
+  /// 访问令牌
+  accessToken       String?  @map("access_token") @db.Text
+  /// 过期时间（秒）
+  expiresAt         Int?     @map("expires_at") @db.Integer
+  /// 令牌类型
+  tokenType         String?  @map("token_type") @db.Text
+  /// 授权范围
+  scope             String?  @db.Text
+  /// ID 令牌
+  idToken           String?  @map("id_token") @db.Text
+  /// 会话状态
+  sessionState      String?  @map("session_state") @db.Text
+  createdAt         DateTime @default(now()) @db.Timestamp(3)
+  updatedAt         DateTime @db.Timestamp(3)
+
+  /// 关联的用户记录
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([provider, providerAccountId], map: "Account_provider_providerAccountId_key")
+  @@index([userId], map: "Account_userId_idx")
+  @@map("Account")
+}
+
+/// 会话表，用于管理当前登录会话
+model Session {
+  id           String   @id @db.Text
+  sessionToken String   @unique(map: "Session_sessionToken_key") @db.Text
+  userId       String   @db.Text
+  expires      DateTime @db.Timestamp(3)
+  createdAt    DateTime @default(now()) @db.Timestamp(3)
+  updatedAt    DateTime @db.Timestamp(3)
+
+  /// 当前会话对应的用户
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId], map: "Session_userId_idx")
+  @@map("Session")
+}
+
+/// 验证令牌表，用于短信/邮箱验证码等场景
+model VerificationToken {
+  identifier String   @db.Text
+  token      String   @db.Text
+  expires    DateTime @db.Timestamp(3)
+
+  @@id([identifier, token])
+  @@unique([token], map: "VerificationToken_token_key")
+  @@map("VerificationToken")
+}
+
+/// 对话抽象表，关联用户并保存摘要
+model Conversation {
+  id        String   @id @db.Text
+  userId    String?  @db.Text
+  summary   String   @default("") @db.Text
+  createdAt DateTime @default(now()) @db.Timestamp(3)
+  updatedAt DateTime @db.Timestamp(3)
+
+  /// 可选的所属用户，删除用户时不删除对话而是置空
+  user     User?                 @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  /// 对应的消息记录列表
+  messages ConversationMessage[]
+
+  @@index([userId], map: "Conversation_userId_idx")
+  @@index([updatedAt], map: "Conversation_updatedAt_idx")
+  @@map("Conversation")
+}
+
+/// 会话中的消息详情，包含文本或语音参数
 model ConversationMessage {
-  /// 主键：cuid 便于跨数据库兼容
-  id String @id @default(cuid())
+  id              String                  @id @db.Text
+  conversationId  String                  @db.Text
+  /// 消息角色，仅允许 SYSTEM/USER/ASSISTANT/TOOL
+  role            ConversationMessageRole
+  /// 文本内容，非语音时必填
+  content         String?                 @db.Text
+  /// 是否为语音消息
+  isVoice         Boolean                 @default(false)
+  /// 语音时长（毫秒）
+  voiceDurationMs Int?                    @db.Integer
+  createdAt       DateTime                @default(now()) @db.Timestamp(3)
 
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// 所属对话，删除对话时级联删除消息
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
-  role    ConversationMessageRole
-  content String @db.Text
-
-  createdAt DateTime @default(now())
-
-  @@index([conversationId])
-  @@index([conversationId, createdAt])
+  /// 语音/文本的 payload 校验约束在数据库层实现，业务需保持字段一致性
+  @@index([conversationId], map: "ConversationMessage_conversationId_idx")
+  @@index([conversationId, createdAt], map: "ConversationMessage_conversationId_createdAt_idx")
+  @@map("ConversationMessage")
 }

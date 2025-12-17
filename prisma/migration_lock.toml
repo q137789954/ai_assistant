@@ -1,0 +1,7 @@
+lock_file_version = "1"
+
+[[migration]]
+id = "20251217120000_init"
+checksum = "0000000000000000000000000000000000000000000000000000000000000000"
+success = true
+force = false
