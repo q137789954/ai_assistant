@@ -1,12 +1,32 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useMemo, useRef } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import useWebSocket from "@/app/hooks/useWebSocket";
 import type {
   WebSocketProviderContextValue,
   WebSocketProviderProps,
   WebSocketMessageListener,
 } from "./types";
+import { GlobalsContext } from "@/app/providers/GlobalsProviders";
+
+/**
+ * 简单的类型守卫，确保后续处理 message 的时候可以安全读取 conversationId 字段。
+ */
+const isConversationIdPayload = (
+  value: unknown,
+): value is { type: "chat:conversationId"; conversationId: string } =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  (value as { type?: unknown }).type === "chat:conversationId" &&
+  typeof (value as { conversationId?: unknown }).conversationId === "string";
 
 export const WebSocketContext = createContext<WebSocketProviderContextValue | undefined>(
   undefined,
@@ -60,6 +80,35 @@ const WebSocketProviders = ({
       messageListenersRef.current.delete(listener);
     };
   }, []);
+
+  const globals = useContext(GlobalsContext);
+  const globalDispatch = globals?.dispatch;
+  // 监听来自服务端的 conversationId 推送，用于更新全局的聊天上下文
+  useEffect(() => {
+    if (!globalDispatch) {
+      return;
+    }
+
+    const unsubscribe = subscribe((event) => {
+      if (typeof event.data !== "string") {
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(event.data);
+        if (isConversationIdPayload(parsed)) {
+          globalDispatch({
+            type: "SET_CONVERSATION_ID",
+            payload: parsed.conversationId,
+          });
+        }
+      } catch {
+        // 无法解析的 payload 忽略，避免影响其他逻辑
+      }
+    });
+
+    return unsubscribe;
+  }, [globalDispatch, subscribe]);
 
   const value: WebSocketProviderContextValue = useMemo(
     () => ({

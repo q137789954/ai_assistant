@@ -31,8 +31,8 @@ export const handleChatInput = async (
     });
 
     // 将新的对话ID发送给客户端
-    socket.emit("chat:conversation", {
-      type: "chat:conversation",
+    socket.emit("chat:conversationId", {
+      type: "chat:conversationId",
       conversationId: conversation.id,
     });
   }
