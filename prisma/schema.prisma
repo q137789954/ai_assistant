@@ -24,7 +24,7 @@ model User {
   /// 用户的展示名称，可选
   name          String?   @db.Text
   /// 用户邮箱，可选但确保全局唯一
-  email         String?   @unique(map: "User_email_key") @db.Text
+  email         String?   @unique(map: "user_email_key") @db.Text
   /// 邮箱验证时间戳，允许为空
   emailVerified DateTime? @db.Timestamp(3)
   /// 头像链接，可选
@@ -40,10 +40,8 @@ model User {
   accounts      Account[]
   /// 关联的会话记录列表
   sessions      Session[]
-  /// 关联的对话记录列表
-  conversations Conversation[]
 
-  @@map("User")
+  @@map("user")
 }
 
 /// 第三方 OAuth / 本地账号绑定表，关联 User
@@ -77,15 +75,15 @@ model Account {
   /// 关联的用户记录
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
-  @@unique([provider, providerAccountId], map: "Account_provider_providerAccountId_key")
-  @@index([userId], map: "Account_userId_idx")
-  @@map("Account")
+  @@unique([provider, providerAccountId], map: "account_provider_provider_account_id_key")
+  @@index([userId], map: "account_user_id_idx")
+  @@map("account")
 }
 
 /// 会话表，用于管理当前登录会话
 model Session {
   id           String   @id @db.Text
-  sessionToken String   @unique(map: "Session_sessionToken_key") @db.Text
+  sessionToken String   @unique(map: "session_session_token_key") @db.Text
   userId       String   @db.Text
   expires      DateTime @db.Timestamp(3)
   createdAt    DateTime @default(now()) @db.Timestamp(3)
@@ -94,8 +92,8 @@ model Session {
   /// 当前会话对应的用户
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
-  @@index([userId], map: "Session_userId_idx")
-  @@map("Session")
+  @@index([userId], map: "session_user_id_idx")
+  @@map("session")
 }
 
 /// 验证令牌表，用于短信/邮箱验证码等场景
@@ -105,26 +103,8 @@ model VerificationToken {
   expires    DateTime @db.Timestamp(3)
 
   @@id([identifier, token])
-  @@unique([token], map: "VerificationToken_token_key")
-  @@map("VerificationToken")
-}
-
-/// 对话抽象表，关联用户并保存摘要
-model Conversation {
-  id        String   @id @db.Text
-  userId    String?  @db.Text
-  summary   String   @default("") @db.Text
-  createdAt DateTime @default(now()) @db.Timestamp(3)
-  updatedAt DateTime @db.Timestamp(3)
-
-  /// 可选的所属用户，删除用户时不删除对话而是置空
-  user     User?                 @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  /// 对应的消息记录列表
-  messages ConversationMessage[]
-
-  @@index([userId], map: "Conversation_userId_idx")
-  @@index([updatedAt], map: "Conversation_updatedAt_idx")
-  @@map("Conversation")
+  @@unique([token], map: "verification_token_token_key")
+  @@map("verification_token")
 }
 
 /// 会话中的消息详情，包含文本或语音参数
@@ -139,13 +119,16 @@ model ConversationMessage {
   isVoice         Boolean                 @default(false)
   /// 语音时长（毫秒）
   voiceDurationMs Int?                    @db.Integer
+  /// 归属用户 ID，用于关联发送者
+  userId          String                  @db.Text
   createdAt       DateTime                @default(now()) @db.Timestamp(3)
 
-  /// 所属对话，删除对话时级联删除消息
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// 所属用户，用户被删除时级联删除消息
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   /// 语音/文本的 payload 校验约束在数据库层实现，业务需保持字段一致性
-  @@index([conversationId], map: "ConversationMessage_conversationId_idx")
-  @@index([conversationId, createdAt], map: "ConversationMessage_conversationId_createdAt_idx")
-  @@map("ConversationMessage")
+  @@index([conversationId], map: "conversation_message_conversation_id_idx")
+  @@index([conversationId, createdAt], map: "conversation_message_conversation_id_created_at_idx")
+  @@index([userId], map: "conversation_message_user_id_idx")
+  @@map("conversation_message")
 }

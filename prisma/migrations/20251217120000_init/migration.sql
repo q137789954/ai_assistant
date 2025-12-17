@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "User" (
+CREATE TABLE "user" (
     "id" TEXT NOT NULL,
     "name" TEXT,
     "email" TEXT,
@@ -9,11 +9,11 @@ CREATE TABLE "User" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "user_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Account" (
+CREATE TABLE "account" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
@@ -29,11 +29,11 @@ CREATE TABLE "Account" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Account_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "account_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Session" (
+CREATE TABLE "session" (
     "id" TEXT NOT NULL,
     "sessionToken" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -41,11 +41,11 @@ CREATE TABLE "Session" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "session_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "VerificationToken" (
+CREATE TABLE "verification_token" (
     "identifier" TEXT NOT NULL,
     "token" TEXT NOT NULL,
     "expires" TIMESTAMP(3) NOT NULL
@@ -58,19 +58,8 @@ CREATE TABLE "VerificationToken" (
 -- CreateEnum
 CREATE TYPE "ConversationMessageRole" AS ENUM ('SYSTEM', 'USER', 'ASSISTANT', 'TOOL');
 
--- CreateTable
-CREATE TABLE "Conversation" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT,
-    "summary" TEXT NOT NULL DEFAULT '',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Conversation_pkey" PRIMARY KEY ("id")
-);
-
 -- CreateTable (UPDATED)
-CREATE TABLE "ConversationMessage" (
+CREATE TABLE "conversation_message" (
     "id" TEXT NOT NULL,
     "conversationId" TEXT NOT NULL,
 
@@ -86,14 +75,17 @@ CREATE TABLE "ConversationMessage" (
     -- 语音时长（毫秒），仅语音消息需要
     "voiceDurationMs" INTEGER,
 
+    -- 归属用户 ID
+    "userId" TEXT NOT NULL,
+
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "ConversationMessage_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "conversation_message_pkey" PRIMARY KEY ("id"),
 
     -- 规则：
     -- 1) isVoice=false -> 必须有 content(非空串)，且 voiceDurationMs 必须为空
     -- 2) isVoice=true  -> content 可空，但 voiceDurationMs 必须存在且 > 0
-    CONSTRAINT "ConversationMessage_payload_check"
+    CONSTRAINT "conversation_message_payload_check"
       CHECK (
         (
           "isVoice" = FALSE
@@ -115,55 +107,47 @@ CREATE TABLE "ConversationMessage" (
 -- =========================
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
 
 -- CreateIndex
-CREATE INDEX "Account_userId_idx" ON "Account"("userId");
+CREATE INDEX "account_user_id_idx" ON "account"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Account_provider_providerAccountId_key" ON "Account"("provider", "providerAccountId");
+CREATE UNIQUE INDEX "account_provider_provider_account_id_key" ON "account"("provider", "providerAccountId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Session_sessionToken_key" ON "Session"("sessionToken");
+CREATE UNIQUE INDEX "session_session_token_key" ON "session"("sessionToken");
 
 -- CreateIndex
-CREATE INDEX "Session_userId_idx" ON "Session"("userId");
+CREATE INDEX "session_user_id_idx" ON "session"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "VerificationToken_token_key" ON "VerificationToken"("token");
+CREATE UNIQUE INDEX "verification_token_token_key" ON "verification_token"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "VerificationToken_identifier_token_key" ON "VerificationToken"("identifier", "token");
-
--- Conversation indexes
-CREATE INDEX "Conversation_userId_idx" ON "Conversation"("userId");
-CREATE INDEX "Conversation_updatedAt_idx" ON "Conversation"("updatedAt");
+CREATE UNIQUE INDEX "verification_token_identifier_token_key" ON "verification_token"("identifier", "token");
 
 -- Message indexes
-CREATE INDEX "ConversationMessage_conversationId_idx" ON "ConversationMessage"("conversationId");
-CREATE INDEX "ConversationMessage_conversationId_createdAt_idx"
-  ON "ConversationMessage"("conversationId", "createdAt");
+CREATE INDEX "conversation_message_conversation_id_idx" ON "conversation_message"("conversationId");
+CREATE INDEX "conversation_message_conversation_id_created_at_idx"
+  ON "conversation_message"("conversationId", "createdAt");
+CREATE INDEX "conversation_message_user_id_idx" ON "conversation_message"("userId");
 
 -- =========================
 -- Foreign Keys
 -- =========================
 
 -- AddForeignKey
-ALTER TABLE "Account"
-ADD CONSTRAINT "Account_userId_fkey"
-FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "account"
+ADD CONSTRAINT "account_user_id_fkey"
+FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Session"
-ADD CONSTRAINT "Session_userId_fkey"
-FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "session"
+ADD CONSTRAINT "session_user_id_fkey"
+FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Conversation"
-ADD CONSTRAINT "Conversation_userId_fkey"
-FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ConversationMessage"
-ADD CONSTRAINT "ConversationMessage_conversationId_fkey"
-FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "conversation_message"
+ADD CONSTRAINT "conversation_message_user_id_fkey"
+FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
