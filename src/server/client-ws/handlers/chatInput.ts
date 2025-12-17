@@ -27,7 +27,13 @@ export const handleChatInput = async (
     payload,
   });
 
-  const { type, outputFormat, content } = payload;
+  const { outputFormat, content } = payload;
+
+  console.log("chatInputHandler: 处理输入内容", { outputFormat, content });
+
+  console.log(userId,"userId---");
+  console.log(conversationId,"conversationId---");
+
 
   if(outputFormat === "text") {
     // 简单示例：将文本输入存储到数据库中的 Message 表
