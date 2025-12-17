@@ -73,7 +73,7 @@ const WebSocketProviders = ({
       emitEvent,
       subscribe,
     }),
-    [status, lastMessage, lastError, isSupported, connect, disconnect, sendMessage, subscribe],
+    [status, lastMessage, lastError, isSupported, connect, disconnect, sendMessage, emitEvent, subscribe],
   );
 
   return <WebSocketContext.Provider value={value}>{children}</WebSocketContext.Provider>;
