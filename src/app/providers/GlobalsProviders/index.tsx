@@ -27,7 +27,6 @@ const initialState: GlobalsState = {
   pendingUserSpeechQueue: [],
   pendingUserSpeech: null,
   chatbotVisible: false,
-  conversationId: '',
 }
 
 const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
@@ -73,11 +72,6 @@ const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
       return state.chatbotVisible === action.payload
         ? state
         : { ...state, chatbotVisible: action.payload }
-    case 'SET_CONVERSATION_ID':
-      // 保证只在 conversationId 真正更新时才触发 rerender
-      return state.conversationId === action.payload
-        ? state
-        : { ...state, conversationId: action.payload }
     default:
       return state
   }
@@ -109,7 +103,6 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     pendingUserSpeech,
     pendingUserSpeechQueue,
     chatbotVisible,
-    conversationId,
   } = state
 
   /**
@@ -172,7 +165,6 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
       pendingUserSpeech,
       pendingUserSpeechQueue,
       chatbotVisible,
-      conversationId,
       dispatch: guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,
@@ -184,7 +176,6 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
       pendingUserSpeech,
       pendingUserSpeechQueue,
       chatbotVisible,
-      conversationId,
       guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,

@@ -18,23 +18,7 @@ export const handleChatInput = async (
 ) => {
   console.debug("chatInputHandler: 收到输入", { clientId, payload });
 
-  const { type, outputFormat, content, conversationId } = payload;
+  const { type, outputFormat, content } = payload;
 
-  // 当conversationId为空时，创建新的对话
-  if (!conversationId) {
-    // 创建新的对话
-    const conversation = await prisma.conversation.create({
-      data: {
-        userId: clientId,
-        summary: "新的对话",
-      },
-    });
-
-    // 将新的对话ID发送给客户端
-    socket.emit("chat:conversationId", {
-      type: "chat:conversationId",
-      conversationId: conversation.id,
-    });
-  }
   
 };

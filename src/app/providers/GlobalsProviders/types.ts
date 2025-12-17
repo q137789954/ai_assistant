@@ -26,10 +26,6 @@ export type GlobalsState = {
    * 控制 Chatbot 组件在主页面的是否展示状态，默认不显示
    */
   chatbotVisible: boolean
-  /**
-   * 当前聊天上下文对应的 conversationId，供页面或 WebSocket 事件使用
-   */
-  conversationId: string
 }
 
 export type GlobalsAction =
