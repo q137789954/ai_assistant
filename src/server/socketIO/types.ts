@@ -15,3 +15,11 @@ export type VoiceBucket = {
   segments: Float32Array[];
   timer: ReturnType<typeof setTimeout> | null;
 };
+
+
+export interface ChatInputPayload {
+  type: "chat:input";
+  outputFormat: "text" | "speech";
+  content: string | Float32Array;
+  conversationId?: string;
+}

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { Server, type Socket } from "socket.io";
 import { queueVoiceSegment } from "./audio";
 import { cleanupClient, handleClientMessage, sendJoinNotifications } from "./clientLifecycle";
+import { handleChatInput } from "./handlers/chatInput";
+import { ChatInputPayload } from "./types";
 
 /**
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
@@ -48,14 +50,20 @@ io.on("connection", (socket) => {
     handleClientMessage(clientId, io, payload);
   });
 
-  socket.on("voice-chunk", (meta, audio) => {
-    console.log("socketIOServer: 收到语音片段", { clientId, meta });
-    queueVoiceSegment(clientId, socket, meta, audio);
-  });
+  // socket.on("voice-chunk", (meta, audio) => {
+  //   console.log("socketIOServer: 收到语音片段，最终返回语音", { clientId, meta });
+  //   queueVoiceSegment(clientId, socket, meta, audio);
+  // });
 
-  socket.on("text-based-chat", (payload) => {
-    console.log("socketIOServer: 收到文本聊天片段", { clientId, payload });
+  // socket.on("text-based-chat", (payload) => {
+  //   console.log("socketIOServer: 收到文本聊天片段，最终返回文本回复", { clientId, payload });
 
+  // });
+
+  // console.log("socketIOServer: 收到语音片段，最终返回语音", { clientId, payload });
+    // queueVoiceSegment(clientId, socket, meta, audio);
+  socket.on("chat:input", (payload:ChatInputPayload) => {
+    handleChatInput(clientId, socket, payload, io);
   });
   
   socket.on("disconnect", (reason) => {
