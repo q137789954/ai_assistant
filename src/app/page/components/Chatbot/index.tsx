@@ -1,7 +1,8 @@
 'use client'
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
-import {VoiceInputToggle} from '@/app/components/features'
+import { Button } from '@/app/components/ui'
+import { Send } from 'lucide-react'
 
 type MessageRole = 'assistant' | 'user'
 
@@ -76,8 +77,7 @@ export default function Chatbot() {
             </div>
           ))}
         </div>
-        <div className="mt-4 flex h-[150px] shrink-0 flex-col rounded-b-[28px] bg-sky-100/90 px-6 py-4">
-          <div className="text-sm text-sky-500">说点什么...</div>
+        <div className="mt-4 flex h-20 shrink-0 flex-col rounded-b-[28px] bg-sky-100/90 px-6 py-4">
           <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-3">
             <textarea
               className="flex-1 resize-none rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none"
@@ -86,33 +86,15 @@ export default function Chatbot() {
               onChange={(event) => setDraft(event.target.value)}
               rows={1}
             />
-            <button
-              type="submit"
-              className="h-10 w-10 rounded-full border border-sky-200 bg-white text-sky-600 transition hover:bg-sky-50"
+            {/* rounded-full border border-sky-200 bg-white text-sky-600 transition hover:bg-sky-50 */}
+            <Button
+              variant="outline"
+              className="h-10 w-10 p-0! flex items-center justify-center rounded-full! text-lg!"
               aria-label="发送消息"
             >
-              <span className="text-lg leading-none">↗︎</span>
-            </button>
+              <Send size={18} />
+            </Button>
           </form>
-          <div className="mt-2 flex items-center justify-between text-[0.65rem] text-slate-400">
-            <VoiceInputToggle />
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className="text-slate-400 transition hover:text-slate-600"
-                aria-label="清理对话"
-              >
-                🗑
-              </button>
-              <button
-                type="button"
-                className="text-slate-400 transition hover:text-slate-600"
-                aria-label="更换主题"
-              >
-                ☀︎
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import { signIn, signOut, useSession } from "next-auth/react";
 
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
-import {VoiceInputToggle} from '@/app/components/features'
+import { VoiceInputToggle } from "@/app/components/features";
 import { useVoiceInputListener } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
@@ -14,6 +14,7 @@ import { MessageSquareMore } from "lucide-react";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
+  const { chatbotVisible, dispatch } = globals ?? {};
   const [messageLog, setMessageLog] = useState<string[]>([]);
   const { data: session, status: authStatus } = useSession();
 
@@ -33,7 +34,7 @@ export default function Home() {
       JSON.stringify({
         type: "ping",
         timestamp: new Date().toISOString(),
-      }),
+      })
     );
   }, [sendMessage]);
 
@@ -53,7 +54,7 @@ export default function Home() {
         console.warn("语音帧发送失败，请检查 WebSocket 连接状态");
       }
     },
-    [emitEvent],
+    [emitEvent]
   );
 
   useEffect(() => {
@@ -81,8 +82,14 @@ export default function Home() {
 
   const friendlyMessage = useMemo(
     () => (lastMessage ? String(lastMessage.data) : "等待消息..."),
-    [lastMessage],
+    [lastMessage]
   );
+
+  const handleTextBtn = useCallback(() => {
+    if(dispatch) {
+      dispatch({ type: "SET_CHATBOT_VISIBILITY", payload: !chatbotVisible });
+    }
+  }, [chatbotVisible, dispatch]);
 
   return (
     <main className="h-full w-full relative flex flex-col">
@@ -120,7 +127,9 @@ export default function Home() {
       )}
 
       <div className="absolute top-4 left-4 w-72 rounded-2xl border border-slate-200/60 bg-white/90 p-4 text-sm text-slate-700 shadow-xl">
-        <p className="text-xs uppercase tracking-wide text-slate-500">WebSocket 连接</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">
+          WebSocket 连接
+        </p>
         <p className="text-base font-semibold">
           状态：
           <span className="ml-2 font-normal text-slate-600">{status}</span>
@@ -167,19 +176,19 @@ export default function Home() {
       </div>
 
       {/* 根据全局配置控制 Chatbot 是否渲染，默认保持隐藏 */}
-      {globals?.chatbotVisible && (
-        <div className="absolute bottom-4 right-4 w-120 h-dvh py-16 pointer-events-auto">
+      {chatbotVisible && (
+        <div className="absolute bottom-4 right-4 w-120 h-dvh py-32 pointer-events-auto">
           <Chatbot />
         </div>
       )}
       <div className="absolute bottom-4 left-6 right-6">
         <div className="w-full flex gap-2">
-            <VoiceInputToggle />
-           <AvatarCommandInput />
-           <Button className="flex gap-2" size='lg' variant='outline'>
+          <VoiceInputToggle />
+          <AvatarCommandInput />
+          <Button className="flex gap-2" size="lg" variant="outline" onClick={handleTextBtn}>
             <MessageSquareMore />
             <span>Text</span>
-           </Button>
+          </Button>
         </div>
       </div>
     </main>
