@@ -1,4 +1,4 @@
-import http from "node:http";
+import http, { type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { Server, type Socket } from "socket.io";
 import { getToken } from "next-auth/jwt";
@@ -39,8 +39,14 @@ io.use(async (socket, next) => {
   }
 
   try {
+    const handshakeReq = socket.request as IncomingMessage & {
+      cookies: Partial<Record<string, string>>;
+    };
+    // next-auth 需要 req 带有 cookies，在握手阶段补齐以满足类型校验
+    handshakeReq.cookies = handshakeReq.cookies ?? {};
+
     const token = await getToken({
-      req: socket.request,
+      req: handshakeReq,
       secret: NEXTAUTH_SECRET,
       secureCookie: process.env.NODE_ENV === "production",
     });
