@@ -33,14 +33,22 @@ export const io = new Server(httpServer, {
 const clients = new Map<string, Socket>();
 
 /**
+ * 每个连接对应的对话 ID，便于追踪本次 WebSocket 会话以及后续的消息上下文。
+ */
+const clientConversations = new Map<string, string>();
+
+/**
  * 每当新的连接建立则注册各类事件。
  */
 io.on("connection", (socket) => {
   const clientId = randomUUID();
+  const conversationId = randomUUID();
   clients.set(clientId, socket);
+  clientConversations.set(clientId, conversationId);
 
   console.debug("socketIOServer: 新客户端连接", {
     clientId,
+    conversationId,
     activeClients: clients.size,
   });
 
@@ -62,17 +70,19 @@ io.on("connection", (socket) => {
 
   // console.log("socketIOServer: 收到语音片段，最终返回语音", { clientId, payload });
     // queueVoiceSegment(clientId, socket, meta, audio);
-  socket.on("chat:input", (payload:ChatInputPayload) => {
-    handleChatInput(clientId, socket, payload, io);
+  socket.on("chat:input", (payload: ChatInputPayload) => {
+    handleChatInput(clientId, conversationId, socket, payload, io);
   });
   
   socket.on("disconnect", (reason) => {
     console.debug("socketIOServer: 客户端断开连接", { clientId, reason });
+    clientConversations.delete(clientId);
     cleanupClient(clientId, clients, io);
   });
 
   socket.on("error", (error) => {
     console.error("socketIOServer: 连接错误", { clientId, error });
+    clientConversations.delete(clientId);
     cleanupClient(clientId, clients, io);
   });
 });
