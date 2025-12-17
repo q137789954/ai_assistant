@@ -8,7 +8,7 @@
     "build:no_lint": "prisma generate && SKIP_ESLINT=1 NEXT_SKIP_TYPE_CHECK=1 next build",
     "start": "next start",
     "lint": "eslint",
-    "socket-server": "tsx src/server/socketIOServer.ts",
+    "client-socket-server": "tsx src/server/clientSocketServer.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

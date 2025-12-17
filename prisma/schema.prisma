@@ -20,7 +20,7 @@ enum ConversationMessageRole {
 /// 用户核心信息表，存储登录所需的基本字段
 model User {
   /// 唯一主键字符串，由业务层生成后写入
-  id            String    @id @db.Text
+  id            String    @id @default(cuid()) @db.Text
   /// 用户的展示名称，可选
   name          String?   @db.Text
   /// 用户邮箱，可选但确保全局唯一
@@ -34,19 +34,21 @@ model User {
   /// 记录创建时间，默认当前时间
   createdAt     DateTime  @default(now()) @db.Timestamp(3)
   /// 更新时间，需要由业务自行更新
-  updatedAt     DateTime  @db.Timestamp(3)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamp(3)
 
   /// 关联的账户记录列表
   accounts      Account[]
   /// 关联的会话记录列表
   sessions      Session[]
+  /// 关联的聊天消息，用于统计和回溯
+  messages      ConversationMessage[]
 
   @@map("user")
 }
 
 /// 第三方 OAuth / 本地账号绑定表，关联 User
 model Account {
-  id                String   @id @db.Text
+  id                String   @id @default(cuid()) @db.Text
   /// 所属用户 ID
   userId            String   @db.Text
   /// 账户类型（例如 oauth）
@@ -56,21 +58,21 @@ model Account {
   /// 第三方账号 ID
   providerAccountId String   @db.Text
   /// 刷新令牌
-  refreshToken      String?  @map("refresh_token") @db.Text
+  refresh_token     String?  @db.Text
   /// 访问令牌
-  accessToken       String?  @map("access_token") @db.Text
+  access_token      String?  @db.Text
   /// 过期时间（秒）
-  expiresAt         Int?     @map("expires_at") @db.Integer
+  expires_at        Int?     @db.Integer
   /// 令牌类型
-  tokenType         String?  @map("token_type") @db.Text
+  token_type        String?  @db.Text
   /// 授权范围
   scope             String?  @db.Text
   /// ID 令牌
-  idToken           String?  @map("id_token") @db.Text
+  id_token           String?  @db.Text
   /// 会话状态
-  sessionState      String?  @map("session_state") @db.Text
+  session_state      String?  @db.Text
   createdAt         DateTime @default(now()) @db.Timestamp(3)
-  updatedAt         DateTime @db.Timestamp(3)
+  updatedAt         DateTime @default(now()) @updatedAt @db.Timestamp(3)
 
   /// 关联的用户记录
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -82,12 +84,12 @@ model Account {
 
 /// 会话表，用于管理当前登录会话
 model Session {
-  id           String   @id @db.Text
+  id           String   @id @default(cuid()) @db.Text
   sessionToken String   @unique(map: "session_session_token_key") @db.Text
   userId       String   @db.Text
   expires      DateTime @db.Timestamp(3)
   createdAt    DateTime @default(now()) @db.Timestamp(3)
-  updatedAt    DateTime @db.Timestamp(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamp(3)
 
   /// 当前会话对应的用户
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
