@@ -7,6 +7,7 @@ import { prisma } from "@/server/db/prisma";
  *
  * @param clientId 客户端唯一标识
  * @param conversationId 本次连接对应的 conversationId，用于上下文追踪
+ * @param userId 当前登录的 userId，可用于写入多轮上下文或权限校验
  * @param socket 当前连接的 socket 实例
  * @param payload 客户端传递的事件载荷
  * @param io 全局 Socket.IO 实例，用于广播或推送
@@ -14,6 +15,7 @@ import { prisma } from "@/server/db/prisma";
 export const handleChatInput = async (
   clientId: string,
   conversationId: string,
+  userId: string,
   socket: Socket,
   payload: ChatInputPayload,
   io: Server,
@@ -21,6 +23,7 @@ export const handleChatInput = async (
   console.debug("chatInputHandler: 收到输入", {
     clientId,
     conversationId,
+    userId,
     payload,
   });
 
@@ -36,7 +39,7 @@ export const handleChatInput = async (
           content,
           outputFormat,
           isVoice: false,
-          userId: clientId,
+          userId,
         },
       });
       console.debug("chatInputHandler: 文本消息已存储到数据库", { clientId, conversationId });

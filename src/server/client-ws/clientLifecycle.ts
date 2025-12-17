@@ -49,8 +49,15 @@ export const cleanupClient = (clientId: string, clients: Map<string, Socket>, io
 
 /**
  * 将客户端的每条 message 转化为统一结构后广播，便于前端展示。
+ * @param userId 已登录的 userId，可用于后端审计或多租户区分
  */
-export const handleClientMessage = (clientId: string, io: Server, rawData: unknown) => {
+export const handleClientMessage = (
+  clientId: string,
+  conversationId: string,
+  userId: string,
+  io: Server,
+  rawData: unknown,
+) => {
   const normalized = normalizeIncomingPayload(rawData);
   let parsed: unknown = normalized;
 
@@ -64,6 +71,8 @@ export const handleClientMessage = (clientId: string, io: Server, rawData: unkno
     event: "client-message",
     data: {
       clientId,
+      userId,
+      conversationId,
       raw: normalized,
       parsed,
       timestamp: new Date().toISOString(),

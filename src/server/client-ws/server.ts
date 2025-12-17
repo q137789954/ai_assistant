@@ -1,6 +1,7 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { Server, type Socket } from "socket.io";
+import { getToken } from "next-auth/jwt";
 import { queueVoiceSegment } from "./audio";
 import { cleanupClient, handleClientMessage, sendJoinNotifications } from "./clientLifecycle";
 import { handleChatInput } from "./handlers/chatInput";
@@ -11,6 +12,7 @@ import { ChatInputPayload } from "./types";
  */
 const PORT = Number(process.env.SOCKET_SERVER_PORT) || 4000;
 const CORS_ORIGIN = process.env.SOCKET_SERVER_CORS_ORIGIN || "*";
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || "";
 
 /**
  * HTTP 服务器仅用于 Socket.IO 的握手，所有 WebSocket 请求都由 socket.io 收到。
@@ -25,6 +27,34 @@ export const io = new Server(httpServer, {
     origin: CORS_ORIGIN,
   },
   transports: ["websocket"],
+});
+
+/**
+ * 在握手阶段使用 next-auth 的 JWT 校验，未登录直接拒绝连接。
+ */
+io.use(async (socket, next) => {
+  if (!NEXTAUTH_SECRET) {
+    next(new Error("socketIOServer: 缺失 NEXTAUTH_SECRET"));
+    return;
+  }
+
+  try {
+    const token = await getToken({
+      req: socket.request,
+      secret: NEXTAUTH_SECRET,
+      secureCookie: process.env.NODE_ENV === "production",
+    });
+
+    const userId = token?.sub;
+    if (!userId) {
+      throw new Error("socketIOServer: 未登录");
+    }
+
+    socket.data.userId = userId;
+    next();
+  } catch (error) {
+    next(new Error("socketIOServer: 未授权"));
+  }
 });
 
 /**
@@ -43,19 +73,21 @@ const clientConversations = new Map<string, string>();
 io.on("connection", (socket) => {
   const clientId = randomUUID();
   const conversationId = randomUUID();
+  const userId = socket.data.userId as string;
   clients.set(clientId, socket);
   clientConversations.set(clientId, conversationId);
 
   console.debug("socketIOServer: 新客户端连接", {
     clientId,
     conversationId,
+    userId,
     activeClients: clients.size,
   });
 
   sendJoinNotifications(clientId, clients);
 
   socket.on("message", (payload) => {
-    handleClientMessage(clientId, io, payload);
+    handleClientMessage(clientId, conversationId, userId, io, payload);
   });
 
   // socket.on("voice-chunk", (meta, audio) => {
@@ -71,7 +103,7 @@ io.on("connection", (socket) => {
   // console.log("socketIOServer: 收到语音片段，最终返回语音", { clientId, payload });
     // queueVoiceSegment(clientId, socket, meta, audio);
   socket.on("chat:input", (payload: ChatInputPayload) => {
-    handleChatInput(clientId, conversationId, socket, payload, io);
+    handleChatInput(clientId, conversationId, userId, socket, payload, io);
   });
   
   socket.on("disconnect", (reason) => {
