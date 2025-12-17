@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { Button } from '@/app/components/ui'
 import { Send } from 'lucide-react'
+import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 
 type MessageRole = 'assistant' | 'user'
 
@@ -13,21 +14,7 @@ interface Message {
 }
 
 const initialMessages: Message[] = [
-  {
-    id: 1,
-    role: 'assistant',
-    content: '你好，我是你的 AI 助手，可以随时帮你整理笔记、写代码或聊天。',
-  },
-  {
-    id: 2,
-    role: 'user',
-    content: '帮我想一个轻松愉快的周末计划。',
-  },
-  {
-    id: 3,
-    role: 'assistant',
-    content: '可以去近郊徒步，然后在湖边野餐，晚上再看一部放松的电影。需要我帮你列一份清单吗？',
-  },
+  
 ]
 
 export default function Chatbot() {
@@ -35,9 +22,16 @@ export default function Chatbot() {
   const [draft, setDraft] = useState('')
   const viewportRef = useRef<HTMLDivElement>(null)
 
+  const {
+    emitEvent,
+  } = useWebSocketContext();
+
   useEffect(() => {
     viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight })
   }, [messages])
+
+
+  
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -45,6 +39,17 @@ export default function Chatbot() {
     if (!trimmed) {
       return
     }
+
+    const messageMeta = {
+          messageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          sampleRate: 16000,
+          timestamp: new Date().toISOString(),
+          content: trimmed,
+        };
+        const sent = emitEvent("text-based-chat", messageMeta);
+        if (!sent) {
+          console.warn("消息发送失败，请检查 WebSocket 连接状态");
+        }
 
     setMessages((prev) => [
       ...prev,

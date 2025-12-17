@@ -53,6 +53,11 @@ io.on("connection", (socket) => {
     queueVoiceSegment(clientId, socket, meta, audio);
   });
 
+  socket.on("text-based-chat", (payload) => {
+    console.log("socketIOServer: 收到文本聊天片段", { clientId, payload });
+
+  });
+  
   socket.on("disconnect", (reason) => {
     console.debug("socketIOServer: 客户端断开连接", { clientId, reason });
     cleanupClient(clientId, clients, io);

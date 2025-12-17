@@ -26,6 +26,10 @@ export type GlobalsState = {
    * 控制 Chatbot 组件在主页面的是否展示状态，默认不显示
    */
   chatbotVisible: boolean
+  /**
+   * 维护当前会话的唯一 sessionId，方便接入后端或者分析上下文
+   */
+  sessionId: string
 }
 
 export type GlobalsAction =
@@ -36,6 +40,7 @@ export type GlobalsAction =
   | { type: 'DEQUEUE_USER_SPEECH' }
   | { type: 'CLEAR_USER_SPEECH_QUEUE' }
   | { type: 'SET_CHATBOT_VISIBILITY'; payload: boolean }
+  | { type: 'SET_SESSION_ID'; payload: string }
 
 export interface GlobalsContextValue extends GlobalsState {
   dispatch: Dispatch<GlobalsAction>
