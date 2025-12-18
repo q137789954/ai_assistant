@@ -175,12 +175,15 @@ export default function Home() {
         )}
       </div>
 
-      {/* 根据全局配置控制 Chatbot 是否渲染，默认保持隐藏 */}
-      {chatbotVisible && (
-        <div className="absolute bottom-4 right-4 w-120 h-dvh py-32 pointer-events-auto">
-          <Chatbot />
-        </div>
-      )}
+      {/* Chatbot 通过抽屉形式展示，交由 open 状态控制动画 */}
+      <Chatbot
+        open={chatbotVisible || false}
+        onOpenChange={(next) => {
+          if (dispatch) {
+            dispatch({ type: 'SET_CHATBOT_VISIBILITY', payload: next })
+          }
+        }}
+      />
       <div className="absolute bottom-4 left-6 right-6">
         <div className="w-full flex gap-2">
           <VoiceInputToggle />

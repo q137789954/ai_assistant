@@ -1,9 +1,19 @@
 'use client'
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
-import { Button } from '@/app/components/ui'
-import { Send } from 'lucide-react'
-import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
+import clsx from 'clsx'
+import {
+  Button,
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/app/components/ui'
+import { Send, X } from 'lucide-react'
+import { useWebSocketContext } from '@/app/providers/WebSocketProviders'
 
 type MessageRole = 'assistant' | 'user'
 
@@ -13,29 +23,33 @@ interface Message {
   content: string
 }
 
-const initialMessages: Message[] = [
-  
-]
+const initialMessages: Message[] = []
 
-export default function Chatbot() {
+interface ChatbotProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [draft, setDraft] = useState('')
   const viewportRef = useRef<HTMLDivElement>(null)
   const streamingAssistantMessageIdRef = useRef<number | null>(null)
 
-  const {
-    emitEvent,
-    subscribe,
-  } = useWebSocketContext();
+  const { emitEvent, subscribe } = useWebSocketContext()
 
   useEffect(() => {
     viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight })
   }, [messages])
 
   useEffect(() => {
-    // 订阅后端流式响应事件，在聊天窗口中逐步插入或更新助手消息
+    if (!open) {
+      streamingAssistantMessageIdRef.current = null
+      return
+    }
+
     const unsubscribe = subscribe((event) => {
-      if (typeof event.data !== "string") {
+      if (typeof event.data !== 'string') {
         return
       }
 
@@ -73,32 +87,32 @@ export default function Chatbot() {
             ...prev,
             {
               id: newId,
-              role: "assistant",
+              role: 'assistant',
               content: text,
             },
           ]
         })
       }
 
-      if (parsed.event === "chat-response-chunk") {
+      if (parsed.event === 'chat-response-chunk') {
         const aggregated = payloadData.aggregated
-        if (typeof aggregated === "string") {
+        if (typeof aggregated === 'string') {
           appendOrUpdateAssistantMessage(aggregated)
         }
         return
       }
 
-      if (parsed.event === "chat-response-complete") {
+      if (parsed.event === 'chat-response-complete') {
         const finalContent = payloadData.assistantContent
-        if (typeof finalContent === "string") {
+        if (typeof finalContent === 'string') {
           appendOrUpdateAssistantMessage(finalContent)
         }
         streamingAssistantMessageIdRef.current = null
         return
       }
 
-      if (parsed.event === "chat-response-error") {
-        console.error("助手响应错误：", payloadData.message)
+      if (parsed.event === 'chat-response-error') {
+        console.error('助手响应错误：', payloadData.message)
       }
     })
 
@@ -106,10 +120,7 @@ export default function Chatbot() {
       streamingAssistantMessageIdRef.current = null
       unsubscribe()
     }
-  }, [subscribe])
-
-
-  
+  }, [open, subscribe])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -119,16 +130,16 @@ export default function Chatbot() {
     }
 
     const messageMeta = {
-          messageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          sampleRate: 16000,
-          content: trimmed,
-          outputFormat: "text",
-          inputFormat: "text",
-        };
-        const sent = emitEvent("chat:input", messageMeta);
-        if (!sent) {
-          console.warn("消息发送失败，请检查 WebSocket 连接状态");
-        }
+      messageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sampleRate: 16000,
+      content: trimmed,
+      outputFormat: 'text',
+      inputFormat: 'text',
+    }
+    const sent = emitEvent('chat:input', messageMeta)
+    if (!sent) {
+      console.warn('消息发送失败，请检查 WebSocket 连接状态')
+    }
 
     setMessages((prev) => [
       ...prev,
@@ -142,27 +153,53 @@ export default function Chatbot() {
   }
 
   return (
-    <div className="flex h-full max-h-full w-full flex-col rounded-[32px] border border-sky-200/80 bg-sky-50/80 p-4 shadow-[0_12px_40px_rgba(15,118,255,0.15)] backdrop-blur">
-      <div className="flex flex-1 flex-col rounded-[28px] border border-sky-100/60 bg-white text-sm shadow-inner">
-        <div
-          ref={viewportRef}
-          className="flex flex-1 flex-col gap-4 overflow-y-auto rounded-[28px] border border-transparent bg-white/50 p-6 text-slate-900"
-        >
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`max-w-[20rem] rounded-[22px] px-4 py-3 leading-relaxed shadow-sm ${
-                message.role === 'assistant'
-                  ? 'bg-slate-100 text-slate-900'
-                  : 'ml-auto bg-sky-100 text-sky-900'
-              }`}
-            >
-              {message.content}
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent
+        placement="bottom"
+        size="lg"
+        className="chatbot-drawer-animated flex max-h-[70vh] flex-col rounded-t-[32px] border border-slate-200/80 bg-slate-50 shadow-2xl"
+      >
+        <DrawerHeader className="px-6 pt-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <DrawerTitle>AI 助手</DrawerTitle>
+              <DrawerDescription>实时语音 + 文本交互，支持持续对话。</DrawerDescription>
             </div>
-          ))}
+            <DrawerClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                aria-label="关闭聊天抽屉"
+              >
+                <X size={16} />
+              </button>
+            </DrawerClose>
+          </div>
+        </DrawerHeader>
+
+        <div className="flex flex-1 flex-col gap-4 px-6 pb-2">
+          <div
+            ref={viewportRef}
+            className="flex flex-1 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/70 bg-white/60 p-4 text-sm text-slate-900 shadow-inner"
+          >
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={clsx(
+                  'max-w-[20rem] rounded-[22px] px-4 py-3 leading-relaxed shadow-sm',
+                  message.role === 'assistant'
+                    ? 'bg-slate-100 text-slate-900'
+                    : 'ml-auto bg-sky-100 text-sky-900'
+                )}
+              >
+                {message.content}
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="mt-4 flex h-20 shrink-0 flex-col rounded-b-[28px] bg-sky-100/90 px-6 py-4">
-          <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-3">
+
+        <DrawerFooter className="sticky bottom-0 w-full border-t border-slate-200/70 bg-slate-100/70 px-6 py-4">
+          <form onSubmit={handleSubmit} className="flex w-full items-center gap-3">
             <textarea
               className="flex-1 resize-none rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none"
               placeholder="输入消息..."
@@ -170,17 +207,16 @@ export default function Chatbot() {
               onChange={(event) => setDraft(event.target.value)}
               rows={1}
             />
-            {/* rounded-full border border-sky-200 bg-white text-sky-600 transition hover:bg-sky-50 */}
             <Button
               variant="outline"
-              className="h-10 w-10 p-0! flex items-center justify-center rounded-full! text-lg!"
+              className="h-10 w-10 rounded-full p-0 text-lg"
               aria-label="发送消息"
             >
               <Send size={18} />
             </Button>
           </form>
-        </div>
-      </div>
-    </div>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }
