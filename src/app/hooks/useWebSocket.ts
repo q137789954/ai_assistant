@@ -75,6 +75,7 @@ const useWebSocket = (url: string | null, options: UseWebSocketOptions = {}) => 
     const socket = io(url, {
       autoConnect: false,
       transports: ["websocket"],
+      withCredentials: true, // 跨域连接需带上 cookie 以传递 next-auth 会话
     });
 
     socket.on("connect", () => {

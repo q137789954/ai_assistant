@@ -12,6 +12,10 @@ import { ChatInputPayload } from "./types";
  */
 const PORT = Number(process.env.SOCKET_SERVER_PORT) || 4000;
 const CORS_ORIGIN = process.env.SOCKET_SERVER_CORS_ORIGIN || "*";
+/**
+ * 只有在指定了明确的跨域源时才允许凭证，避免使用 `*` 时违反浏览器策略。
+ */
+const ALLOW_CREDENTIALS = CORS_ORIGIN !== "*";
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || "";
 
 /**
@@ -25,6 +29,7 @@ const httpServer = http.createServer();
 export const io = new Server(httpServer, {
   cors: {
     origin: CORS_ORIGIN,
+    credentials: ALLOW_CREDENTIALS,
   },
   transports: ["websocket"],
 });
@@ -33,6 +38,7 @@ export const io = new Server(httpServer, {
  * 在握手阶段使用 next-auth 的 JWT 校验，未登录直接拒绝连接。
  */
 io.use(async (socket, next) => {
+  console.log("socket.request.headers.cookie:",socket.request.headers.cookie);
   if (!NEXTAUTH_SECRET) {
     next(new Error("socketIOServer: 缺失 NEXTAUTH_SECRET"));
     return;
@@ -45,11 +51,15 @@ io.use(async (socket, next) => {
     // next-auth 需要 req 带有 cookies，在握手阶段补齐以满足类型校验
     handshakeReq.cookies = handshakeReq.cookies ?? {};
 
+    console.log("服务端NEXTAUTH_SECRET:", NEXTAUTH_SECRET);
     const token = await getToken({
       req: handshakeReq,
       secret: NEXTAUTH_SECRET,
       secureCookie: process.env.NODE_ENV === "production",
     });
+
+    console.debug("cookieHeader:", socket.request.headers.cookie);
+    console.debug("decoded token:", token);
 
     const userId = token?.sub;
     if (!userId) {

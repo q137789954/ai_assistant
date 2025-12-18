@@ -56,10 +56,9 @@ export const authOptions: NextAuthOptions = {
 
   session: {
     /**
-     * 使用数据库会话（Session 表）
-     * - 当配置了 Adapter 时，next-auth 默认使用数据库策略
+     * 使用 JWT 策略让服务端可直接解码 payload 而不用再去数据库查 session。
      */
-    strategy: "database",
+    strategy: "jwt",
   },
 
   pages: {
@@ -130,12 +129,21 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     /**
-     * 把数据库里的 user.id 注入到 session.user.id，方便前端使用
+     * 认证后把初始用户 ID 放在 JWT 里，后续再由 session 回调复用；
      */
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      if (user?.id) {
+        token.id = user.id;
+      }
+      return token;
+    },
+    /**
+     * session 需要从 token 里恢复 user.id，而不是依赖数据库 user 参数（JWT 策略不会重复提供）。
+     */
+    async session({ session, token }) {
       if (session.user) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (session.user as any).id = user.id;
+        (session.user as any).id = token.sub ?? token.id;
       }
       return session;
     },

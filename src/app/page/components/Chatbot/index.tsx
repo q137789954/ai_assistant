@@ -45,8 +45,9 @@ export default function Chatbot() {
           sampleRate: 16000,
           timestamp: new Date().toISOString(),
           content: trimmed,
+          outputFormat: "text",
         };
-        const sent = emitEvent("text-based-chat", messageMeta);
+        const sent = emitEvent("chat:input", messageMeta);
         if (!sent) {
           console.warn("消息发送失败，请检查 WebSocket 连接状态");
         }
