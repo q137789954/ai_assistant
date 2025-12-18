@@ -61,7 +61,6 @@ export const io = new Server(httpServer, {
  * 在握手阶段使用 next-auth 的 JWT 校验，未登录直接拒绝连接。
  */
 io.use(async (socket, next) => {
-  console.log("socket.request.headers.cookie:",socket.request.headers.cookie);
   if (!NEXTAUTH_SECRET) {
     next(new Error("socketIOServer: 缺失 NEXTAUTH_SECRET"));
     return;
@@ -76,16 +75,11 @@ io.use(async (socket, next) => {
       ...(handshakeReq.cookies ?? {}),
       ...parseCookieHeader(socket.request.headers.cookie),
     };
-
-    console.log("服务端NEXTAUTH_SECRET:", NEXTAUTH_SECRET);
     const token = await getToken({
       req: handshakeReq,
       secret: NEXTAUTH_SECRET,
       secureCookie: process.env.NODE_ENV === "production",
     });
-
-    console.debug("cookieHeader:", socket.request.headers.cookie);
-    console.debug("decoded token:", token);
 
     const userId = token?.sub;
     if (!userId) {
@@ -119,13 +113,6 @@ io.on("connection", (socket) => {
   clients.set(clientId, socket);
   clientConversations.set(clientId, conversationId);
 
-  console.debug("socketIOServer: 新客户端连接", {
-    clientId,
-    conversationId,
-    userId,
-    activeClients: clients.size,
-  });
-
   sendJoinNotifications(clientId, clients);
 
   socket.on("message", (payload) => {
@@ -137,13 +124,11 @@ io.on("connection", (socket) => {
   });
   
   socket.on("disconnect", (reason) => {
-    console.debug("socketIOServer: 客户端断开连接", { clientId, reason });
     clientConversations.delete(clientId);
     cleanupClient(clientId, clients, io);
   });
 
   socket.on("error", (error) => {
-    console.error("socketIOServer: 连接错误", { clientId, error });
     clientConversations.delete(clientId);
     cleanupClient(clientId, clients, io);
   });

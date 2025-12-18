@@ -48,10 +48,10 @@ export const authOptions: NextAuthOptions = {
       // eslint-disable-next-line no-console
       console.warn("[next-auth][warn]", code);
     },
-    debug(code, metadata) {
-      // eslint-disable-next-line no-console
-      console.debug("[next-auth][debug]", code, metadata);
-    },
+    // debug(code, metadata) {
+    //   // eslint-disable-next-line no-console
+    //   console.debug("[next-auth][debug]", code, metadata);
+    // },
   },
 
   session: {
