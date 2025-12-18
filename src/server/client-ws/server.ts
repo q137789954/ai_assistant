@@ -132,18 +132,6 @@ io.on("connection", (socket) => {
     handleClientMessage(clientId, conversationId, userId, io, payload);
   });
 
-  // socket.on("voice-chunk", (meta, audio) => {
-  //   console.log("socketIOServer: 收到语音片段，最终返回语音", { clientId, meta });
-  //   queueVoiceSegment(clientId, socket, meta, audio);
-  // });
-
-  // socket.on("text-based-chat", (payload) => {
-  //   console.log("socketIOServer: 收到文本聊天片段，最终返回文本回复", { clientId, payload });
-
-  // });
-
-  // console.log("socketIOServer: 收到语音片段，最终返回语音", { clientId, payload });
-    // queueVoiceSegment(clientId, socket, meta, audio);
   socket.on("chat:input", (payload: ChatInputPayload) => {
     handleChatInput(clientId, conversationId, userId, socket, payload, io);
   });

@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import { ConversationMessageRole } from "@prisma/client";
 import { ChatInputPayload } from "../types";
 import { prisma } from "@/server/db/prisma";
+import { grokCreateChatCompletionStream } from "@/server/llm";
+import { irritablePrompt} from "@/server/llm/prompt";
 
 /**
  * 处理 chat:input 事件的逻辑入口，后续可在此完成复杂的业务流程。
@@ -59,6 +61,19 @@ export const handleChatInput = async (
     } catch (error) {
       console.error("chatInputHandler: 存储文本消息时出错", { clientId, conversationId, error });
     }
+    grokCreateChatCompletionStream({
+      messages: [
+        {
+          role: "system",
+          content: irritablePrompt.systemPrompt,
+        },
+        {
+          role: "user",
+          content: content as string,
+        },
+      ],
+    });
+    console.log("chatInputHandler: 已调用 grokCreateChatCompletionStream 进行响应生成");
   }
 
   // 未来可扩展对其他类型输入（如语音、图像等）的处理逻辑
