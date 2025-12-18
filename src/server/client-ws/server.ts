@@ -19,6 +19,29 @@ const ALLOW_CREDENTIALS = CORS_ORIGIN !== "*";
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || "";
 
 /**
+ * 从握手请求携带的 cookie 字符串中提取键值对，供 next-auth JWT 验证时使用。
+ * 这样即使原始请求没有自动解析 cookie，也能通过 headers 明确提供给 getToken。
+ */
+const parseCookieHeader = (cookieHeader?: string): Partial<Record<string, string>> => {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) {
+    return cookies;
+  }
+
+  for (const entry of cookieHeader.split(";")) {
+    const [rawName, ...rest] = entry.split("=");
+    const name = rawName?.trim();
+    if (!name) {
+      continue;
+    }
+
+    cookies[name] = rest.join("=").trim();
+  }
+
+  return cookies;
+};
+
+/**
  * HTTP 服务器仅用于 Socket.IO 的握手，所有 WebSocket 请求都由 socket.io 收到。
  */
 const httpServer = http.createServer();
@@ -49,7 +72,10 @@ io.use(async (socket, next) => {
       cookies: Partial<Record<string, string>>;
     };
     // next-auth 需要 req 带有 cookies，在握手阶段补齐以满足类型校验
-    handshakeReq.cookies = handshakeReq.cookies ?? {};
+    handshakeReq.cookies = {
+      ...(handshakeReq.cookies ?? {}),
+      ...parseCookieHeader(socket.request.headers.cookie),
+    };
 
     console.log("服务端NEXTAUTH_SECRET:", NEXTAUTH_SECRET);
     const token = await getToken({

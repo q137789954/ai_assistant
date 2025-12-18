@@ -1,4 +1,6 @@
 import { Server, type Socket } from "socket.io";
+import { randomUUID } from "crypto";
+import { ConversationMessageRole } from "@prisma/client";
 import { ChatInputPayload } from "../types";
 import { prisma } from "@/server/db/prisma";
 
@@ -35,15 +37,20 @@ export const handleChatInput = async (
   console.log(conversationId,"conversationId---");
 
 
-  if(outputFormat === "text") {
-    // 简单示例：将文本输入存储到数据库中的 Message 表
+  if (outputFormat === "text") {
+    // 简单示例：将文本输入存储到数据库中的 ConversationMessage 表
     try {
-      await prisma.message.create({
+      // 使用 Prisma 的 ConversationMessage 模型存储聊天记录
+      // 确保文本输入内容为字符串，避免 Float32Array 数据写入文本字段导致类型报错
+      if (typeof content !== "string") {
+        throw new Error("文本输入必须为字符串");
+      }
+      await prisma.conversationMessage.create({
         data: {
+          id: randomUUID(),
           conversationId,
-          role: "user",
+          role: ConversationMessageRole.USER,
           content,
-          outputFormat,
           isVoice: false,
           userId,
         },
