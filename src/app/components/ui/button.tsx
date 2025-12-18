@@ -1,9 +1,10 @@
 'use client'
 
 import * as React from 'react'
-import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 import clsx from 'clsx'
+import { Button as AntdButton } from 'antd'
+import type { ButtonProps as AntdButtonProps } from 'antd'
 
 /**
  * 统一定义按钮的基础样式与变体，方便通过参数快速切换视觉效果。
@@ -38,7 +39,7 @@ const buttonVariants = cva(
 )
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends Omit<AntdButtonProps, 'size' | 'variant'>,
     VariantProps<typeof buttonVariants> {
   /**
    * 支持使用 Radix Slot 作为父组件控制最终渲染元素（用于配合 Link 等组件）。
@@ -47,28 +48,27 @@ export interface ButtonProps
 }
 
 /**
- * 封装 shadcn/button 语义，提供统一的 className 合并与 ref 转发。
+ * 使用 Ant Design Button 作为基础，保持原有变体与 slot 支持，方便统一样式。
  */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, fullWidth, asChild = false, ...props }, ref) => {
-    const classes = clsx(
-      buttonVariants({ variant, size, fullWidth }),
-      className
-    )
-
-    if (asChild) {
-      // 如果通过 Slot 作为父组件渲染，ref 需要匹配 Slot 的返回类型
-      return (
-        <Slot
-          className={classes}
-          ref={ref as React.ForwardedRef<React.ElementRef<typeof Slot>>}
-          {...props}
-        />
-      )
-    }
+  (
+    {
+      className,
+      variant,
+      size: uiSize,
+      fullWidth,
+      ...props
+    },
+    ref
+  ) => {
+    const classes = clsx(buttonVariants({ variant, size: uiSize, fullWidth }), className)
 
     return (
-      <button className={classes} ref={ref} {...props} />
+      <AntdButton
+        ref={ref as React.ForwardedRef<React.ElementRef<typeof AntdButton>>}
+        className={classes}
+        {...props}
+      />
     )
   }
 )
