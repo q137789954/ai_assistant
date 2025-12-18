@@ -5,8 +5,6 @@ import clsx from 'clsx'
 import {
   Button,
   Drawer,
-  DrawerClose,
-  DrawerContent,
   DrawerDescription,
   DrawerFooter,
   DrawerHeader,
@@ -153,27 +151,30 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
   }
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent
-        placement="bottom"
-        size="lg"
-        className="chatbot-drawer-animated flex max-h-[70vh] flex-col rounded-t-[32px] border border-slate-200/80 bg-slate-50 shadow-2xl"
-      >
-        <DrawerHeader className="px-6 pt-6">
+    <Drawer
+      open={open}
+      onClose={() => onOpenChange(false)}
+      placement="bottom"
+      size="large"
+      closable={false}
+      maskClosable
+      className="chatbot-drawer"
+    >
+      <div className="flex h-full flex-col rounded-t-[32px] border border-slate-200/80 bg-slate-50 shadow-2xl">
+        <DrawerHeader>
           <div className="flex items-center justify-between gap-4">
             <div>
               <DrawerTitle>AI 助手</DrawerTitle>
               <DrawerDescription>实时语音 + 文本交互，支持持续对话。</DrawerDescription>
             </div>
-            <DrawerClose asChild>
-              <button
-                type="button"
-                className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                aria-label="关闭聊天抽屉"
-              >
-                <X size={16} />
-              </button>
-            </DrawerClose>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+              aria-label="关闭聊天抽屉"
+            >
+              <X size={16} />
+            </button>
           </div>
         </DrawerHeader>
 
@@ -216,7 +217,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
             </Button>
           </form>
         </DrawerFooter>
-      </DrawerContent>
+      </div>
     </Drawer>
   )
 }
