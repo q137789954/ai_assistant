@@ -23,5 +23,4 @@ export interface ChatInputPayload {
   outputFormat: Format;
   inputFormat: Format;
   content: string | Float32Array;
-  timestamp: string;
 }

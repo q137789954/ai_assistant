@@ -53,7 +53,6 @@ export const handleChatInput = async (
           content,
           isVoice: false,
           userId,
-          createdAt: new Date(),
         },
       });
       console.debug("chatInputHandler: 文本消息已存储到数据库", { clientId, conversationId });
