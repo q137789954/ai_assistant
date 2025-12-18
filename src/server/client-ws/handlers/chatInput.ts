@@ -29,15 +29,15 @@ export const handleChatInput = async (
     payload,
   });
 
-  const { outputFormat, content } = payload;
+  const { outputFormat, inputFormat, content } = payload;
 
-  console.log("chatInputHandler: 处理输入内容", { outputFormat, content });
+  console.log("chatInputHandler: 处理输入内容", { outputFormat, inputFormat, content });
 
   console.log(userId,"userId---");
   console.log(conversationId,"conversationId---");
 
 
-  if (outputFormat === "text") {
+  if (outputFormat === "text" && inputFormat === "text") {
     // 简单示例：将文本输入存储到数据库中的 ConversationMessage 表
     try {
       // 使用 Prisma 的 ConversationMessage 模型存储聊天记录
@@ -53,6 +53,7 @@ export const handleChatInput = async (
           content,
           isVoice: false,
           userId,
+          createdAt: new Date(),
         },
       });
       console.debug("chatInputHandler: 文本消息已存储到数据库", { clientId, conversationId });

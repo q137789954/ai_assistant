@@ -43,9 +43,10 @@ export default function Chatbot() {
     const messageMeta = {
           messageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
           sampleRate: 16000,
-          timestamp: new Date().toISOString(),
+          timestamp: new Date().getTime(),
           content: trimmed,
           outputFormat: "text",
+          inputFormat: "text",
         };
         const sent = emitEvent("chat:input", messageMeta);
         if (!sent) {

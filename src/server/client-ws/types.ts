@@ -16,9 +16,12 @@ export type VoiceBucket = {
   timer: ReturnType<typeof setTimeout> | null;
 };
 
+type Format = "text" | "audio";
 
 export interface ChatInputPayload {
   type: "chat:input";
-  outputFormat: "text" | "speech";
+  outputFormat: Format;
+  inputFormat: Format;
   content: string | Float32Array;
+  timestamp: string;
 }
