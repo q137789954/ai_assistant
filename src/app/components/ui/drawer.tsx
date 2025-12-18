@@ -8,7 +8,7 @@ import type { DrawerProps as AntdDrawerProps } from 'antd'
 /**
  * 基于 Ant Design Drawer 的封装，统一关闭按钮、遮罩与面板样式。
  * - 默认取消自带 header/close icon，避免与自定义结构冲突。
- * - bodyStyle 与 drawerStyle 都设置为透明，方便内部由业务层定义圆角/背景。
+ * - 通过 `styles` 自定义 wrapper/body 为透明，方便内部由业务层定义圆角/背景。
  */
 export type DrawerProps = AntdDrawerProps
 
@@ -19,18 +19,22 @@ const Drawer = ({
   maskClosable = true,
   ...props
 }: DrawerProps) => {
-  const mergedStyles = {
-    ...styles,
-    drawer: {
-      backgroundColor: 'transparent',
-      borderRadius: 0,
-      ...(styles?.drawer ?? {}),
-    },
-    body: {
-      padding: 0,
-      backgroundColor: 'transparent',
-      ...(styles?.body ?? {}),
-    },
+  const mergedStyles: AntdDrawerProps['styles'] = (info) => {
+    const resolvedStyles =
+      typeof styles === 'function' ? styles(info) : styles ?? {}
+    return {
+      ...resolvedStyles,
+      wrapper: {
+        backgroundColor: 'transparent',
+        borderRadius: 0,
+        ...(resolvedStyles?.wrapper ?? {}),
+      },
+      body: {
+        padding: 0,
+        backgroundColor: 'transparent',
+        ...(resolvedStyles?.body ?? {}),
+      },
+    }
   }
   return (
     <AntdDrawer
