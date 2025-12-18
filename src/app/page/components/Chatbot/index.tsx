@@ -21,14 +21,92 @@ export default function Chatbot() {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [draft, setDraft] = useState('')
   const viewportRef = useRef<HTMLDivElement>(null)
+  const streamingAssistantMessageIdRef = useRef<number | null>(null)
 
   const {
     emitEvent,
+    subscribe,
   } = useWebSocketContext();
 
   useEffect(() => {
     viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight })
   }, [messages])
+
+  useEffect(() => {
+    // 订阅后端流式响应事件，在聊天窗口中逐步插入或更新助手消息
+    const unsubscribe = subscribe((event) => {
+      if (typeof event.data !== "string") {
+        return
+      }
+
+      let parsed: { event?: string; data?: Record<string, unknown> } | null = null
+      try {
+        parsed = JSON.parse(event.data)
+      } catch {
+        return
+      }
+
+      if (!parsed?.event) {
+        return
+      }
+
+      const payloadData = parsed.data ?? {}
+
+      const appendOrUpdateAssistantMessage = (text: string) => {
+        if (!text) {
+          return
+        }
+        setMessages((prev) => {
+          const existingId = streamingAssistantMessageIdRef.current
+          const existingIndex =
+            existingId !== null ? prev.findIndex((item) => item.id === existingId) : -1
+
+          if (existingIndex !== -1) {
+            const updated = [...prev]
+            updated[existingIndex] = { ...updated[existingIndex], content: text }
+            return updated
+          }
+
+          const newId = prev.length + 1
+          streamingAssistantMessageIdRef.current = newId
+          return [
+            ...prev,
+            {
+              id: newId,
+              role: "assistant",
+              content: text,
+            },
+          ]
+        })
+      }
+
+      if (parsed.event === "chat-response-chunk") {
+        const aggregated = payloadData.aggregated
+        if (typeof aggregated === "string") {
+          appendOrUpdateAssistantMessage(aggregated)
+        }
+        return
+      }
+
+      if (parsed.event === "chat-response-complete") {
+        const finalContent = payloadData.assistantContent
+        if (typeof finalContent === "string") {
+          appendOrUpdateAssistantMessage(finalContent)
+        }
+        streamingAssistantMessageIdRef.current = null
+        return
+      }
+
+      if (parsed.event === "chat-response-error") {
+        console.error("助手响应错误：", payloadData.message)
+      }
+    })
+
+    return () => {
+      streamingAssistantMessageIdRef.current = null
+      unsubscribe()
+    }
+  }, [subscribe])
 
 
   
