@@ -6,6 +6,7 @@ import { queueVoiceSegment } from "./audio";
 import { cleanupClient, handleClientMessage, sendJoinNotifications } from "./clientLifecycle";
 import { handleChatInput } from "./handlers/chatInput";
 import { ChatInputPayload } from "./types";
+import OpenAI from "openai";
 
 /**
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
@@ -112,8 +113,15 @@ io.on("connection", (socket) => {
   const userId = socket.data.userId as string;
   clients.set(clientId, socket);
   clientConversations.set(clientId, conversationId);
-
   sendJoinNotifications(clientId, clients);
+
+  const llmClient = new OpenAI({
+    apiKey: process.env.GROKKINGAI_API_KEY?.trim(),
+    baseURL: "https://api.x.ai/v1",
+    timeout: 360000, // Override default timeout with longer timeout for reasoning models
+  });
+
+  socket.data.llmClient = llmClient;
 
   socket.on("message", (payload) => {
     handleClientMessage(clientId, conversationId, userId, io, payload);
