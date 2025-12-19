@@ -63,7 +63,7 @@ export const processTextToSpeechChatFlow = async ({
       }
 
       console.log(deltaContent);
-      // 构建流式响应的 payload 并发送给tts服务
+      // 一句完整的话，发送给tts服务
 
     }
   } catch (error) {
