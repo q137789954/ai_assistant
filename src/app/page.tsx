@@ -6,7 +6,7 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
 import { VoiceInputToggle } from "@/app/components/features";
-import { useVoiceInputListener } from "./hooks";
+import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { Button } from "./components/ui";
@@ -67,6 +67,8 @@ export default function Home() {
     });
     return unsubscribe;
   }, [subscribe]);
+
+  useTtsAudioPlayer();
 
   useVoiceInputListener({
     onSpeechSegment: handleVoiceChunk,
