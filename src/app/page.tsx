@@ -126,55 +126,6 @@ export default function Home() {
         </div>
       )}
 
-      <div className="absolute top-4 left-4 w-72 rounded-2xl border border-slate-200/60 bg-white/90 p-4 text-sm text-slate-700 shadow-xl">
-        <p className="text-xs uppercase tracking-wide text-slate-500">
-          WebSocket 连接
-        </p>
-        <p className="text-base font-semibold">
-          状态：
-          <span className="ml-2 font-normal text-slate-600">{status}</span>
-        </p>
-        {lastError && (
-          <p className="text-xs text-red-500">
-            错误：
-            <span className="ml-1">{lastError.type}</span>
-          </p>
-        )}
-        <p className="text-xs text-slate-500">上一条消息：{friendlyMessage}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-500 hover:text-slate-900"
-            type="button"
-            onClick={connect}
-          >
-            连接
-          </button>
-          <button
-            className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-500 hover:text-slate-900"
-            type="button"
-            onClick={disconnect}
-          >
-            断开
-          </button>
-          <button
-            className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-500 hover:text-slate-900"
-            type="button"
-            onClick={handleSendPing}
-          >
-            发送测试消息
-          </button>
-        </div>
-        {messageLog.length > 0 && (
-          <div className="mt-3 max-h-28 overflow-auto rounded-xl border border-slate-200/60 bg-slate-50/80 p-2 text-xs text-slate-600">
-            {messageLog.map((item, index) => (
-              <p key={`${item}-${index}`} className="truncate">
-                {item}
-              </p>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Chatbot 通过抽屉形式展示，交由 open 状态控制动画 */}
       <Chatbot
         open={chatbotVisible || false}
@@ -186,12 +137,12 @@ export default function Home() {
       />
       <div className="absolute bottom-4 left-6 right-6">
         <div className="w-full flex gap-2">
-          <VoiceInputToggle />
-          <AvatarCommandInput />
           <Button className="flex gap-2" size="lg" variant="outline" onClick={handleTextBtn}>
             <MessageSquareMore />
             <span>Text</span>
           </Button>
+          <AvatarCommandInput />
+          <VoiceInputToggle />
         </div>
       </div>
     </main>

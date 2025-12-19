@@ -22,26 +22,40 @@ const Dialog = ({
   width = 560,
   maskClosable = true,
   closable = false,
+  styles,
   bodyStyle,
   className,
   children,
   ...props
-}: DialogProps) => (
-  <Modal
-    open={open}
-    footer={footer}
-    onCancel={() => onOpenChange?.(false)}
-    centered={centered}
-    width={width}
-    maskClosable={maskClosable}
-    closable={closable}
-    bodyStyle={{ padding: 0, backgroundColor: 'transparent', ...bodyStyle }}
-    className={clsx('custom-dialog-root', className)}
-    {...props}
-  >
-    {children}
-  </Modal>
-)
+}: DialogProps) => {
+  // 合并样式以保持默认 padding/背景，并兼容旧的 bodyStyle 配置
+  const mergedStyles: ModalProps['styles'] = {
+    ...(styles ?? {}),
+    body: {
+      padding: 0,
+      backgroundColor: 'transparent',
+      ...(styles?.body ?? {}),
+      ...bodyStyle,
+    },
+  }
+
+  return (
+    <Modal
+      open={open}
+      footer={footer}
+      onCancel={() => onOpenChange?.(false)}
+      centered={centered}
+      width={width}
+      maskClosable={maskClosable}
+      closable={closable}
+      styles={mergedStyles}
+      className={clsx('custom-dialog-root', className)}
+      {...props}
+    >
+      {children}
+    </Modal>
+  )
+}
 Dialog.displayName = 'Dialog'
 
 const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(

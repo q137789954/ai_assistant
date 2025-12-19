@@ -16,7 +16,7 @@ export type VoiceBucket = {
   timer: ReturnType<typeof setTimeout> | null;
 };
 
-type Format = "text" | "audio";
+type Format = "text" | "speech";
 
 export interface ChatInputPayload {
   type: "chat:input";
