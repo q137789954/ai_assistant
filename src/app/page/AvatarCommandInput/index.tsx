@@ -58,6 +58,7 @@ const AvatarCommandInput = () => {
         if (!sent) {
           console.warn('消息发送失败，请检查 WebSocket 连接状态')
         }
+        setInput('')
       }
 
   return (
