@@ -20,11 +20,9 @@ export const handleChatInput = async (
   userId: string,
   socket: Socket,
   payload: ChatInputPayload,
-  io: Server,
-  asrSocket: WebSocket,
 ) => {
 
-  const { outputFormat, inputFormat, content } = payload;
+  const { outputFormat, inputFormat, content, chunkId } = payload;
 
   console.log("chatInputHandler: 处理输入内容", { outputFormat, inputFormat, content });
 
@@ -67,7 +65,7 @@ export const handleChatInput = async (
       userId,
       socket,
       content,
-      asrSocket,
+      chunkId
     });
     if (!flowSuccess) {
       return;

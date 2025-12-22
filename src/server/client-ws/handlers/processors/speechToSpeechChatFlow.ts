@@ -1,4 +1,6 @@
 
+import { Buffer } from "node:buffer";
+import type WebSocket from "ws";
 import { Server, type Socket } from "socket.io";
 
 interface speechChatFlowParams {
@@ -7,18 +9,20 @@ interface speechChatFlowParams {
   userId: string;
   socket: Socket;
   content: Float32Array;
-  asrSocket: WebSocket;
+  chunkId: string | undefined;
 }
 
 export const processSpeechToSpeechChatFlow = async (params: speechChatFlowParams) => {
-    console.log("processSpeechToSpeechChatFlow: 开始处理语音到语音对话流程", params);
-    const { asrSocket } = params;
+  const {socket, content, chunkId } = params;
 
-    asrSocket.send({
-        type: "audio",
-        data: params.content,
-    });
+  const audioBuffer = Buffer.from(content.buffer, content.byteOffset, content.byteLength);
+  const payload = JSON.stringify({
+    type: "audio",
+    data: audioBuffer.toString("base64"),
+    sample_rate: 16000,
+    chunk_id: chunkId,
+  });
+  socket.data.asrSocket.send(payload);
 
-    return true;
-    // TODO: Implement the actual logic for processing speech-to-speech chat flow
-}
+  return true;
+};
