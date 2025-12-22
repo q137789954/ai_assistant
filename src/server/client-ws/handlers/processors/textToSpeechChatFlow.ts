@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import { Socket } from "socket.io";
 import { randomUUID } from "crypto";
 import { ConversationMessageRole } from "@prisma/client";
@@ -29,7 +28,7 @@ const TTS_API_URL =
   process.env.OPENSPEECH_TTS_URL ??
   "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
 const TTS_API_KEY = process.env.OPENSPEECH_API_KEY ?? "";
-const TTS_VOICE = process.env.OPENSPEECH_TTS_VOICE ?? "alloy";
+const TTS_VOICE = process.env.OPENSPEECH_TTS_VOICE ?? "zh_female_cancan_mars_bigtts";
 const TTS_AUDIO_FORMAT = process.env.OPENSPEECH_TTS_FORMAT ?? "wav";
 const TTS_SAMPLE_RATE = parseNumberWithFallback(
   process.env.OPENSPEECH_TTS_SAMPLE_RATE,
@@ -41,6 +40,7 @@ const TTS_VOLUME = parseNumberWithFallback(
   process.env.OPENSPEECH_TTS_VOLUME,
   1
 );
+const TTS_RESOURCE_ID = process.env.OPENSPEECH_RESOURCE_ID ?? "volc.megatts.default";
 const TTS_END_PUNCTUATIONS = /[。！？!?]/;
 
 /**
@@ -55,12 +55,6 @@ export const processTextToSpeechChatFlow = async ({
   socket,
   content,
 }: textToSpeechChatFlowParams): Promise<boolean> => {
-    console.log("textToSpeechChatFlow: 开始处理文本到语音的聊天流程", {
-        clientId,
-        conversationId,
-        userId,
-        content,
-    });
   // 只有字符串才能写入文本列，先做类型校验以防异常
   if (typeof content !== "string") {
     console.error("textChatFlow: 收到的文本内容非法，要求字符串", {
@@ -71,10 +65,6 @@ export const processTextToSpeechChatFlow = async ({
     return false;
   }
   const startTime = Date.now();
-  console.log("textToSpeechChatFlow: 准备写库并处理流式响应（Grok + TTS）", {
-    clientId,
-    conversationId,
-  });
   // 读取 Grok 流式响应，累计文本并在每次收到 chunk 后尝试分句。
   try {
     await prisma.conversationMessage.create({
@@ -87,10 +77,6 @@ export const processTextToSpeechChatFlow = async ({
         userId,
       },
     });
-    console.log("textToSpeechChatFlow: 用户输入落库完成", {
-      clientId,
-      conversationId,
-    });
   } catch (error) {
     console.error("textToSpeechChatFlow: 存储用户输入失败", {
       clientId,
@@ -98,8 +84,6 @@ export const processTextToSpeechChatFlow = async ({
       error,
     });
   }
-
-  console.log("textToSpeechChatFlow: 已发起 Grok 流式生成请求");
   const responseStream = await socket.data.llmClient.chat.completions.create({
     model: "grok-4-fast-non-reasoning",
     stream: true, // 开启流式返回以便后续使用 for-await 读取每个 chunk
@@ -127,12 +111,6 @@ export const processTextToSpeechChatFlow = async ({
     if (!normalized) {
       return;
     }
-
-    console.log("textToSpeechChatFlow: 准备发送句子到 TTS 队列", {
-      clientId,
-      conversationId,
-      sentence: normalized,
-    });
 
     ttsPipeline = ttsPipeline
       .then(() =>
@@ -173,17 +151,7 @@ export const processTextToSpeechChatFlow = async ({
         continue;
       }
 
-      console.log("textToSpeechChatFlow: 收到 Grok chunk", {
-        clientId,
-        conversationId,
-        deltaContent,
-      });
-
       if (!firstChunkLogged) {
-        console.log(
-          "textToSpeechChatFlow: 收到第一个 chunk，耗时 (ms)",
-          Date.now() - startTime
-        );
         firstChunkLogged = true;
       }
 
@@ -212,20 +180,11 @@ export const processTextToSpeechChatFlow = async ({
     }
 
     if (pendingSentence.trim()) {
-      console.log("textToSpeechChatFlow: 处理剩余未闭合句子", {
-        clientId,
-        conversationId,
-        pendingSentence,
-      });
       enqueueSentence(pendingSentence);
       pendingSentence = "";
     }
 
     await ttsPipeline;
-    console.log("textToSpeechChatFlow: 所有句子 TTS 处理完毕", {
-      clientId,
-      conversationId,
-    });
   } catch (error) {
     console.error("textChatFlow: Grok 流式响应处理失败", {
       clientId,
@@ -298,10 +257,6 @@ function extractCompletedSentences(text: string) {
     }
   }
   const remainder = text.slice(cursor);
-  console.log("textToSpeechChatFlow: 分句结果", {
-    sentences,
-    remainder,
-  });
   return {
     sentences,
     remainder,
@@ -323,15 +278,16 @@ async function streamSentenceToTts(params: {
 
   // 构建 TTS 请求体，携带可配置的参数以控制音色与采样率。
   const requestBody = {
-    user:{
-        id: userId,
+    user: {
+      id: userId,
     },
-    req_params:{
-        speaker: sentence,
-        audio_params: {
-        format: "mp3",
-        sample_rate: 24000,
-        },
+    req_params: {
+      speaker: TTS_VOICE,
+      text: sentence,
+      audio_params: {
+        format: TTS_AUDIO_FORMAT,
+        sample_rate: TTS_SAMPLE_RATE,
+      },
     },
   };
 
@@ -339,20 +295,16 @@ async function streamSentenceToTts(params: {
     "Content-Type": "application/json",
     "X-Api-App-Id": "1383573066",
     "X-Api-Access-Key": "4QSc8Vtv1e9kZEUhE2gQeHAhFUHZjhsk",
-    "X-Api-Resource-Id": "seed-tts-1.0",
+    "X-Api-Resource-Id": TTS_RESOURCE_ID,
   };
-
-  console.log("textToSpeechChatFlow: 发起 Openspeech TTS 请求", {
-    clientId,
-    conversationId,
-    sentenceId,
-    sentence,
-  });
   const response = await fetch(TTS_API_URL, {
     method: "POST",
     headers,
     body: JSON.stringify(requestBody),
   });
+
+  console.log("TTS 请求响应状态码", response.status);
+  console.log(response, 'response');
 
   if (!response.ok) {
     throw new Error(`TTS 请求失败：${response.status} ${response.statusText}`);
@@ -381,54 +333,16 @@ async function streamSentenceToTts(params: {
   );
 
   const reader = response.body.getReader();
+  const decoder = new TextDecoder();
   let chunkIndex = 0;
+  let pendingText = "";
+  let completionSignaled = false;
 
-  // 逐个读取流式数据，并立即发送 base64 chunk 给客户端。
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      console.log("textToSpeechChatFlow: 读取 TTS 流式 chunk", {
-        clientId,
-        conversationId,
-        sentenceId,
-        length: value?.length ?? 0,
-        done,
-        value
-      });
-      if (done) {
-        break;
-      }
-      if (!value || !value.length) {
-        continue;
-      }
-
-      socket.emit(
-        "message",
-        serializePayload({
-          event: "tts-audio-chunk",
-          data: {
-            clientId,
-            conversationId,
-            sentenceId,
-            chunkIndex,
-            base64: Buffer.from(value).toString("base64"),
-            sampleRate: TTS_SAMPLE_RATE,
-            format: TTS_AUDIO_FORMAT,
-            voice: TTS_VOICE,
-            timestamp: new Date().toISOString(),
-          },
-        })
-      );
-      chunkIndex += 1;
-      console.log("textToSpeechChatFlow: TTS chunk 推送", {
-        clientId,
-        conversationId,
-        sentenceId,
-        chunkIndex,
-      });
+  const signalCompletion = () => {
+    if (completionSignaled) {
+      return;
     }
-
-    // 发送读取完毕信号，方便客户端做播放收尾或切换下一个句子。
+    completionSignaled = true;
     socket.emit(
       "message",
       serializePayload({
@@ -443,12 +357,120 @@ async function streamSentenceToTts(params: {
         },
       })
     );
-    console.log("textToSpeechChatFlow: TTS 句子完成", {
-      clientId,
-      conversationId,
-      sentenceId,
-      chunkCount: chunkIndex,
-    });
+  };
+
+  const handlePayloadText = (payloadText: string) => {
+    const trimmedPayload = payloadText.trim();
+    if (!trimmedPayload) {
+      return;
+    }
+    if (trimmedPayload === "[DONE]") {
+      signalCompletion();
+      return;
+    }
+
+    let parsed: {
+      code?: number;
+      message?: string;
+      data?: string;
+      sentence?: string;
+    } | null = null;
+    try {
+      parsed = JSON.parse(trimmedPayload);
+    } catch (error) {
+      console.warn("textToSpeechChatFlow: 无法解析 TTS chunk", {
+        clientId,
+        conversationId,
+        sentenceId,
+        line: trimmedPayload,
+        error,
+      });
+      return;
+    }
+
+    if (!parsed) {
+      return;
+    }
+
+    console.log(parsed, '这里是parsed')
+    if (typeof parsed.code === "number" && parsed.code !== 0) {
+      console.warn("textToSpeechChatFlow: TTS 服务返回错误", {
+        clientId,
+        conversationId,
+        sentenceId,
+        code: parsed.code,
+        message: parsed.message,
+      });
+      return;
+    }
+
+    if (typeof parsed.data === "string" && parsed.data) {
+      socket.emit(
+        "message",
+        serializePayload({
+          event: "tts-audio-chunk",
+          data: {
+            clientId,
+            conversationId,
+            sentenceId,
+            chunkIndex,
+            base64: parsed.data,
+            sampleRate: TTS_SAMPLE_RATE,
+            format: TTS_AUDIO_FORMAT,
+            voice: TTS_VOICE,
+            timestamp: new Date().toISOString(),
+          },
+        })
+      );
+      chunkIndex += 1;
+    }
+
+    if (typeof parsed.sentence === "string" && parsed.sentence) {
+      socket.emit(
+        "message",
+        serializePayload({
+          event: "tts-audio-sentence",
+          data: {
+            clientId,
+            conversationId,
+            sentenceId,
+            sentence: parsed.sentence,
+            timestamp: new Date().toISOString(),
+          },
+        })
+      );
+    }
+  };
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value || !value.length) {
+        continue;
+      }
+
+      pendingText += decoder.decode(value, { stream: true });
+      let newlineIndex = pendingText.indexOf("\n");
+      while (newlineIndex !== -1) {
+        const rawLine = pendingText.slice(0, newlineIndex);
+        pendingText = pendingText.slice(newlineIndex + 1);
+        const trimmed = rawLine.trim();
+        if (trimmed.startsWith("data:")) {
+          handlePayloadText(trimmed.slice(5));
+        } else {
+          handlePayloadText(trimmed);
+        }
+        newlineIndex = pendingText.indexOf("\n");
+      }
+    }
+
+    if (pendingText.trim()) {
+      handlePayloadText(pendingText);
+    }
+    signalCompletion();
   } finally {
     reader.releaseLock();
   }
