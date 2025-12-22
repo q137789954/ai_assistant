@@ -64,7 +64,6 @@ export const processTextToSpeechChatFlow = async ({
     });
     return false;
   }
-  const startTime = Date.now();
   // 读取 Grok 流式响应，累计文本并在每次收到 chunk 后尝试分句。
   try {
     await prisma.conversationMessage.create({

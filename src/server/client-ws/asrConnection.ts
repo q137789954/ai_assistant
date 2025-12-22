@@ -1,5 +1,6 @@
 import type { Socket } from "socket.io";
 import WebSocket from "ws";
+import { processTextToSpeechChatFlow } from "./handlers/processors/textToSpeechChatFlow.js";
 
 /**
  * 默认 ASR 服务地址，可通过环境变量覆盖，方便不同部署环境切换。
@@ -38,7 +39,14 @@ export const initializeAsrConnection = (socket: Socket) => {
     const { type, is_final } = parsedPayload || {};
     if( type === "result") {
       if(is_final === true) {
-
+        console.log(socket.data, 'socket.data---asrConnection')
+        processTextToSpeechChatFlow({
+          clientId: socket.id,
+          conversationId: socket.data.conversationId,
+          userId: socket.data.userId,
+          socket,
+          content: parsedPayload.text,
+        });
       }
       return;
     }

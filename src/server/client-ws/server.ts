@@ -116,7 +116,7 @@ io.on("connection", (socket) => {
   clientConversations.set(clientId, conversationId);
   sendJoinNotifications(clientId, clients);
   // 每个客户端连接时主动创建对应的 ASR WebSocket，后续语音片段将通过该通道转发
-  initializeAsrConnection(socket);
+  initializeAsrConnection(clientId, conversationId, userId, socket);
 
   const llmClient = new OpenAI({
     apiKey: process.env.GROKKINGAI_API_KEY?.trim(),

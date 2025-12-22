@@ -19,9 +19,9 @@ const DEFAULT_VAD_OPTIONS: Partial<RealTimeVADOptions> = {
 export const FAST_VAD_PRESET: Partial<RealTimeVADOptions> = {
   model: 'v5',
 
-  // 阈值：开始稍微敏感一点，结束略宽松
-  positiveSpeechThreshold: 0.6,
-  negativeSpeechThreshold: 0.35,
+
+  positiveSpeechThreshold: 0.8,
+  negativeSpeechThreshold: 0.5,
 
   // 静音多久判定为“语音段结束”（ms）
   // 越小越快，但越容易拆句；我们用上层 merge 来兜底
