@@ -15,6 +15,8 @@ interface textToSpeechChatFlowParams {
 
 /**
  * 将环境变量的字符串值解析成数字，若解析失败则退回默认值，避免 NaN 垫高后续逻辑。
+ * @param value 待解析的字符串
+ * @param fallback 解析失败时返回的默认值
  */
 const parseNumberWithFallback = (
   value: string | undefined,
@@ -42,6 +44,7 @@ const TTS_VOLUME = parseNumberWithFallback(
 );
 const TTS_RESOURCE_ID = process.env.OPENSPEECH_RESOURCE_ID ?? "volc.megatts.default";
 const TTS_END_PUNCTUATIONS = /[。！？!?]/;
+// 以上常量用于控制 Openspeech TTS 的各项参数，优先读取可调节的环境变量并保留合理默认值
 
 /**
  * 处理文本输入的全部流程：落库用户输入、调用 Grok 流式接口、持续推送 chunk、落库助手回复。
@@ -64,8 +67,10 @@ export const processTextToSpeechChatFlow = async ({
     });
     return false;
   }
+  // 验证成功后立即将用户输入写入数据库，便于会话记录与问题追踪
   // 读取 Grok 流式响应，累计文本并在每次收到 chunk 后尝试分句。
   try {
+    // 尝试把用户输入写入消息表，便于后续会话追踪
     await prisma.conversationMessage.create({
       data: {
         id: randomUUID(),
@@ -98,6 +103,7 @@ export const processTextToSpeechChatFlow = async ({
     ],
   });
 
+  // 下面的状态变量用于积累助手的回答、维护 chunk 序号以及串行化 TTS 调用
   let assistantContent = "";
   let chunkIndex = 0;
   let firstChunkLogged = false;
@@ -113,13 +119,14 @@ export const processTextToSpeechChatFlow = async ({
 
     ttsPipeline = ttsPipeline
       .then(() =>
-        streamSentenceToTts({
-          sentence: normalized,
-          clientId,
-          conversationId,
-          socket,
-          userId,
-        })
+        // streamSentenceToTts({
+        //   sentence: normalized,
+        //   clientId,
+        //   conversationId,
+        //   socket,
+        //   userId,
+        // })
+        console.log(normalized,'这里是ttsPipeline---IGNORE')
       )
       .catch((error) => {
         console.error("textToSpeechChatFlow: TTS 服务处理失败", {
@@ -142,6 +149,7 @@ export const processTextToSpeechChatFlow = async ({
   };
 
   try {
+    // 遍历 Grok 的流式响应，逐步构建助手回复并推送 chunk
     for await (const chunk of responseStream) {
       const delta = chunk.choices?.[0]?.delta;
       const deltaContent =
@@ -171,6 +179,7 @@ export const processTextToSpeechChatFlow = async ({
       });
       socket.emit("message", chunkPayload);
 
+      // 把当前 chunk 和上一轮未完成的片段拼接，提取出已经完整的句子
       const { sentences, remainder } = extractCompletedSentences(
         pendingSentence + deltaContent
       );
@@ -179,11 +188,13 @@ export const processTextToSpeechChatFlow = async ({
     }
 
     if (pendingSentence.trim()) {
-      enqueueSentence(pendingSentence);
-      pendingSentence = "";
-    }
+      // 循环结束后如果还有残留片段，也需要转换为语音
+    enqueueSentence(pendingSentence);
+    pendingSentence = "";
+  }
 
-    await ttsPipeline;
+  // 等待所有排队的 TTS 请求完成后再继续后续流程
+  await ttsPipeline;
   } catch (error) {
     console.error("textChatFlow: Grok 流式响应处理失败", {
       clientId,
@@ -203,6 +214,7 @@ export const processTextToSpeechChatFlow = async ({
     return false;
   }
 
+  // 通知客户端整个助手响应已完整发送
   const completionPayload = serializePayload({
     event: "chat-response-complete",
     data: {
@@ -217,6 +229,7 @@ export const processTextToSpeechChatFlow = async ({
   socket.emit("message", completionPayload);
 
   if (assistantContent) {
+    // 如果助手生成了文字回复，同步写入数据库以完整记录会话
     try {
       await prisma.conversationMessage.create({
         data: {
@@ -248,6 +261,7 @@ function extractCompletedSentences(text: string) {
   let cursor = 0;
   for (let index = 0; index < text.length; index += 1) {
     if (TTS_END_PUNCTUATIONS.test(text[index])) {
+      // 遇到句尾标点就把从 cursor 到当前的片段作为一个完整句子
       const candidate = text.slice(cursor, index + 1).trim();
       if (candidate) {
         sentences.push(candidate);
@@ -256,6 +270,7 @@ function extractCompletedSentences(text: string) {
     }
   }
   const remainder = text.slice(cursor);
+  // 将最后剩余的未封装段落返回，用于下一次 chunk 拼接
   return {
     sentences,
     remainder,
@@ -275,7 +290,7 @@ async function streamSentenceToTts(params: {
   const { sentence, clientId, conversationId, socket, userId } = params;
   const sentenceId = randomUUID();
 
-  // 构建 TTS 请求体，携带可配置的参数以控制音色与采样率。
+  // 构建 TTS 请求体，携带可配置的参数以控制音色与采样率，并绑定当前用户识别信息
   const requestBody = {
     user: {
       id: userId,
@@ -290,6 +305,7 @@ async function streamSentenceToTts(params: {
     },
   };
 
+  // Openspeech 接口要求的认证头与资源 ID，避免硬编码的时机可通过环境变量替换
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Api-App-Id": "1383573066",
@@ -305,6 +321,7 @@ async function streamSentenceToTts(params: {
   console.log("TTS 请求响应状态码", response.status);
   console.log(response, 'response');
 
+  // 确认 HTTP 级别返回成功，防止后续解析空数据
   if (!response.ok) {
     throw new Error(`TTS 请求失败：${response.status} ${response.statusText}`);
   }
@@ -313,7 +330,7 @@ async function streamSentenceToTts(params: {
     throw new Error("TTS 响应缺少 body");
   }
 
-  // 首先通知客户端 TTS 流即将开始，方便前端初始化解码缓冲区。
+  // 首先通知客户端 TTS 流即将开始，方便前端初始化解码缓冲区与播放流水线
   socket.emit(
     "message",
     serializePayload({
@@ -331,12 +348,14 @@ async function streamSentenceToTts(params: {
     })
   );
 
+  // 获取流式响应 reader 以便逐个处理数据行，然后解码转换为字符串
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let chunkIndex = 0;
   let pendingText = "";
   let completionSignaled = false;
 
+  // 用于确保只推一次 tts-audio-complete 事件
   const signalCompletion = () => {
     if (completionSignaled) {
       return;
@@ -358,6 +377,7 @@ async function streamSentenceToTts(params: {
     );
   };
 
+  // 处理每一行响应文本，解析 JSON 后根据字段分别推送 chunk、sentence 以及完成事件
   const handlePayloadText = (payloadText: string) => {
     const trimmedPayload = payloadText.trim();
     if (!trimmedPayload) {
@@ -392,6 +412,7 @@ async function streamSentenceToTts(params: {
     }
 
     console.log(parsed, '这里是parsed')
+    // 如果 TTS 本身反馈非 0 错误码，则记录并跳过
     if (typeof parsed.code === "number" && parsed.code !== 0) {
       console.warn("textToSpeechChatFlow: TTS 服务返回错误", {
         clientId,
@@ -403,6 +424,7 @@ async function streamSentenceToTts(params: {
       return;
     }
 
+    // 有音频数据就按 chunk 顺序广播给前端，保持播放流水线
     if (typeof parsed.data === "string" && parsed.data) {
       socket.emit(
         "message",
@@ -424,6 +446,7 @@ async function streamSentenceToTts(params: {
       chunkIndex += 1;
     }
 
+    // 如果服务补充了一句完整话语，则通知前端句子内容
     if (typeof parsed.sentence === "string" && parsed.sentence) {
       socket.emit(
         "message",
@@ -442,6 +465,7 @@ async function streamSentenceToTts(params: {
   };
 
   try {
+    // 循环读取每个 chunk，当 done 时跳出
     while (true) {
       const { value, done } = await reader.read();
       if (done) {
@@ -453,6 +477,7 @@ async function streamSentenceToTts(params: {
 
       pendingText += decoder.decode(value, { stream: true });
       let newlineIndex = pendingText.indexOf("\n");
+      // 遇到换行说明接收到一整行 SSE 数据，逐行处理
       while (newlineIndex !== -1) {
         const rawLine = pendingText.slice(0, newlineIndex);
         pendingText = pendingText.slice(newlineIndex + 1);
@@ -467,10 +492,13 @@ async function streamSentenceToTts(params: {
     }
 
     if (pendingText.trim()) {
+      // 处理最后残留的一行数据，防止因没有换行而遗漏
       handlePayloadText(pendingText);
     }
+    // 最终确保发送完成事件通知客户端
     signalCompletion();
   } finally {
+    // 无论成功与否都要释放 reader 锁，避免泄露资源
     reader.releaseLock();
   }
 }
