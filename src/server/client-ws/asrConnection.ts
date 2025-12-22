@@ -1,12 +1,12 @@
 import { Buffer } from "node:buffer";
 import type { Socket } from "socket.io";
 import WebSocket from "ws";
-import { serializePayload } from "./utils";
 
 /**
  * 默认 ASR 服务地址，可通过环境变量覆盖，方便不同部署环境切换。
  */
 const ASR_WS_ENDPOINT = process.env.ASR_WS_ENDPOINT?.trim() || "ws://192.168.3.88:8000/ws/asr";
+const HEARTBEAT_INTERVAL_MS = 10_000;
 
 /**
  * 在某个 socket 连接中初始化与 ASR 服务的 WebSocket 连接，后续通过该连接进行语音片段传输或结果转发。
@@ -15,11 +15,18 @@ export const initializeAsrConnection = (socket: Socket) => {
   const asrSocket = new WebSocket(ASR_WS_ENDPOINT);
   socket.data.asrSocket = asrSocket;
 
+  const heartbeat = setInterval(() => {
+    if (asrSocket.readyState === WebSocket.OPEN) {
+      asrSocket.send(JSON.stringify({ type: "ping" }));
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+  socket.data.asrHeartbeat = heartbeat;
+
   asrSocket.on("open", () => {
     console.log("ASR WebSocket 连接已建立，准备接收语音片段");
   });
 
-  asrSocket.on("message", (rawData:string) => {
+  asrSocket.on("message", (rawData) => {
 
     let parsedPayload: unknown = rawData;
     try {
@@ -49,6 +56,12 @@ export const closeAsrConnection = (socket: Socket) => {
   const asrSocket = socket.data.asrSocket as WebSocket | undefined;
   if (!asrSocket) {
     return;
+  }
+
+  const heartbeat = socket.data.asrHeartbeat as ReturnType<typeof setInterval> | undefined;
+  if (heartbeat) {
+    clearInterval(heartbeat);
+    socket.data.asrHeartbeat = undefined;
   }
 
   socket.data.asrSocket = undefined;
