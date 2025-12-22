@@ -2,6 +2,7 @@ import { Server, type Socket } from "socket.io";
 import { ChatInputPayload } from "../types";
 import { processTextChatFlow } from "./processors/textChatFlow";
 import { processTextToSpeechChatFlow } from "./processors/textToSpeechChatFlow";
+import { processSpeechToSpeechChatFlow } from "./processors/speechToSpeechChatFlow";
 
 /**
  * 处理 chat:input 事件的逻辑入口，后续可在此完成复杂的业务流程。
@@ -45,7 +46,6 @@ export const handleChatInput = async (
     }
   }
   if(outputFormat === "speech" && inputFormat === "text") {
-    console.log("chatInputHandler: 处理输入内容", { outputFormat, inputFormat, content });
     const flowSuccess = await processTextToSpeechChatFlow({
       clientId,
       conversationId,
@@ -56,6 +56,19 @@ export const handleChatInput = async (
     if (!flowSuccess) {
       return;
     }
+  }
+
+  if((outputFormat === "speech" && inputFormat === "speech")) {
+    const flowSuccess = await processSpeechToSpeechChatFlow({
+      clientId,
+      conversationId,
+      userId,
+      socket,
+      content,
+    });
+    if (!flowSuccess) {
+      return;
+    } 
   }
 
   // 未来可扩展对其他类型输入（如语音、图像等）的处理逻辑

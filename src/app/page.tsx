@@ -15,28 +15,9 @@ import { MessageSquareMore } from "lucide-react";
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
-  const [messageLog, setMessageLog] = useState<string[]>([]);
   const { data: session, status: authStatus } = useSession();
 
-  const {
-    status,
-    lastMessage,
-    lastError,
-    connect,
-    disconnect,
-    sendMessage,
-    emitEvent,
-    subscribe,
-  } = useWebSocketContext();
-
-  const handleSendPing = useCallback(() => {
-    sendMessage(
-      JSON.stringify({
-        type: "ping",
-        timestamp: new Date().toISOString(),
-      })
-    );
-  }, [sendMessage]);
+  const { emitEvent, subscribe } = useWebSocketContext();
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
@@ -47,9 +28,12 @@ export default function Home() {
         chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         sampleRate: 16000,
         timestamp: new Date().toISOString(),
-        length: audio.length,
+        content: audio,
+        outputFormat: "speech",
+        inputFormat: "speech",
       };
-      const sent = emitEvent("voice-chunk", chunkMeta, audio);
+      console.log("捕获到语音帧，发送到服务端处理：", chunkMeta);
+      const sent = emitEvent("chat:input", chunkMeta, audio);
       if (!sent) {
         console.warn("语音帧发送失败，请检查 WebSocket 连接状态");
       }
@@ -58,13 +42,7 @@ export default function Home() {
   );
 
   useEffect(() => {
-    const unsubscribe = subscribe((event) => {
-      const payload =
-        typeof event.data === "string"
-          ? event.data
-          : `[binary:${event.data?.byteLength ?? "unknown"}]`;
-      setMessageLog((prev) => [payload, ...prev].slice(0, 5));
-    });
+    const unsubscribe = subscribe(() => {});
     return unsubscribe;
   }, [subscribe]);
 
@@ -82,13 +60,8 @@ export default function Home() {
     },
   });
 
-  const friendlyMessage = useMemo(
-    () => (lastMessage ? String(lastMessage.data) : "等待消息..."),
-    [lastMessage]
-  );
-
   const handleTextBtn = useCallback(() => {
-    if(dispatch) {
+    if (dispatch) {
       dispatch({ type: "SET_CHATBOT_VISIBILITY", payload: !chatbotVisible });
     }
   }, [chatbotVisible, dispatch]);
@@ -133,13 +106,18 @@ export default function Home() {
         open={chatbotVisible || false}
         onOpenChange={(next) => {
           if (dispatch) {
-            dispatch({ type: 'SET_CHATBOT_VISIBILITY', payload: next })
+            dispatch({ type: "SET_CHATBOT_VISIBILITY", payload: next });
           }
         }}
       />
       <div className="absolute bottom-4 left-6 right-6">
         <div className="w-full flex gap-2">
-          <Button className="flex gap-2" size="lg" variant="outline" onClick={handleTextBtn}>
+          <Button
+            className="flex gap-2"
+            size="lg"
+            variant="outline"
+            onClick={handleTextBtn}
+          >
             <MessageSquareMore />
             <span>Text</span>
           </Button>
