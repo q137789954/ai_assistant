@@ -39,6 +39,7 @@ type VoiceInputListenerOptions = {
    * 每次 VAD 判断出的独立语音段（16k Float32 PCM）
    */
   onSpeechSegment?: (audio: Float32Array) => void
+  onSpeechEnd?: () => void
   /**
    * 初始化 / 运行时报错
    */
@@ -63,7 +64,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
   }
 
   const { voiceInputEnabled, dispatch } = globals
-  const { onSpeechSegment, onError, vadOptions } = options
+  const { onSpeechSegment, onError, vadOptions, onSpeechEnd: optionOnSpeechEnd } = options
 
   const vadRef = useRef<MicVAD | null>(null)
   const initializingRef = useRef(false)
@@ -161,6 +162,9 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
           onSpeechEnd: () => {
             if (cancelled) return
             console.log('[useVoiceInputListener] 检测到用户结束说话')
+            if(optionOnSpeechEnd) {
+              optionOnSpeechEnd()
+            }
 
             // 结束语音周期时关闭逐帧推送开关，并通知全局状态
             speakingRef.current = false

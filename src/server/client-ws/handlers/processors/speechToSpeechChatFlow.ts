@@ -7,10 +7,21 @@ interface speechChatFlowParams {
   socket: Socket;
   content: Float32Array;
   chunkId: string | undefined;
+  type: string;
 }
 
 export const processSpeechToSpeechChatFlow = async (params: speechChatFlowParams) => {
-  const {socket, content, chunkId } = params;
+  const {socket, content, chunkId, type } = params;
+
+  if(type === "end") {
+    console.log("用户语音输入结束");
+    // 通知 ASR 服务结束当前语音输入
+    const payload = JSON.stringify({
+      type: "end",
+    });
+    socket.data.asrSocket.send(payload);
+    return true;
+  }
 
   const payload = JSON.stringify({
     type: "audio",

@@ -35,6 +35,13 @@ export const initializeAsrConnection = (socket: Socket) => {
     }
 
     console.log("收到 ASR 服务返回的消息：", parsedPayload);
+    const { type, is_final } = parsedPayload || {};
+    if( type === "result") {
+      if(is_final === true) {
+
+      }
+      return;
+    }
   });
 
   asrSocket.on("close", (code, reason) => {

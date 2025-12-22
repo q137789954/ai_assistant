@@ -56,7 +56,8 @@ export const handleChatInput = async (
       userId,
       socket,
       content,
-      chunkId
+      chunkId,
+      type: payload.type,
     });
     if (!flowSuccess) {
       return;

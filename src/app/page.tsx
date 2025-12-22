@@ -49,8 +49,19 @@ export default function Home() {
 
   useTtsAudioPlayer();
 
+  const onSpeechEnd = useCallback(() => {
+    console.log("用户语音输入结束");
+    emitEvent("chat:input", {
+      content: [],
+      outputFormat: "speech",
+      inputFormat: "speech",
+      type: "end",
+    });
+  }, [emitEvent]);
+
   useVoiceInputListener({
     onSpeechSegment: handleVoiceChunk,
+    onSpeechEnd,
     onError(error) {
       console.error("VAD 错误：", error);
     },
