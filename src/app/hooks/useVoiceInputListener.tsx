@@ -31,7 +31,7 @@ export const FAST_VAD_PRESET: Partial<RealTimeVADOptions> = {
   preSpeechPadMs: 80,
 
   // 片段最短时长（ms），太短的直接视为误触发
-  minSpeechMs: 200,
+  minSpeechMs: 100,
 }
 
 type VoiceInputListenerOptions = {
@@ -70,17 +70,33 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
   // 是否处于“VAD 认为用户在说话”的状态
   const speakingRef = useRef(false)
+  // 控制是否在当前语音周期中持续向外推送每帧音频，关键信号源于 onSpeechStart/onSpeechEnd
+  const streamingRef = useRef(false)
+  // 动态记录最终使用的 positiveSpeechThreshold，便于在 onFrameProcessed 中根据真实阈值判断是否属于语音
+  const positiveSpeechThresholdRef = useRef(
+    FAST_VAD_PRESET.positiveSpeechThreshold ?? 0.6,
+  )
 
   /**
-   * 直接回调每个独立的语音段，留给调用方决定如何合并或发送
+   * 每帧到来时判断是否命中语音阈值，满足则立即透传给 onSpeechSegment。
+   * 这样可以支持将音频逐帧推送给服务端，便于第三方流式处理；判断依据是真实阈值（可能来自用户配置）、
+   * 以及当前帧的模型得分，避免将噪声误认为语音段。
    */
-  const handleSpeechSegment = useCallback(
-    (audio: Float32Array) => {
-      if (!audio.length) {
+  const handleFrameProcessed = useCallback(
+    (probs: { isSpeech: number }, frame: Float32Array) => {
+      // 只有当模型得分超过当前阈值才视作语音并发送，避免无意义帧打扰下游
+      const threshold =
+        positiveSpeechThresholdRef.current ??
+        FAST_VAD_PRESET.positiveSpeechThreshold ??
+        0.6
+      const isSpeech = probs.isSpeech >= threshold
+
+      if (!isSpeech || !frame.length) {
         return
       }
 
-      onSpeechSegment?.(audio)
+      streamingRef.current = true
+      onSpeechSegment?.(frame)
     },
     [onSpeechSegment],
   )
@@ -96,8 +112,10 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
         }
       }
       speakingRef.current = false
+      streamingRef.current = false
       dispatch({ type: 'SET_USER_SPEAKING', payload: false })
 
+      // 当全局关闭语音输入时马上终止推送并标记状态
       return
     }
 
@@ -108,30 +126,46 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
       initializingRef.current = true
 
       try {
-        const instance = await MicVAD.new({
+        // 将默认路径、快速预设以及调用方传入的选项按优先级合并，确保我们总有一套完整的配置供 MicVAD 使用
+        const mergedVadOptions: Partial<RealTimeVADOptions> = {
           ...DEFAULT_VAD_OPTIONS,
           ...FAST_VAD_PRESET,
           ...vadOptions,
+        }
+
+        // 记录落地的 positiveSpeechThreshold，供逐帧推送判断是否属于语音
+        const mergedPositiveThreshold =
+          mergedVadOptions.positiveSpeechThreshold ??
+          FAST_VAD_PRESET.positiveSpeechThreshold ??
+          0.6
+        positiveSpeechThresholdRef.current = mergedPositiveThreshold
+
+        // 记录调用方可能自定义的 onFrameProcessed，以便我们包裹后仍能透传事件
+        const userOnFrameProcessed = mergedVadOptions.onFrameProcessed
+        const instance = await MicVAD.new({
+          ...mergedVadOptions,
+          onFrameProcessed: (probs, frame) => {
+            handleFrameProcessed(probs, frame)
+            userOnFrameProcessed?.(probs, frame)
+          },
 
           onSpeechStart: () => {
             if (cancelled) return
             console.log('[useVoiceInputListener] 检测到用户开始说话')
 
             speakingRef.current = true
+            streamingRef.current = true
             dispatch({ type: 'SET_USER_SPEAKING', payload: true })
           },
 
-          onSpeechEnd: (audio: Float32Array) => {
+          onSpeechEnd: () => {
             if (cancelled) return
-            console.log(
-              '[useVoiceInputListener] 检测到用户结束说话，音频长度：',
-              audio.length,
-            )
+            console.log('[useVoiceInputListener] 检测到用户结束说话')
 
+            // 结束语音周期时关闭逐帧推送开关，并通知全局状态
             speakingRef.current = false
+            streamingRef.current = false
             dispatch({ type: 'SET_USER_SPEAKING', payload: false })
-
-            handleSpeechSegment(audio)
           },
         })
 
@@ -159,7 +193,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
     return () => {
       cancelled = true
     }
-  }, [voiceInputEnabled, dispatch, onError, vadOptions, handleSpeechSegment])
+  }, [voiceInputEnabled, dispatch, onError, vadOptions, handleFrameProcessed])
 
   // 组件卸载时，彻底销毁 VAD（释放 AudioContext / Worklet / 模型等资源）
   useEffect(() => {
@@ -173,6 +207,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
         vadRef.current = null
       }
 
+      // 清理语音相关的状态，以免残留影响下一次激活
       // 退出时确保 speaking 状态复位
       speakingRef.current = false
     }
