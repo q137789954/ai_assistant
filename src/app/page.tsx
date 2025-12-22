@@ -24,11 +24,12 @@ export default function Home() {
    */
   const handleVoiceChunk = useCallback(
     (audio: Float32Array) => {
+      console.log(Array.from(audio), 'audio---useVoiceInputListener')
       const chunkMeta = {
         chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         sampleRate: 16000,
         timestamp: new Date().toISOString(),
-        content: audio,
+        content: Array.from(audio),
         outputFormat: "speech",
         inputFormat: "speech",
       };
