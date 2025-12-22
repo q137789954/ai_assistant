@@ -35,29 +35,28 @@ export const processTextChatFlow = async ({
     });
     return false;
   }
-  try {
-    console.log("textChatFlow: 存储用户输入", {
-        id: randomUUID(),
-        conversationId,
-        role: ConversationMessageRole.USER,
-        content,
-        isVoice: false,
-        userId,
-      });
-    prisma.conversationMessage.create({
-      data: {
-        id: randomUUID(),
-        conversationId,
-        role: ConversationMessageRole.USER,
-        content,
-        isVoice: false,
-        userId,
-      },
+  console.log("textChatFlow: 存储用户输入", {
+      id: randomUUID(),
+      conversationId,
+      role: ConversationMessageRole.USER,
+      content,
+      isVoice: false,
+      userId,
     });
-  } catch (error) {
-    // 写库失败不影响后续生成，但需要记录
+  // 打开“火力全开”模式：不等待写库完成就继续后续流程，但要专门捕获异常避免未处理的 Promise 拒绝
+  const userMessageCreatePromise = prisma.conversationMessage.create({
+    data: {
+      id: randomUUID(),
+      conversationId,
+      role: ConversationMessageRole.USER,
+      content,
+      isVoice: false,
+      userId,
+    },
+  });
+  userMessageCreatePromise.catch((error) => {
     console.error("textChatFlow: 存储用户输入时异常", { clientId, conversationId, error });
-  }
+  });
   const responseStream = await socket.data.llmClient.chat.completions.create({
     model: "grok-4-fast-non-reasoning",
     stream: true, // 开启流式返回以便后续使用 for-await 读取每个 chunk
