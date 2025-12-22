@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import type { Socket } from "socket.io";
-import WebSocket, { type RawData } from "ws";
+import WebSocket from "ws";
 import { serializePayload } from "./utils";
 
 /**
@@ -19,15 +19,16 @@ export const initializeAsrConnection = (socket: Socket) => {
     console.log("ASR WebSocket 连接已建立，准备接收语音片段");
   });
 
-  asrSocket.on("message", (rawData: RawData) => {
-    const payload =
-      typeof rawData === "string"
-        ? rawData
-        : Array.isArray(rawData)
-        ? Buffer.concat(rawData).toString("utf-8")
-        : Buffer.from(rawData).toString("utf-8");
+  asrSocket.on("message", (rawData:string) => {
 
-    console.log("收到 ASR 服务返回的消息：", payload);
+    let parsedPayload: unknown = rawData;
+    try {
+      parsedPayload = JSON.parse(rawData);
+    } catch {
+      parsedPayload = rawData;
+    }
+
+    console.log("收到 ASR 服务返回的消息：", parsedPayload);
   });
 
   asrSocket.on("close", (code, reason) => {
