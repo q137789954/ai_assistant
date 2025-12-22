@@ -131,8 +131,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
   }, [open, subscribe])
 
   // 表单提交即向服务端发送用户输入的消息
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function handleSubmit() {
     const trimmed = draft.trim()
     if (!trimmed) {
       return
@@ -146,6 +145,8 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
       outputFormat: 'text',
       inputFormat: 'text',
     }
+
+    console.log(messageMeta, 'messageMeta')
     const sent = emitEvent('chat:input', messageMeta)
     if (!sent) {
       console.warn('消息发送失败，请检查 WebSocket 连接状态')
@@ -217,7 +218,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
         {/* 底部固定的输入栏，保持输入框在视口可见 */}
         <DrawerFooter className="sticky bottom-0 w-full border-t border-slate-200/70 bg-slate-100/70 px-6 py-4">
           {/* 用户输入区域：支持多行输入和发送按钮 */}
-          <form onSubmit={handleSubmit} className="flex w-full items-center gap-3">
+          <div onSubmit={handleSubmit} className="flex w-full items-center gap-3">
             <textarea
               className="flex-1 resize-none rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none"
               placeholder="输入消息..."
@@ -229,10 +230,11 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
               variant="outline"
               className="h-10 w-10 rounded-full p-0 text-lg"
               aria-label="发送消息"
+              onClick={handleSubmit}
             >
               <Send size={18} />
             </Button>
-          </form>
+          </div>
         </DrawerFooter>
       </div>
     </Drawer>

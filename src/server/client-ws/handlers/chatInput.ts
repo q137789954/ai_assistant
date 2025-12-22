@@ -26,6 +26,11 @@ export const handleChatInput = async (
 
   console.log("chatInputHandler: 处理输入内容", { outputFormat, inputFormat, content });
 
+  console.log("chatInputHandler: 开始处理 chat:input 事件", {
+    outputFormat,
+    inputFormat,
+    content,
+  })
 
   if (outputFormat === "text" && inputFormat === "text") {
     const flowSuccess = await processTextChatFlow({

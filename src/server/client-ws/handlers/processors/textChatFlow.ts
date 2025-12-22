@@ -35,8 +35,15 @@ export const processTextChatFlow = async ({
     });
     return false;
   }
-  const startTime = Date.now();
   try {
+    console.log("textChatFlow: 存储用户输入", {
+        id: randomUUID(),
+        conversationId,
+        role: ConversationMessageRole.USER,
+        content,
+        isVoice: false,
+        userId,
+      });
     prisma.conversationMessage.create({
       data: {
         id: randomUUID(),
@@ -51,7 +58,6 @@ export const processTextChatFlow = async ({
     // 写库失败不影响后续生成，但需要记录
     console.error("textChatFlow: 存储用户输入时异常", { clientId, conversationId, error });
   }
-  console.log("textChatFlow: 已发起 Grok 流式生成请求", startTime);
   const responseStream = await socket.data.llmClient.chat.completions.create({
     model: "grok-4-fast-non-reasoning",
     stream: true, // 开启流式返回以便后续使用 for-await 读取每个 chunk
@@ -80,12 +86,6 @@ export const processTextChatFlow = async ({
       }
 
       if (!firstChunkLogged) {
-        const latencyMs = Date.now() - startTime;
-        console.log("textChatFlow: 收到第一个 chunk，耗时 (ms)", {
-          clientId,
-          conversationId,
-          latencyMs,
-        });
         firstChunkLogged = true;
       }
 
