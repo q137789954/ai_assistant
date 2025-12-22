@@ -131,7 +131,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("chat:input", (payload: ChatInputPayload) => {
-    handleChatInput(clientId, conversationId, userId, socket, payload, io);
+    handleChatInput(clientId, conversationId, userId, socket, payload);
   });
   
   socket.on("disconnect", (reason) => {

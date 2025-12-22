@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import type { Socket } from "socket.io";
 import WebSocket from "ws";
 
