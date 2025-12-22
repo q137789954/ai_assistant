@@ -21,6 +21,7 @@ export const handleChatInput = async (
   socket: Socket,
   payload: ChatInputPayload,
   io: Server,
+  asrSocket: WebSocket,
 ) => {
 
   const { outputFormat, inputFormat, content } = payload;
@@ -59,12 +60,17 @@ export const handleChatInput = async (
   }
 
   if((outputFormat === "speech" && inputFormat === "speech")) {
+    if(content instanceof Float32Array === false) {
+      console.error("chatInputHandler: 语音输入内容格式错误，预期为 Float32Array");
+      return;
+    }
     const flowSuccess = await processSpeechToSpeechChatFlow({
       clientId,
       conversationId,
       userId,
       socket,
       content,
+      asrSocket,
     });
     if (!flowSuccess) {
       return;

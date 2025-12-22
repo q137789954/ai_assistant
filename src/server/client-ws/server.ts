@@ -7,6 +7,7 @@ import { cleanupClient, handleClientMessage, sendJoinNotifications } from "./cli
 import { handleChatInput } from "./handlers/chatInput";
 import { ChatInputPayload } from "./types";
 import OpenAI from "openai";
+import { closeAsrConnection, initializeAsrConnection } from "./asrConnection";
 
 /**
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
@@ -114,6 +115,8 @@ io.on("connection", (socket) => {
   clients.set(clientId, socket);
   clientConversations.set(clientId, conversationId);
   sendJoinNotifications(clientId, clients);
+  // 每个客户端连接时主动创建对应的 ASR WebSocket，后续语音片段将通过该通道转发
+  const asrSocket = initializeAsrConnection(socket);
 
   const llmClient = new OpenAI({
     apiKey: process.env.GROKKINGAI_API_KEY?.trim(),
@@ -128,15 +131,17 @@ io.on("connection", (socket) => {
   });
 
   socket.on("chat:input", (payload: ChatInputPayload) => {
-    handleChatInput(clientId, conversationId, userId, socket, payload, io);
+    handleChatInput(clientId, conversationId, userId, socket, payload, io, asrSocket);
   });
   
   socket.on("disconnect", (reason) => {
+    closeAsrConnection(socket);
     clientConversations.delete(clientId);
     cleanupClient(clientId, clients, io);
   });
 
   socket.on("error", (error) => {
+    closeAsrConnection(socket);
     clientConversations.delete(clientId);
     cleanupClient(clientId, clients, io);
   });
