@@ -111,12 +111,14 @@ const clientConversations = new Map<string, string>();
 io.on("connection", (socket) => {
   const clientId = randomUUID();
   const conversationId = randomUUID();
+  // 把本次会话的 conversationId 暂存到 socket.data，方便 ASR 连接等后续处理读取
+  socket.data.conversationId = conversationId;
   const userId = socket.data.userId as string;
   clients.set(clientId, socket);
   clientConversations.set(clientId, conversationId);
   sendJoinNotifications(clientId, clients);
   // 每个客户端连接时主动创建对应的 ASR WebSocket，后续语音片段将通过该通道转发
-  initializeAsrConnection(clientId, conversationId, userId, socket);
+  initializeAsrConnection(socket);
 
   const llmClient = new OpenAI({
     apiKey: process.env.GROKKINGAI_API_KEY?.trim(),

@@ -36,7 +36,7 @@ export const initializeAsrConnection = (socket: Socket) => {
     }
 
     console.log("收到 ASR 服务返回的消息：", parsedPayload);
-    const { type, is_final } = parsedPayload || {};
+    const { type, is_final, text } = parsedPayload || {};
     if( type === "result") {
       if(is_final === true) {
         console.log(socket.data, 'socket.data---asrConnection')
@@ -45,7 +45,7 @@ export const initializeAsrConnection = (socket: Socket) => {
           conversationId: socket.data.conversationId,
           userId: socket.data.userId,
           socket,
-          content: parsedPayload.text,
+          content: text,
         });
       }
       return;
