@@ -24,14 +24,6 @@ export const handleChatInput = async (
 
   const { outputFormat, inputFormat, content, chunkId } = payload;
 
-  console.log("chatInputHandler: 处理输入内容", { outputFormat, inputFormat, content });
-
-  console.log("chatInputHandler: 开始处理 chat:input 事件", {
-    outputFormat,
-    inputFormat,
-    content,
-  })
-
   if (outputFormat === "text" && inputFormat === "text") {
     const flowSuccess = await processTextChatFlow({
       clientId,
@@ -58,7 +50,6 @@ export const handleChatInput = async (
   }
 
   if((outputFormat === "speech" && inputFormat === "speech")) {
-    console.log(content, 'content')
     const flowSuccess = await processSpeechToSpeechChatFlow({
       clientId,
       conversationId,
