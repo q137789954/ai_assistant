@@ -60,10 +60,7 @@ export const handleChatInput = async (
   }
 
   if((outputFormat === "speech" && inputFormat === "speech")) {
-    if(content instanceof Float32Array === false) {
-      console.error("chatInputHandler: 语音输入内容格式错误，预期为 Float32Array");
-      return;
-    }
+    console.log(content, 'content')
     const flowSuccess = await processSpeechToSpeechChatFlow({
       clientId,
       conversationId,

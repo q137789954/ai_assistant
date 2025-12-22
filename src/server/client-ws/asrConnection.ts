@@ -16,16 +16,7 @@ export const initializeAsrConnection = (socket: Socket) => {
   socket.data.asrSocket = asrSocket;
 
   asrSocket.on("open", () => {
-    socket.emit(
-      "message",
-      serializePayload({
-        event: "asr:connected",
-        data: {
-          endpoint: ASR_WS_ENDPOINT,
-          ts: new Date().toISOString(),
-        },
-      }),
-    );
+    console.log("ASR WebSocket 连接已建立，准备接收语音片段");
   });
 
   asrSocket.on("message", (rawData: RawData) => {
@@ -36,46 +27,15 @@ export const initializeAsrConnection = (socket: Socket) => {
         ? Buffer.concat(rawData).toString("utf-8")
         : Buffer.from(rawData).toString("utf-8");
 
-    socket.emit(
-      "message",
-      serializePayload({
-        event: "asr:message",
-        data: {
-          clientId: socket.data.userId ?? socket.id,
-          payload,
-          ts: new Date().toISOString(),
-        },
-      }),
-    );
+    console.log("收到 ASR 服务返回的消息：", payload);
   });
 
   asrSocket.on("close", (code, reason) => {
-    socket.emit(
-      "message",
-      serializePayload({
-        event: "asr:closed",
-        data: {
-          clientId: socket.data.userId ?? socket.id,
-          code,
-          reason: reason?.toString() ?? "unknown",
-          ts: new Date().toISOString(),
-        },
-      }),
-    );
+    console.log("ASR WebSocket 连接已关闭", code, reason);
   });
 
   asrSocket.on("error", (error) => {
-    socket.emit(
-      "message",
-      serializePayload({
-        event: "asr:error",
-        data: {
-          clientId: socket.data.userId ?? socket.id,
-          message: error?.message ?? "unknown",
-          ts: new Date().toISOString(),
-        },
-      }),
-    );
+    console.error("ASR WebSocket 连接发生错误", error);
   });
 
   return asrSocket;
