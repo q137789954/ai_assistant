@@ -13,19 +13,6 @@ interface textToSpeechChatFlowParams {
   content: unknown;
 }
 
-/**
- * 将环境变量的字符串值解析成数字，若解析失败则退回默认值，避免 NaN 垫高后续逻辑。
- * @param value 待解析的字符串
- * @param fallback 解析失败时返回的默认值
- */
-const parseNumberWithFallback = (
-  value: string | undefined,
-  fallback: number
-) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
 const TTS_END_PUNCTUATIONS = /[。！？!?]/;
 // 以上常量用于控制 Openspeech TTS 的各项参数，优先读取可调节的环境变量并保留合理默认值
 // LLM 可能会在回复中保留一个动作字段，后续需要识别并拆分出该部分。
