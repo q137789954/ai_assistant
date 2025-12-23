@@ -3,7 +3,8 @@
 import { useCallback, useContext } from 'react'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 import { Mic, MicOff } from 'lucide-react'
-import { Button } from '../ui'
+import { AppButton } from "@/app/components/ui";
+import clsx from 'clsx';
 
 type VoiceInputToggleProps = {
   className?: string
@@ -23,13 +24,14 @@ export function VoiceInputToggle({ className = '' }: VoiceInputToggleProps) {
   }, [dispatch, voiceInputEnabled])
 
   return (
-    <div
+    <AppButton
       onClick={toggle}
-      className={ `rounded-full p-2 ${className}`}
+      tone={voiceInputEnabled ? 'success' : 'danger'}
+      className={clsx( `flex items-center justify-center h-12! w-12! rounded-full! p-0! shrink-0`, className, voiceInputEnabled?"" : "")}
     >
       {
-        voiceInputEnabled ? <Mic size={32} /> : <MicOff size={32} />
+        voiceInputEnabled ? <Mic size={24} /> : <MicOff size={24} />
       }
-    </div>
+    </AppButton>
   )
 }

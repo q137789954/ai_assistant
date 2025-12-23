@@ -1,77 +1,129 @@
 'use client'
 
 import * as React from 'react'
-import { cva, type VariantProps } from 'class-variance-authority'
-import clsx from 'clsx'
 import { Button as AntdButton } from 'antd'
 import type { ButtonProps as AntdButtonProps } from 'antd'
 
 /**
- * 统一定义按钮的基础样式与变体，方便通过参数快速切换视觉效果。
- * 同时使用 class-variance-authority 管理尺寸、主题、是否撑满等属性。
+ * 你在业务中更容易理解的一层抽象：
+ * - tone：语义色（primary/danger/success...）
+ * - appearance：外观变体（solid/outlined/text/link...）
+ * - size：sm/md/lg
+ * - fullWidth：是否撑满父容器
+ *
+ * 其余所有 antd ButtonProps 都原样透传。
  */
-const buttonVariants = cva(
-  'cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
-  {
-    variants: {
-      variant: {
-        default: 'bg-slate-900 text-white hover:bg-slate-900/90 focus-visible:ring-slate-400',
-        destructive: 'bg-red-600 text-white hover:bg-red-600/90 focus-visible:ring-red-300',
-        outline: 'border border-slate-200 bg-white text-slate-900 hover:bg-slate-100 focus-visible:ring-slate-400',
-        secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200 focus-visible:ring-slate-400',
-        ghost: 'bg-transparent text-slate-900 hover:bg-slate-100 focus-visible:ring-slate-400',
-        link: 'bg-transparent underline-offset-4 hover:underline text-slate-900 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 py-0',
-      },
-      size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 px-3',
-        lg: 'h-11 px-6',
-      },
-      fullWidth: {
-        true: 'w-full',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-      size: 'default',
-    },
-  }
-)
 
-export interface ButtonProps
-  extends Omit<AntdButtonProps, 'size' | 'variant'>,
-    VariantProps<typeof buttonVariants> {
-  /**
-   * 支持使用 Radix Slot 作为父组件控制最终渲染元素（用于配合 Link 等组件）。
-   */
-  asChild?: boolean
+export type AppButtonTone =
+  | 'default'
+  | 'primary'
+  | 'danger'
+  | 'success'
+  | 'warning'
+  | 'info'
+
+export type AppButtonAppearance =
+  | 'solid'
+  | 'outlined'
+  | 'filled'
+  | 'dashed'
+  | 'text'
+  | 'link'
+
+export type AppButtonSize = 'sm' | 'md' | 'lg'
+
+const toneToAntdColor = (tone: AppButtonTone): AntdButtonProps['color'] => {
+  // antd 支持 `default | primary | danger | PresetColors`
+  // PresetColors: 'blue' | 'green' | 'gold' | 'volcano' ... :contentReference[oaicite:1]{index=1}
+  switch (tone) {
+    case 'primary':
+      return 'primary'
+    case 'danger':
+      return 'danger'
+    case 'success':
+      return 'green'
+    case 'warning':
+      return 'gold'
+    case 'info':
+      return 'blue'
+    case 'default':
+    default:
+      return 'default'
+  }
 }
 
-/**
- * 使用 Ant Design Button 作为基础，保持原有变体与 slot 支持，方便统一样式。
- */
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  (
-    {
-      className,
-      variant,
-      size: uiSize,
-      fullWidth,
-      ...props
-    },
-    ref
-  ) => {
-    const classes = clsx(buttonVariants({ variant, size: uiSize, fullWidth }), className)
+const appearanceToAntdVariant = (
+  appearance: AppButtonAppearance
+): AntdButtonProps['variant'] => {
+  // antd variant: outlined | dashed | solid | filled | text | link :contentReference[oaicite:2]{index=2}
+  return appearance
+}
 
-    return (
-      <AntdButton
-        ref={ref as React.ForwardedRef<React.ElementRef<typeof AntdButton>>}
-        className={classes}
-        {...props}
-      />
-    )
+const sizeToAntdSize = (size: AppButtonSize): AntdButtonProps['size'] => {
+  switch (size) {
+    case 'sm':
+      return 'small'
+    case 'lg':
+      return 'large'
+    case 'md':
+    default:
+      return 'middle'
   }
-)
-Button.displayName = 'Button'
+}
 
-export { Button, buttonVariants }
+export interface AppButtonProps
+  extends Omit<AntdButtonProps, 'color' | 'variant' | 'size'> {
+  /** 语义色：默认 primary */
+  tone?: AppButtonTone
+  /** 外观变体：默认 solid */
+  appearance?: AppButtonAppearance
+  /** 尺寸：默认 md */
+  size?: AppButtonSize
+  /** 是否撑满父容器（映射到 antd 的 block） */
+  fullWidth?: boolean
+
+  /**
+   * 仍然允许你在极少数场景直接指定 antd 的 color/variant（优先级最高）
+   * 例如：color="volcano" variant="outlined"
+   */
+  color?: AntdButtonProps['color']
+  variant?: AntdButtonProps['variant']
+}
+
+export const AppButton = React.forwardRef<
+  React.ElementRef<typeof AntdButton>,
+  AppButtonProps
+>((props, ref) => {
+  const {
+    tone = 'primary',
+    appearance = 'solid',
+    size = 'md',
+    fullWidth,
+    block,
+
+    // 显式覆盖（优先级最高）
+    color: colorOverride,
+    variant: variantOverride,
+
+    ...rest
+  } = props
+
+  const color = colorOverride ?? toneToAntdColor(tone)
+  const variant = variantOverride ?? appearanceToAntdVariant(appearance)
+  const antdSize = sizeToAntdSize(size)
+
+  return (
+    <AntdButton
+      ref={ref}
+      {...rest}
+      color={color}
+      variant={variant}
+      size={antdSize}
+      block={block ?? Boolean(fullWidth)}
+    />
+  )
+})
+AppButton.displayName = 'AppButton'
+
+// 可选：导出默认别名，方便替换项目里 Button 组件
+export const Button = AppButton

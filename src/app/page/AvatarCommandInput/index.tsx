@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Textarea, Button } from "@/app/components/ui";
 import { useWebSocketContext } from '@/app/providers/WebSocketProviders'
+import { SendHorizontal } from "lucide-react";
+import { VoiceInputToggle } from "@/app/components/features";
 
 
 const AvatarCommandInput = () => {
@@ -62,10 +64,11 @@ const AvatarCommandInput = () => {
       }
 
   return (
-    <div className="w-full flex gap-2">
-        <Textarea placeholder="请输入指令" value={input} onChange={(e) => setInput(e.target.value)} />
-        <Button className="flex gap-2" size="lg" variant="outline" onClick={handleSubmit}>
-            发送
+    <div className="w-full flex gap-1 items-center">
+        <Textarea className="h-12! rounded-full!" placeholder="请输入指令" value={input} onChange={(e) => setInput(e.target.value)} />
+        <VoiceInputToggle />
+        <Button className="flex items-center justify-center h-12! w-12! rounded-full! p-0! shrink-0" onClick={handleSubmit}>
+            <SendHorizontal size={24} />
         </Button>
     </div>
   );

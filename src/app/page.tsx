@@ -5,7 +5,6 @@ import { signIn, signOut, useSession } from "next-auth/react";
 
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
-import { VoiceInputToggle } from "@/app/components/features";
 import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
@@ -120,18 +119,9 @@ export default function Home() {
         }}
       />
       <div className="absolute bottom-4 left-6 right-6">
-        <div className="w-full flex gap-2">
-          <Button
-            className="flex gap-2"
-            size="lg"
-            variant="outline"
-            onClick={handleTextBtn}
-          >
-            <MessageSquareMore />
-            <span>Text</span>
-          </Button>
+        <div className="w-full flex gap-2 items-center">
+          <MessageSquareMore onClick={handleTextBtn} size={24} />
           <AvatarCommandInput />
-          <VoiceInputToggle />
         </div>
       </div>
     </main>
