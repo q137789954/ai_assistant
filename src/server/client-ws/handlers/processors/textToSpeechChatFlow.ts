@@ -26,25 +26,29 @@ const parseNumberWithFallback = (
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const TTS_API_URL =
-  process.env.OPENSPEECH_TTS_URL ??
-  "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
-const TTS_API_KEY = process.env.OPENSPEECH_API_KEY ?? "";
-const TTS_VOICE = process.env.OPENSPEECH_TTS_VOICE ?? "zh_female_cancan_mars_bigtts";
-const TTS_AUDIO_FORMAT = process.env.OPENSPEECH_TTS_FORMAT ?? "wav";
-const TTS_SAMPLE_RATE = parseNumberWithFallback(
-  process.env.OPENSPEECH_TTS_SAMPLE_RATE,
-  24000
-);
-const TTS_SPEED = parseNumberWithFallback(process.env.OPENSPEECH_TTS_SPEED, 1);
-const TTS_PITCH = parseNumberWithFallback(process.env.OPENSPEECH_TTS_PITCH, 1);
-const TTS_VOLUME = parseNumberWithFallback(
-  process.env.OPENSPEECH_TTS_VOLUME,
-  1
-);
-const TTS_RESOURCE_ID = process.env.OPENSPEECH_RESOURCE_ID ?? "volc.megatts.default";
 const TTS_END_PUNCTUATIONS = /[。！？!?]/;
 // 以上常量用于控制 Openspeech TTS 的各项参数，优先读取可调节的环境变量并保留合理默认值
+// LLM 可能会在回复中保留一个动作字段，后续需要识别并拆分出该部分。
+const ACTION_MARKER = /【动作：([^】]+)】/;
+
+/**
+ * 试图从文本中提取动作标记，若存在则同时移除该片段并返回去除后的内容与动作名称。
+ */
+const stripActionMarker = (text: string) => {
+  const match = ACTION_MARKER.exec(text);
+  if (!match) {
+    return {
+      sanitized: text,
+      action: null,
+    };
+  }
+  const before = text.slice(0, match.index);
+  const after = text.slice(match.index + match[0].length);
+  return {
+    sanitized: `${before}${after}`,
+    action: match[1].trim(),
+  };
+};
 
 /**
  * 处理文本输入的全部流程：落库用户输入、调用 Grok 流式接口、持续推送 chunk、落库助手回复。
@@ -109,6 +113,27 @@ export const processTextToSpeechChatFlow = async ({
   let firstChunkLogged = false;
   let pendingSentence = "";
   let ttsPipeline: Promise<void> = Promise.resolve();
+  let pendingAction: string | null = null;
+  let actionEventSent = false;
+  let actionHandledByTts = false;
+
+  // 通过专用事件在 TTS 生成前把动作信息传递给客户端，避免动作文本被朗读。
+  const notifyActionToClient = () => {
+    if (actionEventSent || !pendingAction) {
+      return;
+    }
+    const actionPayload = serializePayload({
+      event: "tts-action",
+      data: {
+        clientId,
+        conversationId,
+        action: pendingAction,
+        timestamp: new Date().toISOString(),
+      },
+    });
+    socket.emit("message", actionPayload);
+    actionEventSent = true;
+  };
 
   // 通过 Promise 链把所有需要转换的句子串行化，避免 TTS 请求并发导致顺序错乱。
   const enqueueSentence = (sentence: string) => {
@@ -117,16 +142,22 @@ export const processTextToSpeechChatFlow = async ({
       return;
     }
 
+    const actionForSentence =
+      !actionHandledByTts && pendingAction ? pendingAction : undefined;
+    if (actionForSentence) {
+      actionHandledByTts = true;
+    }
+
     ttsPipeline = ttsPipeline
       .then(() =>
-        // streamSentenceToTts({
-        //   sentence: normalized,
-        //   clientId,
-        //   conversationId,
-        //   socket,
-        //   userId,
-        // })
-        console.log(normalized,'这里是ttsPipeline---IGNORE')
+        streamSentenceToTts({
+          sentence: normalized,
+          clientId,
+          conversationId,
+          socket,
+          userId,
+          action: actionForSentence,
+        })
       )
       .catch((error) => {
         console.error("textToSpeechChatFlow: TTS 服务处理失败", {
@@ -180,21 +211,25 @@ export const processTextToSpeechChatFlow = async ({
       socket.emit("message", chunkPayload);
 
       // 把当前 chunk 和上一轮未完成的片段拼接，提取出已经完整的句子
-      const { sentences, remainder } = extractCompletedSentences(
-        pendingSentence + deltaContent
-      );
+      const combinedText = pendingSentence + deltaContent;
+      const { sanitized, action } = stripActionMarker(combinedText);
+      if (action && !pendingAction) {
+        pendingAction = action;
+        notifyActionToClient();
+      }
+      const { sentences, remainder } = extractCompletedSentences(sanitized);
       pendingSentence = remainder;
       sentences.forEach(enqueueSentence);
     }
 
     if (pendingSentence.trim()) {
       // 循环结束后如果还有残留片段，也需要转换为语音
-    enqueueSentence(pendingSentence);
-    pendingSentence = "";
-  }
+      enqueueSentence(pendingSentence);
+      pendingSentence = "";
+    }
 
-  // 等待所有排队的 TTS 请求完成后再继续后续流程
-  await ttsPipeline;
+    // 等待所有排队的 TTS 请求完成后再继续后续流程
+    await ttsPipeline;
   } catch (error) {
     console.error("textChatFlow: Grok 流式响应处理失败", {
       clientId,
@@ -286,9 +321,19 @@ async function streamSentenceToTts(params: {
   conversationId: string;
   socket: Socket;
   userId: string;
+  action?: string;
 }) {
-  const { sentence, clientId, conversationId, socket, userId } = params;
+  const { sentence, clientId, conversationId, socket, userId, action } = params;
   const sentenceId = randomUUID();
+
+  // Openspeech 接口要求的认证头与资源 ID，避免硬编码的时机可通过环境变量替换
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Api-App-Id": "1383573066",
+    "X-Api-Access-Key": "4QSc8Vtv1e9kZEUhE2gQeHAhFUHZjhsk",
+    "X-Api-Resource-Id": "seed-tts-2.0",
+    "Connection": "keep-alive",
+  };
 
   // 构建 TTS 请求体，携带可配置的参数以控制音色与采样率，并绑定当前用户识别信息
   const requestBody = {
@@ -296,30 +341,24 @@ async function streamSentenceToTts(params: {
       id: userId,
     },
     req_params: {
-      speaker: TTS_VOICE,
+      speaker: 'saturn_zh_female_keainvsheng_tob', // 语音角色，可根据需求调整
       text: sentence,
       audio_params: {
-        format: TTS_AUDIO_FORMAT,
-        sample_rate: TTS_SAMPLE_RATE,
+        format: 'mp3',
       },
     },
   };
 
-  // Openspeech 接口要求的认证头与资源 ID，避免硬编码的时机可通过环境变量替换
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "X-Api-App-Id": "1383573066",
-    "X-Api-Access-Key": "4QSc8Vtv1e9kZEUhE2gQeHAhFUHZjhsk",
-    "X-Api-Resource-Id": TTS_RESOURCE_ID,
-  };
-  const response = await fetch(TTS_API_URL, {
+  console.log(requestBody, 'requestBody---textToSpeechChatFlow');
+  console.log(headers, 'headers---textToSpeechChatFlow');
+  const response = await fetch('https://openspeech.bytedance.com/api/v3/tts/unidirectional', {
     method: "POST",
     headers,
     body: JSON.stringify(requestBody),
   });
 
   console.log("TTS 请求响应状态码", response.status);
-  console.log(response, 'response');
+  console.log(response.ok, 'response');
 
   // 确认 HTTP 级别返回成功，防止后续解析空数据
   if (!response.ok) {
@@ -330,21 +369,22 @@ async function streamSentenceToTts(params: {
     throw new Error("TTS 响应缺少 body");
   }
 
-  // 首先通知客户端 TTS 流即将开始，方便前端初始化解码缓冲区与播放流水线
+  // 首先通知客户端 TTS 流即将开始，方便前端初始化解码缓冲区与播放流水线，同时把动作信息补传
+  const startData: Record<string, unknown> = {
+    clientId,
+    conversationId,
+    sentenceId,
+    sentence,
+    timestamp: new Date().toISOString(),
+  };
+  if (action) {
+    startData.action = action;
+  }
   socket.emit(
     "message",
     serializePayload({
       event: "tts-audio-start",
-      data: {
-        clientId,
-        conversationId,
-        sentenceId,
-        sentence,
-        sampleRate: TTS_SAMPLE_RATE,
-        format: TTS_AUDIO_FORMAT,
-        voice: TTS_VOICE,
-        timestamp: new Date().toISOString(),
-      },
+      data: startData,
     })
   );
 
@@ -436,9 +476,6 @@ async function streamSentenceToTts(params: {
             sentenceId,
             chunkIndex,
             base64: parsed.data,
-            sampleRate: TTS_SAMPLE_RATE,
-            format: TTS_AUDIO_FORMAT,
-            voice: TTS_VOICE,
             timestamp: new Date().toISOString(),
           },
         })
