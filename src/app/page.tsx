@@ -8,7 +8,7 @@ import AvatarCommandInput from "./page/AvatarCommandInput";
 import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
-import { Button } from "./components/ui";
+import { AppButton, Button } from "./components/ui";
 import { MessageSquareMore } from "lucide-react";
 
 export default function Home() {
@@ -120,7 +120,7 @@ export default function Home() {
       />
       <div className="absolute bottom-4 left-6 right-6">
         <div className="w-full flex gap-2 items-center">
-          <MessageSquareMore onClick={handleTextBtn} size={24} />
+          <div className="h-6 w-6 flex justify-center items-center text-2xl" onClick={handleTextBtn}>💬</div>
           <AvatarCommandInput />
         </div>
       </div>

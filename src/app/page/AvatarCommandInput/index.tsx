@@ -65,7 +65,7 @@ const AvatarCommandInput = () => {
 
   return (
     <div className="w-full flex gap-1 items-center">
-        <Textarea className="h-12! rounded-full!" placeholder="请输入指令" value={input} onChange={(e) => setInput(e.target.value)} />
+        <Textarea className="h-11! rounded-full!" placeholder="请输入指令" value={input} onChange={(e) => setInput(e.target.value)} />
         <VoiceInputToggle />
         <Button className="flex items-center justify-center h-12! w-12! rounded-full! p-0! shrink-0" onClick={handleSubmit}>
             <SendHorizontal size={24} />
