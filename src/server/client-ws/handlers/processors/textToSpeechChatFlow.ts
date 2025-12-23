@@ -419,7 +419,7 @@ async function streamSentenceToTts(params: {
       speaker: 'saturn_zh_female_keainvsheng_tob', // 语音角色，可根据需求调整
       text: sentence,
       audio_params: {
-        format: 'mp3',
+        format: 'pcm',
       },
     },
   };
