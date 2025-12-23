@@ -62,6 +62,14 @@ export const processTextToSpeechChatFlow = async ({
   socket,
   content,
 }: textToSpeechChatFlowParams): Promise<boolean> => {
+  const flowStartTime = Date.now();
+  const flowContext = { clientId, conversationId };
+  // 记录流程起始时间，方便后续各阶段耗时对比
+  console.log(
+    "[textToSpeechChatFlow] 流程入口",
+    flowContext,
+    new Date(flowStartTime).toISOString()
+  );
   // 只有字符串才能写入文本列，先做类型校验以防异常
   if (typeof content !== "string") {
     console.error("textChatFlow: 收到的文本内容非法，要求字符串", {
@@ -92,6 +100,7 @@ export const processTextToSpeechChatFlow = async ({
       error,
     });
   }
+  const llmRequestStartTime = Date.now();
   const responseStream = await socket.data.llmClient.chat.completions.create({
     model: "grok-4-fast-non-reasoning",
     stream: true, // 开启流式返回以便后续使用 for-await 读取每个 chunk
@@ -106,6 +115,13 @@ export const processTextToSpeechChatFlow = async ({
       },
     ],
   });
+  // 记录 LLM 请求返回时间与耗时信息
+  console.log(
+    "[textToSpeechChatFlow] LLM 请求返回",
+    flowContext,
+    { durationMs: Date.now() - llmRequestStartTime },
+    new Date().toISOString()
+  );
 
   // 下面的状态变量用于积累助手的回答、维护 chunk 序号以及串行化 TTS 调用
   let assistantContent = "";
@@ -116,6 +132,8 @@ export const processTextToSpeechChatFlow = async ({
   let pendingAction: string | null = null;
   let actionEventSent = false;
   let actionHandledByTts = false;
+  let llmStreamEndTime = 0;
+  let ttsFirstEnqueueTimestamp: number | null = null;
 
   // 通过专用事件在 TTS 生成前把动作信息传递给客户端，避免动作文本被朗读。
   const notifyActionToClient = () => {
@@ -140,6 +158,17 @@ export const processTextToSpeechChatFlow = async ({
     const normalized = sentence.trim();
     if (!normalized) {
       return;
+    }
+
+    if (!ttsFirstEnqueueTimestamp) {
+      ttsFirstEnqueueTimestamp = Date.now();
+      // 记录第一句话进入 TTS 队列的时间节点，有助于对比下游耗时
+      console.log(
+        "[textToSpeechChatFlow] TTS 队列首次入列",
+        flowContext,
+        { sentence: normalized },
+        new Date(ttsFirstEnqueueTimestamp).toISOString()
+      );
     }
 
     const actionForSentence =
@@ -222,6 +251,15 @@ export const processTextToSpeechChatFlow = async ({
       sentences.forEach(enqueueSentence);
     }
 
+    llmStreamEndTime = Date.now();
+    // 记录 LLM 流式响应结束的时间点与总体耗时
+    console.log(
+      "[textToSpeechChatFlow] LLM 流式响应完成",
+      flowContext,
+      { durationMs: llmStreamEndTime - llmRequestStartTime },
+      new Date(llmStreamEndTime).toISOString()
+    );
+
     if (pendingSentence.trim()) {
       // 循环结束后如果还有残留片段，也需要转换为语音
       enqueueSentence(pendingSentence);
@@ -230,6 +268,23 @@ export const processTextToSpeechChatFlow = async ({
 
     // 等待所有排队的 TTS 请求完成后再继续后续流程
     await ttsPipeline;
+    const ttsPipelineEndTime = Date.now();
+    // 记录 TTS 队列和流水线完成时的耗时指标
+    if (ttsFirstEnqueueTimestamp) {
+      console.log(
+        "[textToSpeechChatFlow] TTS 流程完成",
+        flowContext,
+        {
+          durationMs: ttsPipelineEndTime - ttsFirstEnqueueTimestamp,
+          sinceFlowStartMs: ttsPipelineEndTime - flowStartTime,
+          sinceLlmEndMs:
+            llmStreamEndTime > 0
+              ? ttsPipelineEndTime - llmStreamEndTime
+              : undefined,
+        },
+        new Date(ttsPipelineEndTime).toISOString()
+      );
+    }
   } catch (error) {
     console.error("textChatFlow: Grok 流式响应处理失败", {
       clientId,
@@ -262,6 +317,18 @@ export const processTextToSpeechChatFlow = async ({
   });
 
   socket.emit("message", completionPayload);
+  // 记录完整响应发送结束的时间点与累积耗时
+  const completionEmitTime = Date.now();
+  console.log(
+    "[textToSpeechChatFlow] 响应完成事件发送",
+    flowContext,
+    {
+      durationMs: completionEmitTime - flowStartTime,
+      sinceLlmEndMs:
+        llmStreamEndTime > 0 ? completionEmitTime - llmStreamEndTime : undefined,
+    },
+    new Date(completionEmitTime).toISOString()
+  );
 
   if (assistantContent) {
     // 如果助手生成了文字回复，同步写入数据库以完整记录会话
@@ -325,6 +392,14 @@ async function streamSentenceToTts(params: {
 }) {
   const { sentence, clientId, conversationId, socket, userId, action } = params;
   const sentenceId = randomUUID();
+  const ttsSentenceStartTime = Date.now();
+  // 记录每句 TTS 请求的入口时间，便于分析单条语音耗时
+  console.log(
+    "[streamSentenceToTts] TTS 请求开始",
+    { clientId, conversationId, sentenceId },
+    { sentence },
+    new Date(ttsSentenceStartTime).toISOString()
+  );
 
   // Openspeech 接口要求的认证头与资源 ID，避免硬编码的时机可通过环境变量替换
   const headers: Record<string, string> = {
@@ -363,6 +438,14 @@ async function streamSentenceToTts(params: {
   if (!response.body) {
     throw new Error("TTS 响应缺少 body");
   }
+  const ttsRequestEndTime = Date.now();
+  // 记录 TTS 接口返回后耗时，以便分析上传/网络开销
+  console.log(
+    "[streamSentenceToTts] TTS 请求返回完成",
+    { clientId, conversationId, sentenceId },
+    { durationMs: ttsRequestEndTime - ttsSentenceStartTime },
+    new Date(ttsRequestEndTime).toISOString()
+  );
 
   // 首先通知客户端 TTS 流即将开始，方便前端初始化解码缓冲区与播放流水线，同时把动作信息补传
   const startData: Record<string, unknown> = {
@@ -382,6 +465,12 @@ async function streamSentenceToTts(params: {
       data: startData,
     })
   );
+  // 记录向客户端发送 TTS 音频开始事件的时间
+  console.log(
+    "[streamSentenceToTts] 发送 tts-audio-start",
+    { clientId, conversationId, sentenceId },
+    new Date().toISOString()
+  );
 
   // 获取流式响应 reader 以便逐个处理数据行，然后解码转换为字符串
   const reader = response.body.getReader();
@@ -396,6 +485,17 @@ async function streamSentenceToTts(params: {
       return;
     }
     completionSignaled = true;
+    // 记录完成事件发送时的耗时指标
+    const ttsCompletionTime = Date.now();
+    console.log(
+      "[streamSentenceToTts] 发送 tts-audio-complete",
+      { clientId, conversationId, sentenceId },
+      {
+        durationMs: ttsCompletionTime - ttsSentenceStartTime,
+        sinceRequestReturnMs: ttsCompletionTime - ttsRequestEndTime,
+      },
+      new Date(ttsCompletionTime).toISOString()
+    );
     socket.emit(
       "message",
       serializePayload({

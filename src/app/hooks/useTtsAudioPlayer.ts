@@ -55,9 +55,6 @@ const buildAudioMimeType = (format: string | undefined) => {
 
 const describeEvent = (event: MessageEvent) => {
   const data = typeof event.data === "string" ? event.data : undefined;
-  if (data) {
-    console.log("ttsAudioPlayer: 原始服务端消息", data.slice(0, 300));
-  }
   if (!data) {
     return null;
   }
@@ -277,11 +274,6 @@ export const useTtsAudioPlayer = () => {
 
       const payload = parsed.data ?? {};
       const sentenceId = safeString(payload.sentenceId);
-      console.log("ttsAudioPlayer: 收到事件", {
-        event: parsed.event,
-        sentenceId,
-        payload,
-      });
       switch (parsed.event) {
         case "tts-audio-start": {
           if (!sentenceId) {
@@ -292,10 +284,6 @@ export const useTtsAudioPlayer = () => {
             chunkBuffers: [],
             format: safeString(payload.format) || "mp3",
           });
-          console.log("ttsAudioPlayer: 收到 tts-audio-start", {
-            sentenceId,
-            format: safeString(payload.format),
-          });
           enqueueSentence(sentenceId);
           break;
         }
@@ -303,6 +291,7 @@ export const useTtsAudioPlayer = () => {
           if (!sentenceId) {
             break;
           }
+          console.log("ttsAudioPlayer: 收到音频块，句子ID=", sentenceId);
           const entry = sentencesRef.current.get(sentenceId);
           const base64 = safeString(payload.base64);
           if (!base64 || !entry) {
@@ -311,11 +300,6 @@ export const useTtsAudioPlayer = () => {
           entry.chunks.push(base64);
           const chunk = base64ToUint8Array(base64);
           entry.chunkBuffers.push(chunk);
-          console.log("ttsAudioPlayer: chunk len", {
-            sentenceId,
-            index: entry.chunks.length - 1,
-            snippet: base64.slice(0, 32),
-          });
           appendPending(entry);
           break;
         }
