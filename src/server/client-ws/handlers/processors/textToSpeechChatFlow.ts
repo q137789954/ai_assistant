@@ -349,8 +349,6 @@ async function streamSentenceToTts(params: {
     },
   };
 
-  console.log(requestBody, 'requestBody---textToSpeechChatFlow');
-  console.log(headers, 'headers---textToSpeechChatFlow');
   const response = await fetch('https://openspeech.bytedance.com/api/v3/tts/unidirectional', {
     method: "POST",
     headers,
@@ -358,7 +356,6 @@ async function streamSentenceToTts(params: {
   });
 
   console.log("TTS 请求响应状态码", response.status);
-  console.log(response.ok, 'response');
 
   // 确认 HTTP 级别返回成功，防止后续解析空数据
   if (!response.ok) {

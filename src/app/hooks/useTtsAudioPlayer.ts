@@ -5,6 +5,7 @@ type SentenceState = {
   chunks: string[];
   format: string;
   audioUrl?: string;
+  enqueued?: boolean;
 };
 
 const base64ToUint8Array = (base64: string) => {
@@ -51,9 +52,71 @@ const describeEvent = (event: MessageEvent) => {
 export const useTtsAudioPlayer = () => {
   const { subscribe } = useWebSocketContext();
   const sentencesRef = useRef(new Map<string, SentenceState>());
+  const queueRef = useRef<string[]>([]);
+  const isPlayingRef = useRef(false);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  /**
+   * 异步顺序播放队列中的音频，当前没有在播放才会取出下一条。
+   */
+  const playNextFromQueue = () => {
+    if (isPlayingRef.current) {
+      return;
+    }
+
+    let nextId: string | undefined;
+    let nextEntry: SentenceState | undefined;
+    while (queueRef.current.length) {
+      nextId = queueRef.current.shift();
+      if (!nextId) {
+        nextEntry = undefined;
+        break;
+      }
+      nextEntry = sentencesRef.current.get(nextId);
+      if (nextEntry?.audioUrl) {
+        break;
+      }
+      nextEntry = undefined;
+      nextId = undefined;
+    }
+
+    if (!nextId || !nextEntry || !nextEntry.audioUrl) {
+      return;
+    }
+
+    isPlayingRef.current = true;
+    const audio = new Audio(nextEntry.audioUrl);
+    currentAudioRef.current = audio;
+    const revokeAndProceed = () => {
+      if (nextEntry && nextEntry.audioUrl) {
+        URL.revokeObjectURL(nextEntry.audioUrl);
+      }
+      if (nextId) {
+        sentencesRef.current.delete(nextId);
+      }
+      currentAudioRef.current = null;
+      isPlayingRef.current = false;
+      playNextFromQueue();
+    };
+    audio.addEventListener("ended", revokeAndProceed, { once: true });
+
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch((error) => {
+        console.warn("ttsAudioPlayer: 音频播放被浏览器阻止", error);
+        revokeAndProceed();
+      });
+    }
+  };
 
   useEffect(() => {
     const cleanup = () => {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.src = "";
+        currentAudioRef.current = null;
+      }
+      queueRef.current = [];
       sentencesRef.current.forEach((state) => {
         if (state.audioUrl) {
           URL.revokeObjectURL(state.audioUrl);
@@ -77,23 +140,23 @@ export const useTtsAudioPlayer = () => {
       });
       switch (parsed.event) {
         case "tts-audio-start": {
-        if (!sentenceId) {
+          if (!sentenceId) {
+            break;
+          }
+          sentencesRef.current.set(sentenceId, {
+            chunks: [],
+            format: safeString(payload.format) || "mp3",
+          });
+          console.log("ttsAudioPlayer: 收到 tts-audio-start", {
+            sentenceId,
+            format: safeString(payload.format),
+          });
           break;
         }
-        sentencesRef.current.set(sentenceId, {
-          chunks: [],
-          format: safeString(payload.format) || "mp3",
-        });
-        console.log("ttsAudioPlayer: 收到 tts-audio-start", {
-          sentenceId,
-          format: safeString(payload.format),
-        });
-        break;
-      }
-      case "tts-audio-chunk": {
-        if (!sentenceId) {
-          break;
-        }
+        case "tts-audio-chunk": {
+          if (!sentenceId) {
+            break;
+          }
           const entry = sentencesRef.current.get(sentenceId);
           const base64 = safeString(payload.base64);
           if (!base64 || !entry) {
@@ -129,17 +192,10 @@ export const useTtsAudioPlayer = () => {
           const audioUrl = URL.createObjectURL(blob);
           entry.audioUrl = audioUrl;
 
-          const audio = new Audio(audioUrl);
-          audio.addEventListener("ended", () => {
-            URL.revokeObjectURL(audioUrl);
-            sentencesRef.current.delete(sentenceId);
-          });
-
-          const playPromise = audio.play();
-          if (playPromise && typeof playPromise.catch === "function") {
-            playPromise.catch((error) => {
-              console.warn("ttsAudioPlayer: 音频播放被浏览器阻止", error);
-            });
+          if (!entry.enqueued) {
+            entry.enqueued = true;
+            queueRef.current.push(sentenceId);
+            playNextFromQueue();
           }
 
           break;
