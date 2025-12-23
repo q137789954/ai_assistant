@@ -34,8 +34,6 @@ export const initializeAsrConnection = (socket: Socket) => {
     } catch {
       parsedPayload = rawData;
     }
-
-    console.log("收到 ASR 服务返回的消息：", parsedPayload);
     const { type, is_final, text } = parsedPayload || {};
     if( type === "result") {
       if(is_final === true) {

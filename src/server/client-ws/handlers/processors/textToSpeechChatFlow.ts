@@ -355,8 +355,6 @@ async function streamSentenceToTts(params: {
     body: JSON.stringify(requestBody),
   });
 
-  console.log("TTS 请求响应状态码", response.status);
-
   // 确认 HTTP 级别返回成功，防止后续解析空数据
   if (!response.ok) {
     throw new Error(`TTS 请求失败：${response.status} ${response.statusText}`);
@@ -447,8 +445,6 @@ async function streamSentenceToTts(params: {
     if (!parsed) {
       return;
     }
-
-    console.log(parsed, '这里是parsed')
     // 如果 TTS 本身反馈非 0 错误码，则记录并跳过
     if (typeof parsed.code === "number" && parsed.code !== 0) {
       console.warn("textToSpeechChatFlow: TTS 服务返回错误", {

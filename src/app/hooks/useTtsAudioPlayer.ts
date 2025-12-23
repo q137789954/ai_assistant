@@ -4,8 +4,13 @@ import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 type SentenceState = {
   chunks: string[];
   format: string;
-  audioUrl?: string;
+  chunkBuffers: Uint8Array[];
   enqueued?: boolean;
+  isComplete?: boolean;
+  mediaSource?: MediaSource;
+  sourceBuffer?: SourceBuffer;
+  audioElement?: HTMLAudioElement;
+  supportsMediaSource?: boolean;
 };
 
 const base64ToUint8Array = (base64: string) => {
@@ -25,13 +30,27 @@ const safeString = (value: unknown) => (typeof value === "string" ? value : "");
 const buildAudioMimeType = (format: string | undefined) => {
   const raw = (format ?? "mp3").trim().toLowerCase();
   if (!raw) {
-    return "audio/mp3";
+    return "audio/mpeg; codecs=\"mp3\"";
   }
+
   if (raw.startsWith("audio/")) {
     return raw;
   }
+
   const sanitized = raw.replace(/[^a-z0-9]+/g, "");
-  return sanitized ? `audio/${sanitized}` : "audio/mp3";
+  switch (sanitized) {
+    case "mp3":
+      return "audio/mpeg; codecs=\"mp3\"";
+    case "mpeg":
+      return "audio/mpeg";
+    case "wav":
+    case "wave":
+      return "audio/wav";
+    case "ogg":
+      return "audio/ogg";
+    default:
+      return sanitized ? `audio/${sanitized}` : "audio/mpeg; codecs=\"mp3\"";
+  }
 };
 
 const describeEvent = (event: MessageEvent) => {
@@ -54,57 +73,184 @@ export const useTtsAudioPlayer = () => {
   const sentencesRef = useRef(new Map<string, SentenceState>());
   const queueRef = useRef<string[]>([]);
   const isPlayingRef = useRef(false);
+  const currentSentenceIdRef = useRef<string | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  /**
-   * 异步顺序播放队列中的音频，当前没有在播放才会取出下一条。
-   */
+  const appendPending = (entry: SentenceState) => {
+    const sourceBuffer = entry.sourceBuffer;
+    if (!sourceBuffer || sourceBuffer.updating) {
+      return;
+    }
+    const nextChunk = entry.chunkBuffers.shift();
+    if (nextChunk) {
+      try {
+        sourceBuffer.appendBuffer(nextChunk);
+      } catch (error) {
+        console.error("ttsAudioPlayer: 追加音频块失败", error);
+      }
+      return;
+    }
+    if (entry.isComplete && entry.mediaSource?.readyState === "open") {
+      try {
+        entry.mediaSource.endOfStream();
+      } catch (error) {
+        console.error("ttsAudioPlayer: 结束流式播放失败", error);
+      }
+    }
+  };
+
+  const cleanupEntry = (sentenceId: string) => {
+    const entry = sentencesRef.current.get(sentenceId);
+    if (!entry) {
+      return;
+    }
+    if (entry.audioElement) {
+      URL.revokeObjectURL(entry.audioElement.src);
+      entry.audioElement.pause();
+      entry.audioElement.src = "";
+      entry.audioElement = undefined;
+    }
+    if (entry.sourceBuffer) {
+      try {
+        if (entry.mediaSource?.readyState === "open") {
+          entry.mediaSource.endOfStream();
+        }
+      } catch {
+        // 忽略流式结束异常
+      }
+      entry.sourceBuffer = undefined;
+    }
+    if (entry.mediaSource) {
+      entry.mediaSource = undefined;
+    }
+    entry.chunkBuffers = [];
+    sentencesRef.current.delete(sentenceId);
+  };
+
+  const enqueueSentence = (sentenceId: string) => {
+    const entry = sentencesRef.current.get(sentenceId);
+    if (!entry || entry.enqueued) {
+      return;
+    }
+    entry.enqueued = true;
+    queueRef.current.push(sentenceId);
+    playNextFromQueue();
+  };
+
   const playNextFromQueue = () => {
     if (isPlayingRef.current) {
       return;
     }
 
-    let nextId: string | undefined;
-    let nextEntry: SentenceState | undefined;
     while (queueRef.current.length) {
-      nextId = queueRef.current.shift();
-      if (!nextId) {
-        nextEntry = undefined;
-        break;
+      const nextId = queueRef.current[0];
+      const entry = sentencesRef.current.get(nextId);
+      if (!entry) {
+        queueRef.current.shift();
+        continue;
       }
-      nextEntry = sentencesRef.current.get(nextId);
-      if (nextEntry?.audioUrl) {
-        break;
-      }
-      nextEntry = undefined;
-      nextId = undefined;
-    }
+      const mimeType = buildAudioMimeType(entry.format);
+      const supportsMediaSource =
+        typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(mimeType);
+      entry.supportsMediaSource = supportsMediaSource;
 
-    if (!nextId || !nextEntry || !nextEntry.audioUrl) {
+      if (!supportsMediaSource && !entry.isComplete) {
+        return;
+      }
+
+      queueRef.current.shift();
+
+      if (!supportsMediaSource) {
+        startFallbackPlayback(nextId, entry, mimeType);
+        return;
+      }
+
+      isPlayingRef.current = true;
+      currentSentenceIdRef.current = nextId;
+      const mediaSource = new MediaSource();
+      entry.mediaSource = mediaSource;
+      const audio = new Audio();
+      audio.autoplay = true;
+      const objectUrl = URL.createObjectURL(mediaSource);
+      audio.src = objectUrl;
+      entry.audioElement = audio;
+      currentAudioRef.current = audio;
+
+      const finalize = () => {
+        cleanupEntry(nextId);
+        currentSentenceIdRef.current = null;
+        currentAudioRef.current = null;
+        isPlayingRef.current = false;
+        playNextFromQueue();
+      };
+
+      audio.addEventListener("ended", finalize, { once: true });
+
+      mediaSource.addEventListener(
+        "sourceopen",
+        () => {
+          try {
+            entry.sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+            entry.sourceBuffer.addEventListener("updateend", () => appendPending(entry));
+            appendPending(entry);
+          } catch (error) {
+            console.error("ttsAudioPlayer: 初始化 SourceBuffer 失败", error);
+            if (entry.audioElement) {
+              URL.revokeObjectURL(entry.audioElement.src);
+              entry.audioElement = undefined;
+            }
+            entry.mediaSource = undefined;
+            entry.sourceBuffer = undefined;
+            isPlayingRef.current = false;
+            currentSentenceIdRef.current = null;
+            currentAudioRef.current = null;
+            startFallbackPlayback(nextId, entry, mimeType);
+          }
+        },
+        { once: true },
+      );
       return;
     }
+  };
 
-    isPlayingRef.current = true;
-    const audio = new Audio(nextEntry.audioUrl);
+  const startFallbackPlayback = (
+    sentenceId: string,
+    entry: SentenceState,
+    mimeType: string,
+  ) => {
+    if (!entry.chunkBuffers.length) {
+      cleanupEntry(sentenceId);
+      currentSentenceIdRef.current = null;
+      currentAudioRef.current = null;
+      isPlayingRef.current = false;
+      playNextFromQueue();
+      return;
+    }
+    const blob = new Blob(entry.chunkBuffers, { type: mimeType });
+    const audioUrl = URL.createObjectURL(blob);
+    const audio = new Audio(audioUrl);
+    audio.autoplay = true;
+    entry.audioElement = audio;
     currentAudioRef.current = audio;
-    const revokeAndProceed = () => {
-      if (nextEntry && nextEntry.audioUrl) {
-        URL.revokeObjectURL(nextEntry.audioUrl);
-      }
-      if (nextId) {
-        sentencesRef.current.delete(nextId);
-      }
+    currentSentenceIdRef.current = sentenceId;
+    isPlayingRef.current = true;
+
+    const finalize = () => {
+      cleanupEntry(sentenceId);
+      currentSentenceIdRef.current = null;
       currentAudioRef.current = null;
       isPlayingRef.current = false;
       playNextFromQueue();
     };
-    audio.addEventListener("ended", revokeAndProceed, { once: true });
+
+    audio.addEventListener("ended", finalize, { once: true });
+    audio.addEventListener("error", finalize, { once: true });
 
     const playPromise = audio.play();
     if (playPromise && typeof playPromise.catch === "function") {
       playPromise.catch((error) => {
         console.warn("ttsAudioPlayer: 音频播放被浏览器阻止", error);
-        revokeAndProceed();
+        finalize();
       });
     }
   };
@@ -117,11 +263,9 @@ export const useTtsAudioPlayer = () => {
         currentAudioRef.current = null;
       }
       queueRef.current = [];
-      sentencesRef.current.forEach((state) => {
-        if (state.audioUrl) {
-          URL.revokeObjectURL(state.audioUrl);
-        }
-      });
+      currentSentenceIdRef.current = null;
+      isPlayingRef.current = false;
+      Array.from(sentencesRef.current.keys()).forEach((id) => cleanupEntry(id));
       sentencesRef.current.clear();
     };
 
@@ -145,12 +289,14 @@ export const useTtsAudioPlayer = () => {
           }
           sentencesRef.current.set(sentenceId, {
             chunks: [],
+            chunkBuffers: [],
             format: safeString(payload.format) || "mp3",
           });
           console.log("ttsAudioPlayer: 收到 tts-audio-start", {
             sentenceId,
             format: safeString(payload.format),
           });
+          enqueueSentence(sentenceId);
           break;
         }
         case "tts-audio-chunk": {
@@ -163,11 +309,14 @@ export const useTtsAudioPlayer = () => {
             break;
           }
           entry.chunks.push(base64);
+          const chunk = base64ToUint8Array(base64);
+          entry.chunkBuffers.push(chunk);
           console.log("ttsAudioPlayer: chunk len", {
             sentenceId,
             index: entry.chunks.length - 1,
             snippet: base64.slice(0, 32),
           });
+          appendPending(entry);
           break;
         }
         case "tts-audio-complete": {
@@ -178,26 +327,9 @@ export const useTtsAudioPlayer = () => {
           if (!entry || !entry.chunks.length) {
             break;
           }
-
-          const byteArrays = entry.chunks.map((chunk) => base64ToUint8Array(chunk));
-          const mimeType = buildAudioMimeType(entry.format);
-          console.log("ttsAudioPlayer: 组合完成", {
-            sentenceId,
-            mimeType,
-            chunks: entry.chunks.length,
-          });
-          const blob = new Blob(byteArrays, {
-            type: mimeType,
-          });
-          const audioUrl = URL.createObjectURL(blob);
-          entry.audioUrl = audioUrl;
-
-          if (!entry.enqueued) {
-            entry.enqueued = true;
-            queueRef.current.push(sentenceId);
-            playNextFromQueue();
-          }
-
+          entry.isComplete = true;
+          appendPending(entry);
+          playNextFromQueue();
           break;
         }
         default:
