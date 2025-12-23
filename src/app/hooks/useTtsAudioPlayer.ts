@@ -60,6 +60,7 @@ const logPlaybackLatency = (sentenceId: string, entry: SentenceState) => {
   }
   const now = getNow();
   const start = entry.firstChunkTimestamp;
+  console.log("ttsAudioPlayer: 句子ID=", sentenceId, "开始播放时间戳=", new Date().toISOString());
   if (start) {
     console.log(
       "ttsAudioPlayer: 句子ID=",

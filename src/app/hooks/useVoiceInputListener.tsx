@@ -152,7 +152,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
           onSpeechStart: () => {
             if (cancelled) return
-            console.log('[useVoiceInputListener] 检测到用户开始说话')
+            console.log('[useVoiceInputListener] 检测到用户开始说话', new Date().toISOString())
 
             speakingRef.current = true
             streamingRef.current = true
@@ -161,7 +161,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
           onSpeechEnd: () => {
             if (cancelled) return
-            console.log('[useVoiceInputListener] 检测到用户结束说话')
+            console.log('[useVoiceInputListener] 检测到用户结束说话', new Date().toISOString())
             if(optionOnSpeechEnd) {
               optionOnSpeechEnd()
             }
