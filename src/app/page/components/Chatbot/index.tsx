@@ -145,8 +145,6 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
       outputFormat: 'text',
       inputFormat: 'text',
     }
-
-    console.log(messageMeta, 'messageMeta')
     const sent = emitEvent('chat:input', messageMeta)
     if (!sent) {
       console.warn('消息发送失败，请检查 WebSocket 连接状态')

@@ -35,14 +35,6 @@ export const processTextChatFlow = async ({
     });
     return false;
   }
-  console.log("textChatFlow: 存储用户输入", {
-      id: randomUUID(),
-      conversationId,
-      role: ConversationMessageRole.USER,
-      content,
-      isVoice: false,
-      userId,
-    });
   // 打开“火力全开”模式：不等待写库完成就继续后续流程，但要专门捕获异常避免未处理的 Promise 拒绝
   const userMessageCreatePromise = prisma.conversationMessage.create({
     data: {

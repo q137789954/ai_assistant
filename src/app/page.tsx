@@ -24,7 +24,6 @@ export default function Home() {
    */
   const handleVoiceChunk = useCallback(
     (audio: Float32Array) => {
-      console.log(Array.from(audio), 'audio---useVoiceInputListener')
       const chunkMeta = {
         chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         sampleRate: 16000,
@@ -33,7 +32,6 @@ export default function Home() {
         outputFormat: "speech",
         inputFormat: "speech",
       };
-      console.log("捕获到语音帧，发送到服务端处理：", chunkMeta);
       const sent = emitEvent("chat:input", chunkMeta, audio);
       if (!sent) {
         console.warn("语音帧发送失败，请检查 WebSocket 连接状态");
@@ -50,7 +48,6 @@ export default function Home() {
   useTtsAudioPlayer();
 
   const onSpeechEnd = useCallback(() => {
-    console.log("用户语音输入结束");
     emitEvent("chat:input", {
       content: [],
       outputFormat: "speech",
