@@ -21,11 +21,11 @@ export const FAST_VAD_PRESET: Partial<RealTimeVADOptions> = {
 
 
   positiveSpeechThreshold: 0.8,
-  negativeSpeechThreshold: 0.5,
+  negativeSpeechThreshold: 0.6,
 
   // 静音多久判定为“语音段结束”（ms）
   // 越小越快，但越容易拆句；我们用上层 merge 来兜底
-  redemptionMs: 120,
+  redemptionMs: 200,
 
   // 在语音片段前补一点，避免吃掉开头音节
   preSpeechPadMs: 80,
