@@ -19,11 +19,7 @@ type SentenceState = {
 const base64ToUint8Array = (base64: string) => {
   // 将服务端返回的 Base64 音频数据解码为浏览器可直接处理的 Uint8Array
   const binary = globalThis.atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 };
 
 // 统一过滤非字符串的数据，避免后续操作中因 undefined 或 null 引发异常
@@ -95,6 +91,29 @@ export const useTtsAudioPlayer = () => {
   const isPlayingRef = useRef(false);
   const currentSentenceIdRef = useRef<string | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const sharedAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  /**
+   * 保证全局唯一的 audio 元素存在，避免每次播放都重新创建带来的延迟。
+   */
+  const ensureAudioElement = () => {
+    if (!sharedAudioRef.current) {
+      const audio = new Audio();
+      audio.autoplay = true;
+      sharedAudioRef.current = audio;
+    }
+    return sharedAudioRef.current;
+  };
+
+  useEffect(() => {
+    // 进入页面时立即实例化 Audio，并在离开时释放
+    const audio = ensureAudioElement();
+    return () => {
+      audio.pause();
+      audio.src = "";
+      sharedAudioRef.current = null;
+    };
+  }, []);
 
   const appendPending = (entry: SentenceState) => {
     // 每次尝试从缓冲队列取出下一段音频缓冲并交给 SourceBuffer 处理，或在数据发送完成后关闭流
@@ -195,8 +214,7 @@ export const useTtsAudioPlayer = () => {
       currentSentenceIdRef.current = nextId;
       const mediaSource = new MediaSource();
       entry.mediaSource = mediaSource;
-      const audio = new Audio();
-      audio.autoplay = true;
+      const audio = ensureAudioElement();
       const objectUrl = URL.createObjectURL(mediaSource);
       audio.src = objectUrl;
       entry.audioElement = audio;
@@ -211,7 +229,8 @@ export const useTtsAudioPlayer = () => {
         playNextFromQueue();
       };
 
-      audio.addEventListener("ended", finalize, { once: true });
+      audio.onended = finalize;
+      audio.onerror = finalize;
 
       mediaSource.addEventListener(
         "sourceopen",
@@ -258,8 +277,8 @@ export const useTtsAudioPlayer = () => {
     }
     const blob = new Blob(entry.chunkBuffers, { type: mimeType });
     const audioUrl = URL.createObjectURL(blob);
-    const audio = new Audio(audioUrl);
-    audio.autoplay = true;
+    const audio = ensureAudioElement();
+    audio.src = audioUrl;
     entry.audioElement = audio;
     currentAudioRef.current = audio;
     currentSentenceIdRef.current = sentenceId;
@@ -274,16 +293,9 @@ export const useTtsAudioPlayer = () => {
       playNextFromQueue();
     };
 
-    audio.addEventListener("ended", finalize, { once: true });
-    audio.addEventListener("error", finalize, { once: true });
-
-    const playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === "function") {
-      playPromise.catch((error) => {
-        console.warn("ttsAudioPlayer: 音频播放被浏览器阻止", error);
-        finalize();
-      });
-    }
+    audio.onended = finalize;
+    audio.onerror = finalize;
+    attemptPlay(audio);
   };
 
   useEffect(() => {
@@ -301,21 +313,21 @@ export const useTtsAudioPlayer = () => {
       sentencesRef.current.clear();
     };
 
-      // 订阅 WebSocket 消息以驱动 TTS 播放流程
-      const dismantle = subscribe((event) => {
-        const parsed = describeEvent(event);
-        if (!parsed || typeof parsed.event !== "string") {
-          return;
-        }
+    // 订阅 WebSocket 消息以驱动 TTS 播放流程
+    const dismantle = subscribe((event) => {
+      const parsed = describeEvent(event);
+      if (!parsed || typeof parsed.event !== "string") {
+        return;
+      }
 
-        const payload = parsed.data ?? {};
-        const sentenceId = safeString(payload.sentenceId);
-        // 根据 event 字段决定当前收到的是 TTS 何种阶段的数据
-        switch (parsed.event) {
-          case "tts-audio-start": {
-            if (!sentenceId) {
-              break;
-            }
+      const payload = parsed.data ?? {};
+      const sentenceId = safeString(payload.sentenceId);
+      // 根据 event 字段决定当前收到的是 TTS 何种阶段的数据
+      switch (parsed.event) {
+        case "tts-audio-start": {
+          if (!sentenceId) {
+            break;
+          }
           sentencesRef.current.set(sentenceId, {
             chunks: [],
             chunkBuffers: [],
@@ -325,27 +337,27 @@ export const useTtsAudioPlayer = () => {
           break;
         }
         case "tts-audio-chunk": {
-            if (!sentenceId) {
-              break;
-            }
-            console.log("ttsAudioPlayer: 收到音频块，句子ID=", sentenceId);
-            const entry = sentencesRef.current.get(sentenceId);
-            const base64 = safeString(payload.base64);
-            if (!base64 || !entry) {
-              break;
-            }
-            entry.chunks.push(base64);
-            const chunk = base64ToUint8Array(base64);
-            entry.chunkBuffers.push(chunk);
-            appendPending(entry);
+          if (!sentenceId) {
             break;
           }
+          console.log("ttsAudioPlayer: 收到音频块，句子ID=", sentenceId);
+          const entry = sentencesRef.current.get(sentenceId);
+          const base64 = safeString(payload.base64);
+          if (!base64 || !entry) {
+            break;
+          }
+          entry.chunks.push(base64);
+          const chunk = base64ToUint8Array(base64);
+          entry.chunkBuffers.push(chunk);
+          appendPending(entry);
+          break;
+        }
         case "tts-audio-complete": {
-            if (!sentenceId) {
-              break;
-            }
-            const entry = sentencesRef.current.get(sentenceId);
-            if (!entry || !entry.chunks.length) {
+          if (!sentenceId) {
+            break;
+          }
+          const entry = sentencesRef.current.get(sentenceId);
+          if (!entry || !entry.chunks.length) {
             break;
           }
           entry.isComplete = true;
