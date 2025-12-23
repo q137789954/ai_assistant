@@ -420,6 +420,7 @@ async function streamSentenceToTts(params: {
       text: sentence,
       audio_params: {
         format: 'pcm',
+        sample_rate: 16000,
       },
     },
   };

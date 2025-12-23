@@ -16,9 +16,22 @@ type SentenceState = {
 };
 
 const base64ToUint8Array = (base64: string) => {
-  // 将服务端返回的 Base64 音频数据解码为浏览器可直接处理的 Uint8Array
+  // 将服务端返回的 Base64 PCM 数据解码为字节数组，后续再转换为 Float32
   const binary = globalThis.atob(base64);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+};
+
+const buildFloat32ChannelFromPcm = (chunk: Uint8Array) => {
+  const sampleCount = Math.floor(chunk.byteLength / Int16Array.BYTES_PER_ELEMENT);
+  if (!sampleCount) {
+    return null;
+  }
+  const view = new DataView(chunk.buffer, chunk.byteOffset, sampleCount * Int16Array.BYTES_PER_ELEMENT);
+  const float32 = new Float32Array(sampleCount);
+  for (let i = 0; i < sampleCount; i += 1) {
+    float32[i] = Math.max(-1, Math.min(1, view.getInt16(i * 2, true) / 32768));
+  }
+  return float32;
 };
 
 // 统一过滤非字符串的数据，避免后续操作中因 undefined 或 null 引发异常
@@ -132,31 +145,17 @@ export const useTtsAudioPlayer = () => {
   };
 
   // 使用 AudioContext 解码当前 chunk 为 PCM，并交由上面的发送/排队逻辑处理。
-  const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: Uint8Array) => {
+const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: Uint8Array) => {
     if (!entry.useWorklet) {
       return;
     }
-    const context = audioContextRef.current;
-    if (!context) {
+    const floatChannel = buildFloat32ChannelFromPcm(chunk);
+    if (!floatChannel) {
+      console.warn("ttsAudioPlayer: PCM chunk 无法转换，丢弃", sentenceId);
+      entry.useWorklet = false;
       return;
     }
-    const chunkBuffer = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-    context
-      .decodeAudioData(chunkBuffer.slice(0))
-      .then((decoded) => {
-        const channelData: Float32Array[] = [];
-        for (let channelIndex = 0; channelIndex < decoded.numberOfChannels; channelIndex += 1) {
-          channelData.push(new Float32Array(decoded.getChannelData(channelIndex)));
-        }
-        if (!channelData.length) {
-          return;
-        }
-        sendOrQueueWorkletChannels(sentenceId, entry, channelData);
-      })
-      .catch((error) => {
-        console.warn("ttsAudioPlayer: Worklet 解码失败，使用降级路径", error);
-        entry.useWorklet = false;
-      });
+    sendOrQueueWorkletChannels(sentenceId, entry, [floatChannel]);
   };
   
   const cleanupEntry = (sentenceId: string) => {
@@ -278,7 +277,7 @@ export const useTtsAudioPlayer = () => {
       return undefined;
     }
     let canceled = false;
-    const context = new AudioContext();
+    const context = new AudioContext({ sampleRate: 16000 });
     audioContextRef.current = context;
     const initWorklet = async () => {
       try {
@@ -348,7 +347,6 @@ export const useTtsAudioPlayer = () => {
           if (!sentenceId) {
             break;
           }
-          console.log("ttsAudioPlayer: 收到音频块，句子ID=", sentenceId);
           const entry = sentencesRef.current.get(sentenceId);
           const base64 = safeString(payload.base64);
           if (!base64 || !entry) {
