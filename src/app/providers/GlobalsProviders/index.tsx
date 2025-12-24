@@ -27,6 +27,7 @@ const initialState: GlobalsState = {
   pendingUserSpeechQueue: [],
   pendingUserSpeech: null,
   chatbotVisible: false,
+  personalCenterVisible: false,
 }
 
 const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
@@ -72,6 +73,11 @@ const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
       return state.chatbotVisible === action.payload
         ? state
         : { ...state, chatbotVisible: action.payload }
+    case 'SET_PERSONAL_CENTER_VISIBILITY':
+      // 控制个人中心抽屉的开关状态，避免重复渲染
+      return state.personalCenterVisible === action.payload
+        ? state
+        : { ...state, personalCenterVisible: action.payload }
     default:
       return state
   }
@@ -103,6 +109,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     pendingUserSpeech,
     pendingUserSpeechQueue,
     chatbotVisible,
+    personalCenterVisible,
   } = state
 
   /**
@@ -165,20 +172,22 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
       pendingUserSpeech,
       pendingUserSpeechQueue,
       chatbotVisible,
+      personalCenterVisible,
       dispatch: guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,
     }),
     [
-      deviceType,
-      voiceInputEnabled,
-      isUserSpeaking,
-      pendingUserSpeech,
-      pendingUserSpeechQueue,
-      chatbotVisible,
-      guardedDispatch,
-      permissionDialogOpen,
-      setPermissionDialogOpen,
+    deviceType,
+    voiceInputEnabled,
+    isUserSpeaking,
+    pendingUserSpeech,
+    pendingUserSpeechQueue,
+    chatbotVisible,
+    personalCenterVisible,
+    guardedDispatch,
+    permissionDialogOpen,
+    setPermissionDialogOpen,
     ]
   )
 

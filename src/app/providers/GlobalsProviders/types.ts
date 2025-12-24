@@ -26,6 +26,10 @@ export type GlobalsState = {
    * 控制 Chatbot 组件在主页面的是否展示状态，默认不显示
    */
   chatbotVisible: boolean
+  /**
+   * 控制个人中心抽屉的是否展示状态
+   */
+  personalCenterVisible: boolean
 }
 
 export type GlobalsAction =
@@ -36,6 +40,7 @@ export type GlobalsAction =
   | { type: 'DEQUEUE_USER_SPEECH' }
   | { type: 'CLEAR_USER_SPEECH_QUEUE' }
   | { type: 'SET_CHATBOT_VISIBILITY'; payload: boolean }
+  | { type: 'SET_PERSONAL_CENTER_VISIBILITY'; payload: boolean }
   | { type: 'SET_SESSION_ID'; payload: string }
   | { type: 'SET_CONVERSATION_ID'; payload: string }
 
