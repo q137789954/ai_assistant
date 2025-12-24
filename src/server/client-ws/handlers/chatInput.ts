@@ -22,7 +22,7 @@ export const handleChatInput = async (
   payload: ChatInputPayload,
 ) => {
 
-  const { outputFormat, inputFormat, content, chunkId } = payload;
+  const { outputFormat, inputFormat, content, chunkId, requestId } = payload;
 
   if (outputFormat === "text" && inputFormat === "text") {
     const flowSuccess = await processTextChatFlow({
@@ -43,6 +43,7 @@ export const handleChatInput = async (
       userId,
       socket,
       content,
+      requestId
     });
     if (!flowSuccess) {
       return;
@@ -59,6 +60,7 @@ export const handleChatInput = async (
       content,
       chunkId,
       type: payload.type,
+      requestId
     });
     if (!flowSuccess) {
       return;

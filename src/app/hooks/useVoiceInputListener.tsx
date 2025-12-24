@@ -40,6 +40,7 @@ type VoiceInputListenerOptions = {
    */
   onSpeechSegment?: (audio: Float32Array) => void
   onSpeechEnd?: () => void
+  onSpeechStart?: () => void
   /**
    * 初始化 / 运行时报错
    */
@@ -64,7 +65,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
   }
 
   const { voiceInputEnabled, dispatch } = globals
-  const { onSpeechSegment, onError, vadOptions, onSpeechEnd: optionOnSpeechEnd } = options
+  const { onSpeechSegment, onError, vadOptions, onSpeechEnd: optionOnSpeechEnd, onSpeechStart: optionOnSpeechStart } = options
 
   const vadRef = useRef<MicVAD | null>(null)
   const initializingRef = useRef(false)
@@ -153,7 +154,9 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
           onSpeechStart: () => {
             if (cancelled) return
             console.log('[useVoiceInputListener] 检测到用户开始说话', new Date().toISOString())
-
+            if(optionOnSpeechStart) {
+              optionOnSpeechStart()
+            }
             speakingRef.current = true
             streamingRef.current = true
             dispatch({ type: 'SET_USER_SPEAKING', payload: true })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState, useRef } from "react";
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
 import VideoPlayer from "./page/components/VideoPlayer";
@@ -21,13 +21,15 @@ export default function Home() {
   const [showAnimationLoader, setShowAnimationLoader] = useState(true)
   const { emitEvent, subscribe } = useWebSocketContext();
 
+  const requestId = useRef<string>(null);
+
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
    */
   const handleVoiceChunk = useCallback(
     (audio: Float32Array) => {
       const chunkMeta = {
-        messageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        requestId: requestId.current,
         chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         sampleRate: 16000,
         timestamp: new Date().toISOString(),
@@ -66,6 +68,10 @@ export default function Home() {
   }, [showAnimationLoader])
   useTtsAudioPlayer();
 
+  const onSpeechStart = useCallback(() => {
+    requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }, [])
+
   const onSpeechEnd = useCallback(() => {
     emitEvent("chat:input", {
       content: [],
@@ -73,9 +79,11 @@ export default function Home() {
       inputFormat: "speech",
       type: "end",
     });
+     requestId.current = null;
   }, [emitEvent]);
 
   useVoiceInputListener({
+    onSpeechStart,
     onSpeechSegment: handleVoiceChunk,
     onSpeechEnd,
     onError(error) {

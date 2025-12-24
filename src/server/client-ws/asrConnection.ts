@@ -34,7 +34,7 @@ export const initializeAsrConnection = (socket: Socket) => {
     } catch {
       parsedPayload = rawData;
     }
-    const { type, is_final, text } = parsedPayload || {};
+    const { type, is_final, text, requestId } = parsedPayload || {};
     if( type === "result") {
       if(is_final === true) {
         console.log(new Date().toISOString(), '收到最终识别结果：', text);
@@ -44,6 +44,7 @@ export const initializeAsrConnection = (socket: Socket) => {
           userId: socket.data.userId,
           socket,
           content: text,
+          requestId,
         });
       }
       return;

@@ -11,6 +11,7 @@ interface textToSpeechChatFlowParams {
   userId: string;
   socket: Socket;
   content: unknown;
+  requestId: string;
 }
 
 const TTS_END_PUNCTUATIONS = /[。！？!?]/;
@@ -48,7 +49,9 @@ export const processTextToSpeechChatFlow = async ({
   userId,
   socket,
   content,
+  requestId
 }: textToSpeechChatFlowParams): Promise<boolean> => {
+  console.log(requestId, 'requestId11111')
   // 只有字符串才能写入文本列，先做类型校验以防异常
   if (typeof content !== "string") {
     console.error("textChatFlow: 收到的文本内容非法，要求字符串", {
@@ -103,26 +106,7 @@ export const processTextToSpeechChatFlow = async ({
   let pendingSentence = "";
   let ttsPipeline: Promise<void> = Promise.resolve();
   let pendingAction: string | null = null;
-  let actionEventSent = false;
   let actionHandledByTts = false;
-
-  // 通过专用事件在 TTS 生成前把动作信息传递给客户端，避免动作文本被朗读。
-  const notifyActionToClient = () => {
-    if (actionEventSent || !pendingAction) {
-      return;
-    }
-    const actionPayload = serializePayload({
-      event: "tts-action",
-      data: {
-        clientId,
-        conversationId,
-        action: pendingAction,
-        timestamp: new Date().toISOString(),
-      },
-    });
-    socket.emit("message", actionPayload);
-    actionEventSent = true;
-  };
 
   // 通过 Promise 链把所有需要转换的句子串行化，避免 TTS 请求并发导致顺序错乱。
   const enqueueSentence = (sentence: string) => {
@@ -147,6 +131,7 @@ export const processTextToSpeechChatFlow = async ({
           userId,
           action: actionForSentence,
           llmAction: pendingAction ?? undefined,
+          requestId
         })
       )
       .catch((error) => {
@@ -156,16 +141,6 @@ export const processTextToSpeechChatFlow = async ({
           sentence: normalized,
           error,
         });
-        const errorPayload = serializePayload({
-          event: "tts-error",
-          data: {
-            clientId,
-            conversationId,
-            sentence: normalized,
-            message: error instanceof Error ? error.message : "未知的 TTS 异常",
-          },
-        });
-        socket.emit("message", errorPayload);
       });
   };
 
@@ -186,26 +161,11 @@ export const processTextToSpeechChatFlow = async ({
       assistantContent += deltaContent;
       chunkIndex += 1;
 
-      // const chunkPayload = serializePayload({
-      //   event: "chat-response-chunk",
-      //   data: {
-      //     clientId,
-      //     conversationId,
-      //     role: "assistant",
-      //     delta: deltaContent,
-      //     aggregated: assistantContent,
-      //     chunkIndex,
-      //     timestamp: new Date().toISOString(),
-      //   },
-      // });
-      // socket.emit("message", chunkPayload);
-
       // 把当前 chunk 和上一轮未完成的片段拼接，提取出已经完整的句子
       const combinedText = pendingSentence + deltaContent;
       const { sanitized, action } = stripActionMarker(combinedText);
       if (action && !pendingAction) {
         pendingAction = action;
-        notifyActionToClient();
       }
       const { sentences, remainder } = extractCompletedSentences(sanitized);
       pendingSentence = remainder;
@@ -238,20 +198,6 @@ export const processTextToSpeechChatFlow = async ({
     socket.emit("message", errorPayload);
     return false;
   }
-
-  // 通知客户端整个助手响应已完整发送
-  const completionPayload = serializePayload({
-    event: "chat-response-complete",
-    data: {
-      clientId,
-      conversationId,
-      assistantContent,
-      chunkCount: chunkIndex,
-      timestamp: new Date().toISOString(),
-    },
-  });
-
-  socket.emit("message", completionPayload);
 
   if (assistantContent) {
     // 如果助手生成了文字回复，同步写入数据库以完整记录会话
@@ -313,9 +259,10 @@ async function streamSentenceToTts(params: {
   userId: string;
   action?: string;
   llmAction?: string;
+  requestId:string;
 }) {
   console.log(new Date().toISOString(), '开始处理 TTS 句子：', params.sentence);
-  const { sentence, clientId, conversationId, socket, userId, action, llmAction } = params;
+  const { sentence, clientId, conversationId, socket, userId, action, llmAction, requestId } = params;
   const sentenceId = randomUUID();
 
   // Openspeech 接口要求的认证头与资源 ID，避免硬编码的时机可通过环境变量替换
@@ -358,12 +305,14 @@ async function streamSentenceToTts(params: {
   }
 
   // 首先通知客户端 TTS 流即将开始，方便前端初始化解码缓冲区与播放流水线，同时把动作信息补传
+  console.log(requestId, 'requestId')
   const startData: Record<string, unknown> = {
     clientId,
     conversationId,
     sentenceId,
     sentence,
     timestamp: new Date().toISOString(),
+    requestId
   };
   const actionField = llmAction ?? action;
   if (actionField) {
@@ -403,6 +352,7 @@ async function streamSentenceToTts(params: {
           sentence,
           chunkCount: chunkIndex,
           timestamp: new Date().toISOString(),
+          requestId
         },
       })
     );
@@ -467,6 +417,7 @@ async function streamSentenceToTts(params: {
             chunkIndex,
             base64: parsed.data,
             timestamp: new Date().toISOString(),
+            requestId
           },
         })
       );

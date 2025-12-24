@@ -24,4 +24,5 @@ export interface ChatInputPayload {
   inputFormat: Format;
   content: string | Float32Array;
   chunkId?: string;
+  requestId: string;
 }

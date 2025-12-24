@@ -56,7 +56,7 @@ const AvatarCommandInput = () => {
 
     // 构建消息元数据，包含唯一 ID 及格式要求
     const messageMeta = {
-      messageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      requestId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       sampleRate: 16000,
       content: trimmed,
       outputFormat: "speech",
