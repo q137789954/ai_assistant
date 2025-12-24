@@ -59,7 +59,7 @@ const Tabbar = () => {
 
   return (
     <>
-      <div className="absolute top-4 left-6 cursor-pointer text-white hover:text-[#cf0]" onClick={handleOpenPersonalCenter}>
+      <div className="cursor-pointer text-white hover:text-[#cf0]" onClick={handleOpenPersonalCenter}>
         <Settings size={24} />
       </div>
 

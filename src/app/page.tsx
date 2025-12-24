@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useContext, useEffect} from "react";
+import { useCallback, useContext, useEffect } from "react";
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
+import VideoPlayer from "./page/components/VideoPlayer";
 import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
@@ -72,13 +73,19 @@ export default function Home() {
 
   return (
     <main className="h-full w-full relative flex flex-col">
-      <Tabbar />
-      {globals?.isUserSpeaking && (
-        <div className="pointer-events-none absolute top-16 right-6 rounded-2xl border border-green-300/50 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600 shadow-lg">
-          检测到用户说话中...
+      <div className="py-4 px-6 shrink-0">
+        <Tabbar />
+      </div>
+      <div className="flex flex-1 justify-center items-center px-6 py-8 grow shrink">
+        {/* 视频组件区域：占位在页面中央，展示可快速筛选和切换的播放器 */}
+        <VideoPlayer />
+      </div>
+      <div className="py-4 px-6 shrink-0">
+        <div className="w-full flex gap-2 items-center">
+          <div className="h-6 w-6 flex justify-center items-center text-xl" onClick={handleTextBtn}>💬</div>
+          <AvatarCommandInput />
         </div>
-      )}
-
+      </div>
       {/* Chatbot 通过抽屉形式展示，交由 open 状态控制动画 */}
       <Chatbot
         open={chatbotVisible || false}
@@ -88,12 +95,6 @@ export default function Home() {
           }
         }}
       />
-      <div className="absolute bottom-4 left-6 right-6">
-        <div className="w-full flex gap-2 items-center">
-          <div className="h-6 w-6 flex justify-center items-center text-xl" onClick={handleTextBtn}>💬</div>
-          <AvatarCommandInput />
-        </div>
-      </div>
     </main>
   );
 }
