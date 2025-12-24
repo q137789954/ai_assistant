@@ -8,8 +8,6 @@ import AvatarCommandInput from "./page/AvatarCommandInput";
 import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
-import { AppButton, Button } from "./components/ui";
-import { MessageSquareMore } from "lucide-react";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -120,7 +118,7 @@ export default function Home() {
       />
       <div className="absolute bottom-4 left-6 right-6">
         <div className="w-full flex gap-2 items-center">
-          <div className="h-6 w-6 flex justify-center items-center text-2xl" onClick={handleTextBtn}>💬</div>
+          <div className="h-6 w-6 flex justify-center items-center text-xl" onClick={handleTextBtn}>💬</div>
           <AvatarCommandInput />
         </div>
       </div>

@@ -10,7 +10,7 @@ import clsx from 'clsx'
 export const textareaVariants = cva(
   clsx(
     'flex w-full rounded-md p-3! text-xs! leading-4! text-white!',
-    'border! bg-[#222222]! shadow-sm',
+    'border-default bg-[#222222]! shadow-sm',
     'placeholder:text-white/70!',
     'disabled:cursor-not-allowed disabled:opacity-50'
   )
