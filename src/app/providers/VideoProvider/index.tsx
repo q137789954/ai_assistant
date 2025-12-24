@@ -13,7 +13,6 @@ import { useSession } from 'next-auth/react'
 
 export interface VideoMeta {
   id: string
-  title: string
   description?: string
   src: string
   thumbnail?: string
@@ -27,25 +26,29 @@ export interface PreloadProgress {
 // 默认的视频列表，可由外部通过 props 覆盖
 const DEFAULT_VIDEO_PLAYLIST: VideoMeta[] = [
   {
-    id: 'tour',
-    title: '系统演示',
-    description: '展示 AI 助手核心能力的视频剪辑。',
-    src: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-    thumbnail: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerJoyrides.jpg',
+    id: 'entrance',
+    description: '入场动画',
+    src: '/video-penguin/idle/standby2.mp4',
   },
   {
-    id: 'lecture',
-    title: '产品说明会',
-    description: '多段式解说，呈现产品背后的逻辑与打法。',
-    src: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    thumbnail: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg',
+    id: 'standby',
+    description: '待机动画',
+    src: '/video-penguin/idle/standby.mp4',
   },
   {
-    id: 'demo',
-    title: '功能拆解',
-    description: '演示语音输入、实时聊天与音频播放的联动流程。',
-    src: 'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-    thumbnail: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg',
+    id: 'dance',
+    description: '跳舞动画',
+    src: '/video-penguin/dance/d4.mp4',
+  },
+  {
+    id: 'jeer',
+    description: '嘲笑动画',
+    src: '/video-penguin/jeer/jeer.mp4',
+  },
+  {
+    id: 'think',
+    description: '思考动画',
+    src: '/video-penguin/think/t1.mp4',
   },
 ]
 
