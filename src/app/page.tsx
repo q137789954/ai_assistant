@@ -8,6 +8,7 @@ import AvatarCommandInput from "./page/AvatarCommandInput";
 import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
+import Tabbar from './page/components/Tabbar';
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -99,6 +100,7 @@ export default function Home() {
           </button>
         )}
       </div>
+      <Tabbar />
       {globals?.isUserSpeaking && (
         <div className="pointer-events-none absolute top-16 right-6 rounded-2xl border border-green-300/50 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600 shadow-lg">
           检测到用户说话中...
