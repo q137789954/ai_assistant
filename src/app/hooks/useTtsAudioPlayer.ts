@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useVideoPlayer } from "@/app/providers/VideoProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 
 /**
@@ -82,6 +83,7 @@ const supportsWorkletFormat = (format: string | undefined) => {
 
 export const useTtsAudioPlayer = () => {
   const { subscribe } = useWebSocketContext();
+  const { allVideosLoaded, videos, switchToVideoById, play } = useVideoPlayer();
   const sentencesRef = useRef(new Map<string, SentenceState>());
   const queueRef = useRef<string[]>([]);
   const isPlayingRef = useRef(false);
@@ -334,6 +336,16 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
           if (!sentenceId) {
             break;
           }
+          console.log(payload, 'payload')
+          const actionId = safeString(payload.action);
+          if (actionId && allVideosLoaded) {
+            const animationExists = videos.some((video) => video.id === actionId);
+            if (animationExists) {
+              // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
+              switchToVideoById(actionId);
+              play();
+            }
+          }
           const format = safeString(payload.format) || "mp3";
           sentencesRef.current.set(sentenceId, {
             format,
@@ -389,5 +401,5 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
       dismantle();
       cleanup();
     };
-  }, [subscribe]);
+  }, [subscribe, allVideosLoaded, videos, switchToVideoById, play]);
 };

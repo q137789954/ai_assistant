@@ -146,6 +146,7 @@ export const processTextToSpeechChatFlow = async ({
           socket,
           userId,
           action: actionForSentence,
+          llmAction: pendingAction ?? undefined,
         })
       )
       .catch((error) => {
@@ -185,19 +186,19 @@ export const processTextToSpeechChatFlow = async ({
       assistantContent += deltaContent;
       chunkIndex += 1;
 
-      const chunkPayload = serializePayload({
-        event: "chat-response-chunk",
-        data: {
-          clientId,
-          conversationId,
-          role: "assistant",
-          delta: deltaContent,
-          aggregated: assistantContent,
-          chunkIndex,
-          timestamp: new Date().toISOString(),
-        },
-      });
-      socket.emit("message", chunkPayload);
+      // const chunkPayload = serializePayload({
+      //   event: "chat-response-chunk",
+      //   data: {
+      //     clientId,
+      //     conversationId,
+      //     role: "assistant",
+      //     delta: deltaContent,
+      //     aggregated: assistantContent,
+      //     chunkIndex,
+      //     timestamp: new Date().toISOString(),
+      //   },
+      // });
+      // socket.emit("message", chunkPayload);
 
       // 把当前 chunk 和上一轮未完成的片段拼接，提取出已经完整的句子
       const combinedText = pendingSentence + deltaContent;
@@ -311,9 +312,10 @@ async function streamSentenceToTts(params: {
   socket: Socket;
   userId: string;
   action?: string;
+  llmAction?: string;
 }) {
   console.log(new Date().toISOString(), '开始处理 TTS 句子：', params.sentence);
-  const { sentence, clientId, conversationId, socket, userId, action } = params;
+  const { sentence, clientId, conversationId, socket, userId, action, llmAction } = params;
   const sentenceId = randomUUID();
 
   // Openspeech 接口要求的认证头与资源 ID，避免硬编码的时机可通过环境变量替换
@@ -363,8 +365,10 @@ async function streamSentenceToTts(params: {
     sentence,
     timestamp: new Date().toISOString(),
   };
-  if (action) {
-    startData.action = action;
+  const actionField = llmAction ?? action;
+  if (actionField) {
+    // 在 TTS 音频开始事件中同步传递 LLM 本次回复的动作字段，避免客户端异步等待
+    startData.action = actionField;
   }
   console.log(new Date().toISOString(), '通知客户端 TTS 流开始，句子ID=', sentenceId);
   socket.emit(
