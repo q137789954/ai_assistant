@@ -20,11 +20,11 @@ export default function VideoPlayer() {
   }, [allVideosLoaded, preloadProgress])
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="h-full w-full">
       {currentVideo ? (
           <video
             ref={registerVideoElement}
-            className="h-[360px] w-full object-cover"
+            className="max-w-[960px] object-contain"
             poster={currentVideo.thumbnail}
             playsInline
             muted

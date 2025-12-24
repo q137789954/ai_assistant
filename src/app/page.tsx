@@ -76,7 +76,7 @@ export default function Home() {
       <div className="py-4 px-6 shrink-0">
         <Tabbar />
       </div>
-      <div className="flex flex-1 justify-center items-center px-6 py-8 grow shrink">
+      <div className="flex flex-1 justify-center items-center px-6 py-8 grow shrink max-h-[calc(100%-132px)]">
         {/* 视频组件区域：占位在页面中央，展示可快速筛选和切换的播放器 */}
         <VideoPlayer />
       </div>
