@@ -21,9 +21,7 @@ export default function VideoPlayer() {
 
   return (
     <section className="flex flex-col gap-4">
-      {/* 播放区域本身不提供用户控制条，仅展示视频内容 */}
-      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
-        {currentVideo ? (
+      {currentVideo ? (
           <video
             ref={registerVideoElement}
             className="h-[360px] w-full object-cover"
@@ -39,7 +37,6 @@ export default function VideoPlayer() {
             {statusHint}
           </div>
         )}
-      </div>
     </section>
   )
 }
