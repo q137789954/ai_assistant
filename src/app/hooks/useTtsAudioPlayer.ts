@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useVideoPlayer } from "@/app/providers/VideoProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 
@@ -161,8 +161,8 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     sendOrQueueWorkletChannels(sentenceId, entry, [floatChannel]);
   };
   
-  const cleanupEntry = (sentenceId: string) => {
-    // 当前句子播放结束或被清理时释放资源，并从状态集合移除。
+  // 当前句子播放结束或被清理时释放资源，并从状态集合移除。
+  const cleanupEntry = useCallback((sentenceId: string) => {
     const entry = sentencesRef.current.get(sentenceId);
     if (!entry) {
       return;
@@ -171,7 +171,24 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     entry.useWorklet = undefined;
     entry.workletDrained = false;
     sentencesRef.current.delete(sentenceId);
-  };
+  }, []);
+
+  // 对外提供的快速中断逻辑：立即停止播放、清空队列并重置音频上下文。
+  const stopTtsPlayback = useCallback(() => {
+    queueRef.current = [];
+    isPlayingRef.current = false;
+    currentSentenceIdRef.current = null;
+    currentWorkletSentenceIdRef.current = null;
+    currentWorkletEntryRef.current = null;
+    const pendingIds = Array.from(sentencesRef.current.keys());
+    pendingIds.forEach((id) => cleanupEntry(id));
+    sentencesRef.current.clear();
+    workletPortRef.current?.postMessage({ type: "resetState" });
+    const context = audioContextRef.current;
+    if (context) {
+      void context.suspend().catch(() => {});
+    }
+  }, [cleanupEntry]);
 
   const enqueueSentence = (sentenceId: string) => {
     // 将状态完整的句子放入播放队列，避免重复入列
@@ -315,14 +332,6 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
   }, []);
 
   useEffect(() => {
-    const cleanup = () => {
-      queueRef.current = [];
-      currentSentenceIdRef.current = null;
-      isPlayingRef.current = false;
-      Array.from(sentencesRef.current.keys()).forEach((id) => cleanupEntry(id));
-      sentencesRef.current.clear();
-    };
-
     const dismantle = subscribe((event) => {
       const parsed = describeEvent(event);
       if (!parsed || typeof parsed.event !== "string") {
@@ -399,7 +408,9 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
 
     return () => {
       dismantle();
-      cleanup();
+      stopTtsPlayback();
     };
-  }, [subscribe, allVideosLoaded, videos, switchToVideoById, play]);
+  }, [subscribe, allVideosLoaded, videos, switchToVideoById, play, stopTtsPlayback]);
+
+  return { stopTtsPlayback };
 };

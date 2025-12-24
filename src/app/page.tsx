@@ -27,6 +27,7 @@ export default function Home() {
   const handleVoiceChunk = useCallback(
     (audio: Float32Array) => {
       const chunkMeta = {
+        messageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         sampleRate: 16000,
         timestamp: new Date().toISOString(),
