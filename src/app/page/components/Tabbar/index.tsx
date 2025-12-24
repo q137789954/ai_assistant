@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useContext, useRef, type TouchEvent } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { Drawer } from "@/app/components/ui";
 import { Typography } from "antd";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
-import { Pencil, Copy, Check } from "lucide-react";
+import { Pencil, Copy, Check, Settings } from "lucide-react";
 
 const { Paragraph } = Typography;
 
@@ -59,15 +59,8 @@ const Tabbar = () => {
 
   return (
     <>
-      <div className="flex justify-between p-4">
-        <button
-          type="button"
-          onClick={handleOpenPersonalCenter}
-          className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-[rgb(204,255,0)] text-lg font-bold text-[rgb(204,255,0)]! shadow-sm cursor-pointer transition hover:opacity-85"
-          aria-label="打开个人中心"
-        >
-          {initial}
-        </button>
+      <div className="absolute top-4 left-6 cursor-pointer text-white hover:text-[#cf0]" onClick={handleOpenPersonalCenter}>
+        <Settings size={24} />
       </div>
 
       {/* 个人中心抽屉：承载用户信息、菜单与退出操作 */}
@@ -140,12 +133,13 @@ const Tabbar = () => {
           {/* 退出相关入口保持在抽屉底部 */}
           <div className="logout-area mt-auto flex flex-col gap-2">
             <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
               type="button"
-              className="w-full rounded-2xl border border-slate-700 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-500 hover:text-white"
+              className="cursor-pointer w-full rounded-2xl border border-slate-700 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-500 hover:text-white"
             >
               LOG OUT
             </button>
-            <div className="text-center text-xs font-medium text-slate-400">
+            <div className="text-center text-xs font-medium text-slate-400 cursor-pointer hover:text-slate-500">
               Delete Account
             </div>
           </div>

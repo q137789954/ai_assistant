@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useContext, useEffect} from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
-
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
 import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
@@ -13,7 +11,6 @@ import Tabbar from './page/components/Tabbar';
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
-  const { data: session, status: authStatus } = useSession();
 
   const { emitEvent, subscribe } = useWebSocketContext();
 
@@ -75,31 +72,6 @@ export default function Home() {
 
   return (
     <main className="h-full w-full relative flex flex-col">
-      {/* 右上角：登录/登出入口（便于快速验证登录注册功能） */}
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        {authStatus === "authenticated" ? (
-          <>
-            <span className="rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs text-slate-700 shadow-sm">
-              {session.user?.name || session.user?.email || "已登录"}
-            </span>
-            <button
-              type="button"
-              className="rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-500"
-              onClick={() => signOut({ callbackUrl: "/" })}
-            >
-              退出
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-500"
-            onClick={() => signIn(undefined, { callbackUrl: "/" })}
-          >
-            登录
-          </button>
-        )}
-      </div>
       <Tabbar />
       {globals?.isUserSpeaking && (
         <div className="pointer-events-none absolute top-16 right-6 rounded-2xl border border-green-300/50 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600 shadow-lg">
