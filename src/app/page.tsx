@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useEffect } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
 import VideoPlayer from "./page/components/VideoPlayer";
@@ -8,11 +8,17 @@ import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from './page/components/Tabbar';
+import { useVideoPlayer } from "@/app/providers/VideoProvider";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
 
+  const {
+    allVideosLoaded,
+    preloadProgress,
+  } = useVideoPlayer()
+  const [showAnimationLoader, setShowAnimationLoader] = useState(true)
   const { emitEvent, subscribe } = useWebSocketContext();
 
   /**
@@ -41,6 +47,22 @@ export default function Home() {
     return unsubscribe;
   }, [subscribe]);
 
+  // 所有视频动画加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
+  useEffect(() => {
+    if (allVideosLoaded) {
+      setShowAnimationLoader(false)
+    }
+  }, [allVideosLoaded])
+
+  useEffect(() => {
+    if (!showAnimationLoader) {
+      return undefined
+    }
+    const timeout = setTimeout(() => {
+      setShowAnimationLoader(false)
+    }, 10000)
+    return () => clearTimeout(timeout)
+  }, [showAnimationLoader])
   useTtsAudioPlayer();
 
   const onSpeechEnd = useCallback(() => {
@@ -71,8 +93,18 @@ export default function Home() {
     }
   }, [chatbotVisible, dispatch]);
 
+  // 所有动画资源加载完之前展示一个加载中组件（最多10秒）
+
   return (
     <main className="h-full w-full relative flex flex-col">
+      {showAnimationLoader && (
+        <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-slate-950/90 text-center text-white">
+          <div className="text-xl font-semibold">资源加载中……</div>
+          <div className="text-sm text-slate-300">
+            已加载 {preloadProgress.loaded}/{preloadProgress.total}，最多等待 10 秒
+          </div>
+        </div>
+      )}
       <div className="py-4 px-6 shrink-0">
         <Tabbar />
       </div>
