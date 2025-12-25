@@ -59,6 +59,7 @@ const AvatarCommandInput = () => {
       requestId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       sampleRate: 16000,
       content: trimmed,
+      timestamp: Date.now(),
       outputFormat: "speech",
       inputFormat: "text",
     };

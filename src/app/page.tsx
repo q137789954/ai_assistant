@@ -22,6 +22,7 @@ export default function Home() {
   const { emitEvent, subscribe } = useWebSocketContext();
 
   const requestId = useRef<string>(null);
+  const speechStartTimestamp = useRef<number>(null)
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
@@ -32,7 +33,7 @@ export default function Home() {
         requestId: requestId.current,
         chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         sampleRate: 16000,
-        timestamp: new Date().toISOString(),
+        timestamp: Date.now(),
         content: Array.from(audio),
         outputFormat: "speech",
         inputFormat: "speech",
@@ -70,6 +71,7 @@ export default function Home() {
 
   const onSpeechStart = useCallback(() => {
     requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    speechStartTimestamp.current = Date.now();
   }, [])
 
   const onSpeechEnd = useCallback(() => {
@@ -80,6 +82,7 @@ export default function Home() {
       type: "end",
     });
      requestId.current = null;
+     speechStartTimestamp.current = null;
   }, [emitEvent]);
 
   useVoiceInputListener({
