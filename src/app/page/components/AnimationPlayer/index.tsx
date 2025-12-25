@@ -86,12 +86,15 @@ export default function AnimationPlayer() {
       return
     }
     const { width, height } = app.renderer
+    // 让 Spine 实例的中心位置对齐画布中心
     spine.x = width / 2
-    spine.y = height * 0.85
+    spine.y = height / 2
     const bounds = spine.getLocalBounds()
     const contentWidth = Math.max(1, bounds.width)
     const contentHeight = Math.max(1, bounds.height)
-    const scale = Math.min((width * 0.55) / contentWidth, (height * 0.85) / contentHeight)
+    const scale = Math.min((width * 0.9) / contentWidth, (height * 0.9) / contentHeight)
+    // 以动画自身包围盒中心作为缩放与旋转的参考点，避免偏移
+    spine.pivot.set(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
     spine.scale.set(scale)
   }, [])
 
