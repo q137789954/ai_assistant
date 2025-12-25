@@ -83,12 +83,11 @@ export const processTextToSpeechChatFlow = async ({
       error,
     });
   }
-  socket.data.clientConversations.push({
-      "role": "user",
-      content,
-  })
 
-  console.log(socket.data.clientConversations, 'socket.data.clientConversations')
+  console.log(
+    socket.data.clientConversations,
+    "socket.data.clientConversations"
+  );
   const responseStream = await socket.data.llmClient.chat.completions.create({
     // model: "grok-4-fast-non-reasoning",
     model: "qwen-turbo",
@@ -138,7 +137,7 @@ export const processTextToSpeechChatFlow = async ({
           action: actionForSentence,
           llmAction: pendingAction ?? undefined,
           requestId,
-          timestamp
+          timestamp,
         })
       )
       .catch((error) => {
@@ -228,6 +227,10 @@ export const processTextToSpeechChatFlow = async ({
 
     // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
     socket.data.clientConversations.push({
+      role: "user",
+      content,
+    });
+    socket.data.clientConversations.push({
       role: "assistant",
       content: assistantContent,
     });
@@ -271,10 +274,20 @@ async function streamSentenceToTts(params: {
   userId: string;
   action?: string;
   llmAction?: string;
-  requestId:string;
-  timestamp: number
+  requestId: string;
+  timestamp: number;
 }) {
-  const { sentence, clientId, conversationId, socket, userId, action, llmAction, requestId, timestamp } = params;
+  const {
+    sentence,
+    clientId,
+    conversationId,
+    socket,
+    userId,
+    action,
+    llmAction,
+    requestId,
+    timestamp,
+  } = params;
   const sentenceId = randomUUID();
 
   // Openspeech 接口要求的认证头与资源 ID，避免硬编码的时机可通过环境变量替换
@@ -283,7 +296,7 @@ async function streamSentenceToTts(params: {
     "X-Api-App-Id": "1383573066",
     "X-Api-Access-Key": "4QSc8Vtv1e9kZEUhE2gQeHAhFUHZjhsk",
     "X-Api-Resource-Id": "seed-tts-2.0",
-    "Connection": "keep-alive",
+    Connection: "keep-alive",
   };
 
   // 构建 TTS 请求体，携带可配置的参数以控制音色与采样率，并绑定当前用户识别信息
@@ -292,20 +305,23 @@ async function streamSentenceToTts(params: {
       id: userId,
     },
     req_params: {
-      speaker: 'saturn_zh_female_keainvsheng_tob', // 语音角色，可根据需求调整
+      speaker: "saturn_zh_female_keainvsheng_tob", // 语音角色，可根据需求调整
       text: sentence,
       audio_params: {
-        format: 'pcm',
+        format: "pcm",
         sample_rate: 16000,
       },
     },
   };
 
-  const response = await fetch('https://openspeech.bytedance.com/api/v3/tts/unidirectional', {
-    method: "POST",
-    headers,
-    body: JSON.stringify(requestBody),
-  });
+  const response = await fetch(
+    "https://openspeech.bytedance.com/api/v3/tts/unidirectional",
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    }
+  );
 
   // 确认 HTTP 级别返回成功，防止后续解析空数据
   if (!response.ok) {
@@ -364,7 +380,7 @@ async function streamSentenceToTts(params: {
           chunkCount: chunkIndex,
           timestamp: new Date().toISOString(),
           requestId,
-          echoTimestamp: timestamp
+          echoTimestamp: timestamp,
         },
       })
     );
@@ -429,7 +445,7 @@ async function streamSentenceToTts(params: {
             base64: parsed.data,
             timestamp: new Date().toISOString(),
             requestId,
-            echoTimestamp: timestamp
+            echoTimestamp: timestamp,
           },
         })
       );
