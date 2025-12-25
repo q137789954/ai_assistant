@@ -84,6 +84,7 @@ export const useTtsAudioPlayer = () => {
   const workletReadyRef = useRef(false);
   const currentWorkletSentenceIdRef = useRef<string | null>(null);
   const currentWorkletEntryRef = useRef<SentenceState | null>(null);
+  const lastRequestIdRef = useRef<string | null>(null);
 
   // 将解码后的 PCM 数据暂存到句子的队列里，等待此句子被激活后再推送到 Worklet。
   const queueWorkletChannels = (entry: SentenceState, channelData: Float32Array[]) => {
@@ -347,17 +348,19 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
           if (!sentenceId) {
             break;
           }
-          console.log(payload.requestId, 'parsed.requestId');
-          console.log(payload.timestamp, 'parsed.timestamp');
           const actionId = safeString(payload.action);
-          if (actionId && allAnimationsLoaded) {
-            const animationExists = animations.some((video) => video.id === actionId);
+          const requestId = safeString(payload.requestId);
+          const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
+          if(!isRepeatRequest&&actionId && allAnimationsLoaded) {
+            const animationExists = animations.some((animation) => animation.id === actionId);
             if (animationExists) {
               // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
-              console.log(actionId)
               switchToAnimationById(actionId);
-              play();
+                play();
             }
+          }
+          if (requestId) {
+            lastRequestIdRef.current = requestId;
           }
           const format = safeString(payload.format) || "mp3";
           sentencesRef.current.set(sentenceId, {
