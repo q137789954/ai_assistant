@@ -8,10 +8,12 @@ interface speechChatFlowParams {
   content: Float32Array;
   chunkId: string | undefined;
   type: string;
+  timestamp: number
+  requestId: string
 }
 
 export const processSpeechToSpeechChatFlow = async (params: speechChatFlowParams) => {
-  const { socket, content, chunkId, type } = params;
+  const { socket, content, chunkId, type, timestamp, requestId } = params;
 
   // 客户端主动发送 end，服务端无需再等待，立即转发第三方结束命令
   if (type === "end") {
@@ -29,8 +31,10 @@ export const processSpeechToSpeechChatFlow = async (params: speechChatFlowParams
     data: content,
     sample_rate: 16000,
     chunk_id: chunkId,
+    timestamp,
+    requestId
   });
-  console.log(new Date().toISOString(), '发送音频片段到 ASR 服务器，chunkId=', chunkId);
+  console.log(requestId, '发送音频片段到 ASR 服务器，chunkId=', chunkId);
   socket.data.asrSocket.send(payload);
 
   return true;

@@ -23,6 +23,7 @@ export const handleChatInput = async (
 ) => {
 
   const { outputFormat, inputFormat, content, chunkId, requestId, timestamp } = payload;
+  console.log(timestamp, 'timestamp1111')
 
   if (outputFormat === "text" && inputFormat === "text") {
     const flowSuccess = await processTextChatFlow({
@@ -44,7 +45,7 @@ export const handleChatInput = async (
       socket,
       content,
       requestId,
-      timestamp
+      timestamp,
     });
     if (!flowSuccess) {
       return;
