@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef } from "react";
-import { useVideoPlayer } from "@/app/providers/VideoProvider";
+import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
@@ -70,7 +70,7 @@ const supportsWorkletFormat = (format: string | undefined) => {
 
 export const useTtsAudioPlayer = () => {
   const { subscribe } = useWebSocketContext();
-  const { allVideosLoaded, videos, switchToVideoById, play } = useVideoPlayer();
+  const { allAnimationsLoaded, animations, switchToAnimationById, play } = useAnimationPlayer();
   // 读取全局的 timestampWatermark，确保旧指令的 TTS 语音在新指令发出后不会继续执行
   const globalsContext = useContext(GlobalsContext);
   const timestampWatermark = globalsContext?.timestampWatermark ?? null;
@@ -347,12 +347,15 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
           if (!sentenceId) {
             break;
           }
+          console.log(payload.requestId, 'parsed.requestId');
+          console.log(payload.timestamp, 'parsed.timestamp');
           const actionId = safeString(payload.action);
-          if (actionId && allVideosLoaded) {
-            const animationExists = videos.some((video) => video.id === actionId);
+          if (actionId && allAnimationsLoaded) {
+            const animationExists = animations.some((video) => video.id === actionId);
             if (animationExists) {
               // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
-              switchToVideoById(actionId);
+              console.log(actionId)
+              switchToAnimationById(actionId);
               play();
             }
           }
@@ -411,7 +414,15 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
       dismantle();
       stopTtsPlayback();
     };
-  }, [subscribe, allVideosLoaded, videos, switchToVideoById, play, stopTtsPlayback, timestampWatermark]);
+  }, [
+    subscribe,
+    allAnimationsLoaded,
+    animations,
+    switchToAnimationById,
+    play,
+    stopTtsPlayback,
+    timestampWatermark,
+  ]);
 
   return { stopTtsPlayback };
 };

@@ -3,18 +3,19 @@
 import { useCallback, useContext, useEffect, useState, useRef } from "react";
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
-import VideoPlayer from "./page/components/VideoPlayer";
+import AnimationPlayer from "./page/components/AnimationPlayer";
 import { useVoiceInputListener, useTtsAudioPlayer, } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
-import { useVideoPlayer } from "@/app/providers/VideoProvider";
+import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
 
-  const { allVideosLoaded, preloadProgress, resetToFirstFrame, switchToVideoById } = useVideoPlayer();
+const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimationById } =
+    useAnimationPlayer();
   const { stopTtsPlayback } = useTtsAudioPlayer();
   const [showAnimationLoader, setShowAnimationLoader] = useState(true);
   const { emitEvent, subscribe } = useWebSocketContext();
@@ -28,12 +29,12 @@ export default function Home() {
     requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     speechStartTimestamp.current = Date.now();
     dispatch?.({ type: "SET_TIMESTAMP_WATERMARK", payload: speechStartTimestamp.current });
-    // 发送新指令前重置语音播放与视频帧
+    // 发送新指令前重置语音播放与动画帧
     stopTtsPlayback();
     resetToFirstFrame();
-    switchToVideoById('think')
+    switchToAnimationById('think')
   }
-}, [dispatch, stopTtsPlayback, resetToFirstFrame, switchToVideoById]);
+}, [dispatch, stopTtsPlayback, resetToFirstFrame, switchToAnimationById]);
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
@@ -63,12 +64,16 @@ export default function Home() {
     return unsubscribe;
   }, [subscribe]);
 
-  // 所有视频动画加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
+  // 所有动画资源加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
   useEffect(() => {
-    if (allVideosLoaded) {
-      setShowAnimationLoader(false);
+    if (!allAnimationsLoaded) {
+      return undefined;
     }
-  }, [allVideosLoaded]);
+    const frame = window.setTimeout(() => {
+      setShowAnimationLoader(false);
+    }, 0);
+    return () => clearTimeout(frame);
+  }, [allAnimationsLoaded]);
 
   useEffect(() => {
     if (!showAnimationLoader) {
@@ -130,8 +135,8 @@ export default function Home() {
         <Tabbar />
       </div>
       <div className="flex flex-1 justify-center items-center px-6 py-8 grow shrink max-h-[calc(100%-132px)]">
-        {/* 视频组件区域：占位在页面中央，展示可快速筛选和切换的播放器 */}
-        <VideoPlayer />
+        {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
+        <AnimationPlayer />
       </div>
       <div className="py-4 px-6 shrink-0">
         <div className="w-full flex gap-2 items-center">

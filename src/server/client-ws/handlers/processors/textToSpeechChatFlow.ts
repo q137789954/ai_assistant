@@ -348,6 +348,7 @@ async function streamSentenceToTts(params: {
     // 在 TTS 音频开始事件中同步传递 LLM 本次回复的动作字段，避免客户端异步等待
     startData.action = actionField;
   }
+  console.log(requestId, 'requestId')
   socket.emit(
     "message",
     serializePayload({
@@ -422,13 +423,13 @@ async function streamSentenceToTts(params: {
     }
     // 如果 TTS 本身反馈非 0 错误码，则记录并跳过
     if (typeof parsed.code === "number" && parsed.code !== 0) {
-      console.warn("textToSpeechChatFlow: TTS 服务返回错误", {
-        clientId,
-        conversationId,
-        sentenceId,
-        code: parsed.code,
-        message: parsed.message,
-      });
+      // console.warn("textToSpeechChatFlow: TTS 服务返回错误", {
+      //   clientId,
+      //   conversationId,
+      //   sentenceId,
+      //   code: parsed.code,
+      //   message: parsed.message,
+      // });
       return;
     }
 

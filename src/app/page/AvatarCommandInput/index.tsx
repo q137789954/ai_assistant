@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext } from "react";
 import { Textarea } from "@/app/components/ui";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
-import { useVideoPlayer } from "@/app/providers/VideoProvider";
+import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
 import { VoiceInputToggle } from "@/app/components/features";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
@@ -10,12 +10,12 @@ const AvatarCommandInput = () => {
   const [input, setInput] = useState("");
   const { emitEvent, subscribe } = useWebSocketContext();
   const { stopTtsPlayback } = useTtsAudioPlayer();
-  const { resetToFirstFrame } = useVideoPlayer();
+  const { resetToFirstFrame } = useAnimationPlayer();
 
   const globals = useContext(GlobalsContext);
     const { dispatch } = globals ?? {};
 
-  // 通过音频与视频控制钩子提前抢占现有播放资源，防止新指令与旧音频冲突
+  // 通过音频与动画控制钩子提前抢占现有播放资源，防止新指令与旧音频冲突
 
   useEffect(() => {
     // 订阅 WebSocket 消息，当聊天抽屉打开时接收助手回应
