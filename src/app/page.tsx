@@ -7,22 +7,19 @@ import VideoPlayer from "./page/components/VideoPlayer";
 import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
-import Tabbar from './page/components/Tabbar';
+import Tabbar from "./page/components/Tabbar";
 import { useVideoPlayer } from "@/app/providers/VideoProvider";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
 
-  const {
-    allVideosLoaded,
-    preloadProgress,
-  } = useVideoPlayer()
-  const [showAnimationLoader, setShowAnimationLoader] = useState(true)
+  const { allVideosLoaded, preloadProgress } = useVideoPlayer();
+  const [showAnimationLoader, setShowAnimationLoader] = useState(true);
   const { emitEvent, subscribe } = useWebSocketContext();
 
   const requestId = useRef<string>(null);
-  const speechStartTimestamp = useRef<number>(null)
+  const speechStartTimestamp = useRef<number>(null);
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
@@ -54,25 +51,31 @@ export default function Home() {
   // 所有视频动画加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
   useEffect(() => {
     if (allVideosLoaded) {
-      setShowAnimationLoader(false)
+      setShowAnimationLoader(false);
     }
-  }, [allVideosLoaded])
+  }, [allVideosLoaded]);
 
   useEffect(() => {
     if (!showAnimationLoader) {
-      return undefined
+      return undefined;
     }
     const timeout = setTimeout(() => {
-      setShowAnimationLoader(false)
-    }, 10000)
-    return () => clearTimeout(timeout)
-  }, [showAnimationLoader])
+      setShowAnimationLoader(false);
+    }, 10000);
+    return () => clearTimeout(timeout);
+  }, [showAnimationLoader]);
   useTtsAudioPlayer();
 
   const onSpeechStart = useCallback(() => {
-    requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     speechStartTimestamp.current = Date.now();
-  }, [])
+    if (dispatch) {
+      dispatch({
+        type: "SET_TIMESTAMP_WATERMARK",
+        payload: speechStartTimestamp.current,
+      });
+    }
+  }, [dispatch]);
 
   const onSpeechEnd = useCallback(() => {
     emitEvent("chat:input", {
@@ -81,9 +84,9 @@ export default function Home() {
       inputFormat: "speech",
       type: "end",
     });
-     requestId.current = null;
-     speechStartTimestamp.current = null;
-  }, [emitEvent]);
+    requestId.current = null;
+    speechStartTimestamp.current = null;
+  }, [emitEvent, dispatch]);
 
   useVoiceInputListener({
     onSpeechStart,
@@ -113,7 +116,8 @@ export default function Home() {
         <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-slate-950/90 text-center text-white">
           <div className="text-xl font-semibold">资源加载中……</div>
           <div className="text-sm text-slate-300">
-            已加载 {preloadProgress.loaded}/{preloadProgress.total}，最多等待 10 秒
+            已加载 {preloadProgress.loaded}/{preloadProgress.total}，最多等待 10
+            秒
           </div>
         </div>
       )}
@@ -126,7 +130,12 @@ export default function Home() {
       </div>
       <div className="py-4 px-6 shrink-0">
         <div className="w-full flex gap-2 items-center">
-          <div className="h-6 w-6 flex justify-center items-center text-xl" onClick={handleTextBtn}>💬</div>
+          <div
+            className="h-6 w-6 flex justify-center items-center text-xl"
+            onClick={handleTextBtn}
+          >
+            💬
+          </div>
           <AvatarCommandInput />
         </div>
       </div>

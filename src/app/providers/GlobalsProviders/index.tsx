@@ -28,6 +28,7 @@ const initialState: GlobalsState = {
   pendingUserSpeech: null,
   chatbotVisible: false,
   personalCenterVisible: false,
+  timestampWatermark: null
 }
 
 const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
@@ -78,6 +79,9 @@ const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
       return state.personalCenterVisible === action.payload
         ? state
         : { ...state, personalCenterVisible: action.payload }
+    case 'SET_TIMESTAMP_WATERMARK':
+        // 用户最后开口/发送聊天时间
+        return { ...state, timestampWatermark: action.payload || null }
     default:
       return state
   }

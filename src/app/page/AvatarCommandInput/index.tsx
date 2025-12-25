@@ -1,16 +1,21 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { Textarea, Button } from "@/app/components/ui";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
 import { useVideoPlayer } from "@/app/providers/VideoProvider";
 import { SendHorizontal } from "lucide-react";
 import { VoiceInputToggle } from "@/app/components/features";
+import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
 const AvatarCommandInput = () => {
   const [input, setInput] = useState("");
   const { emitEvent, subscribe } = useWebSocketContext();
   const { stopTtsPlayback } = useTtsAudioPlayer();
   const { resetToFirstFrame } = useVideoPlayer();
+
+  const globals = useContext(GlobalsContext);
+    const { dispatch } = globals ?? {};
+
   // 通过音频与视频控制钩子提前抢占现有播放资源，防止新指令与旧音频冲突
 
   useEffect(() => {
@@ -50,6 +55,13 @@ const AvatarCommandInput = () => {
     if (!trimmed) {
       return;
     }
+    const timestampWatermark = Date.now();
+    if (dispatch) {
+      dispatch({
+        type: "SET_TIMESTAMP_WATERMARK",
+        payload: timestampWatermark,
+      });
+    }
     // 发送新指令前重置语音播放与视频帧
     stopTtsPlayback();
     resetToFirstFrame();
@@ -59,7 +71,7 @@ const AvatarCommandInput = () => {
       requestId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       sampleRate: 16000,
       content: trimmed,
-      timestamp: Date.now(),
+      timestamp: timestampWatermark,
       outputFormat: "speech",
       inputFormat: "text",
     };
