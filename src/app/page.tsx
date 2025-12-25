@@ -21,11 +21,21 @@ export default function Home() {
   const requestId = useRef<string>(null);
   const speechStartTimestamp = useRef<number>(null);
 
+
+  const ensureSpeechSession = useCallback(() => {
+  if (!requestId.current) {
+    requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    speechStartTimestamp.current = Date.now();
+    dispatch?.({ type: "SET_TIMESTAMP_WATERMARK", payload: speechStartTimestamp.current });
+  }
+}, [dispatch]);
+
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
    */
   const handleVoiceChunk = useCallback(
     (audio: Float32Array) => {
+      ensureSpeechSession();
       const chunkMeta = {
         requestId: requestId.current,
         chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -40,7 +50,7 @@ export default function Home() {
         console.warn("语音帧发送失败，请检查 WebSocket 连接状态");
       }
     },
-    [emitEvent]
+    [emitEvent, ensureSpeechSession]
   );
 
   useEffect(() => {
@@ -66,30 +76,20 @@ export default function Home() {
   }, [showAnimationLoader]);
   useTtsAudioPlayer();
 
-  const onSpeechStart = useCallback(() => {
-    requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    speechStartTimestamp.current = Date.now();
-    if (dispatch) {
-      dispatch({
-        type: "SET_TIMESTAMP_WATERMARK",
-        payload: speechStartTimestamp.current,
-      });
-    }
-  }, [dispatch]);
-
   const onSpeechEnd = useCallback(() => {
     emitEvent("chat:input", {
       content: [],
       outputFormat: "speech",
       inputFormat: "speech",
       type: "end",
+      timestamp: Date.now(),
+      requestId: requestId.current,
     });
     requestId.current = null;
     speechStartTimestamp.current = null;
   }, [emitEvent, dispatch]);
 
   useVoiceInputListener({
-    onSpeechStart,
     onSpeechSegment: handleVoiceChunk,
     onSpeechEnd,
     onError(error) {

@@ -19,8 +19,10 @@ export const processSpeechToSpeechChatFlow = async (params: speechChatFlowParams
   if (type === "end") {
     const payload = JSON.stringify({
       type: "end",
+      timestamp,
+      requestId
     });
-    console.log(new Date().toISOString(), '发送结束命令到 ASR 服务器');
+    console.log(payload, '发送结束命令到 ASR 服务器');
     socket.data.asrSocket.send(payload);
     return true;
   }
@@ -34,7 +36,7 @@ export const processSpeechToSpeechChatFlow = async (params: speechChatFlowParams
     timestamp,
     requestId
   });
-  console.log(requestId, '发送音频片段到 ASR 服务器，chunkId=', chunkId);
+  console.log(requestId,timestamp, '发送音频片段到 ASR 服务器，chunkId=', chunkId);
   socket.data.asrSocket.send(payload);
 
   return true;

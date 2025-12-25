@@ -60,20 +60,6 @@ const logPlaybackLatency = (sentenceId: string, entry: SentenceState) => {
   if (entry.hasLoggedPlayback) {
     return;
   }
-  const now = getNow();
-  const start = entry.firstChunkTimestamp;
-  console.log("ttsAudioPlayer: 句子ID=", sentenceId, "开始播放时间戳=", new Date().toISOString());
-  if (start) {
-    console.log(
-      "ttsAudioPlayer: 句子ID=",
-      sentenceId,
-      "首块到开始播放耗时=",
-      (now - start).toFixed(2),
-      "ms",
-    );
-  } else {
-    console.log("ttsAudioPlayer: 句子ID=", sentenceId, "未记录首块时间戳", now);
-  }
   entry.hasLoggedPlayback = true;
 };
 
@@ -338,7 +324,6 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
   useEffect(() => {
     const dismantle = subscribe((event) => {
       const parsed = describeEvent(event);
-      console.log(parsed, 'parsed')
       if (!parsed || typeof parsed.event !== "string") {
         return;
       }
@@ -362,7 +347,6 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
           if (!sentenceId) {
             break;
           }
-          console.log(payload, 'payload')
           const actionId = safeString(payload.action);
           if (actionId && allVideosLoaded) {
             const animationExists = videos.some((video) => video.id === actionId);

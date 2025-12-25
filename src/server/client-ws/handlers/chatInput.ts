@@ -53,7 +53,6 @@ export const handleChatInput = async (
   }
 
   if((outputFormat === "speech" && inputFormat === "speech")) {
-    console.log(new Date().toISOString(), '收到语音输入，chunkId=', chunkId);
     const flowSuccess = await processSpeechToSpeechChatFlow({
       clientId,
       conversationId,

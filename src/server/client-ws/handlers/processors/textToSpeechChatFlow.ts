@@ -64,7 +64,6 @@ export const processTextToSpeechChatFlow = async ({
   }
   // 验证成功后立即将用户输入写入数据库，便于会话记录与问题追踪
   // 读取 Grok 流式响应，累计文本并在每次收到 chunk 后尝试分句。
-  console.log(new Date().toISOString(), '开始处理文本输入的 TTS 流式对话');
   try {
     // 尝试把用户输入写入消息表，便于后续会话追踪
     await prisma.conversationMessage.create({
@@ -264,7 +263,6 @@ async function streamSentenceToTts(params: {
   requestId:string;
   timestamp: number
 }) {
-  console.log(new Date().toISOString(), '开始处理 TTS 句子：', params.sentence);
   const { sentence, clientId, conversationId, socket, userId, action, llmAction, requestId, timestamp } = params;
   const sentenceId = randomUUID();
 
@@ -322,7 +320,6 @@ async function streamSentenceToTts(params: {
     // 在 TTS 音频开始事件中同步传递 LLM 本次回复的动作字段，避免客户端异步等待
     startData.action = actionField;
   }
-  console.log(new Date().toISOString(), '通知客户端 TTS 流开始，句子ID=', sentenceId);
   socket.emit(
     "message",
     serializePayload({
@@ -409,7 +406,6 @@ async function streamSentenceToTts(params: {
 
     // 有音频数据就按 chunk 顺序广播给前端，保持播放流水线
     if (typeof parsed.data === "string" && parsed.data) {
-      console.log(new Date().toISOString(), '推送 TTS 音频 chunk，句子ID=', sentenceId, 'chunkIndex=', chunkIndex);
       socket.emit(
         "message",
         serializePayload({
