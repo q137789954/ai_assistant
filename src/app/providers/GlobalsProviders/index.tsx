@@ -114,6 +114,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     pendingUserSpeechQueue,
     chatbotVisible,
     personalCenterVisible,
+    timestampWatermark,
   } = state
 
   /**
@@ -177,6 +178,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
       pendingUserSpeechQueue,
       chatbotVisible,
       personalCenterVisible,
+      timestampWatermark,
       dispatch: guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,
@@ -189,6 +191,7 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     pendingUserSpeechQueue,
     chatbotVisible,
     personalCenterVisible,
+    timestampWatermark,
     guardedDispatch,
     permissionDialogOpen,
     setPermissionDialogOpen,

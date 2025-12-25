@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useContext, useEffect, useRef } from "react";
 import { useVideoPlayer } from "@/app/providers/VideoProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
+import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
 /**
  * 用于跟踪每个 TTS 句子的状态，包含格式、Worklet 缓存与播放标识。
@@ -84,6 +85,9 @@ const supportsWorkletFormat = (format: string | undefined) => {
 export const useTtsAudioPlayer = () => {
   const { subscribe } = useWebSocketContext();
   const { allVideosLoaded, videos, switchToVideoById, play } = useVideoPlayer();
+  // 读取全局的 timestampWatermark，确保旧指令的 TTS 语音在新指令发出后不会继续执行
+  const globalsContext = useContext(GlobalsContext);
+  const timestampWatermark = globalsContext?.timestampWatermark ?? null;
   const sentencesRef = useRef(new Map<string, SentenceState>());
   const queueRef = useRef<string[]>([]);
   const isPlayingRef = useRef(false);
@@ -334,11 +338,24 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
   useEffect(() => {
     const dismantle = subscribe((event) => {
       const parsed = describeEvent(event);
+      console.log(parsed, 'parsed')
       if (!parsed || typeof parsed.event !== "string") {
         return;
       }
 
       const payload = parsed.data ?? {};
+
+      const { echoTimestamp } = payload;
+      const parsedEchoTimestamp =
+        typeof echoTimestamp === "number" ? echoTimestamp : Number(echoTimestamp);
+      // 只有 timestampWatermark 为 null 或 echoTimestamp 不小于 watermark 时才继续处理，保证新指令抢占资源
+      if (
+        timestampWatermark !== null &&
+        (!Number.isFinite(parsedEchoTimestamp) || parsedEchoTimestamp < timestampWatermark)
+      ) {
+        return;
+      }
+
       const sentenceId = safeString(payload.sentenceId);
       switch (parsed.event) {
         case "tts-audio-start": {
@@ -410,7 +427,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
       dismantle();
       stopTtsPlayback();
     };
-  }, [subscribe, allVideosLoaded, videos, switchToVideoById, play, stopTtsPlayback]);
+  }, [subscribe, allVideosLoaded, videos, switchToVideoById, play, stopTtsPlayback, timestampWatermark]);
 
   return { stopTtsPlayback };
 };
