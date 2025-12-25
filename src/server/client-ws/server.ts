@@ -101,11 +101,6 @@ io.use(async (socket, next) => {
 const clients = new Map<string, Socket>();
 
 /**
- * 每个连接对应的对话 ID，便于追踪本次 WebSocket 会话以及后续的消息上下文。
- */
-const clientConversations = new Map<string, string>();
-
-/**
  * 每当新的连接建立则注册各类事件。
  */
 io.on("connection", (socket) => {
@@ -115,10 +110,14 @@ io.on("connection", (socket) => {
   socket.data.conversationId = conversationId;
   const userId = socket.data.userId as string;
   clients.set(clientId, socket);
-  clientConversations.set(clientId, conversationId);
   sendJoinNotifications(clientId, clients);
   // 每个客户端连接时主动创建对应的 ASR WebSocket，后续语音片段将通过该通道转发
   initializeAsrConnection(socket);
+
+  /**
+ * 每个连接对应的对话 ID，存储消息上下文。
+ */
+  socket.data.clientConversations = [];
 
   const llmClient = new OpenAI({
     // apiKey: process.env.GROKKINGAI_API_KEY?.trim(),
@@ -140,13 +139,11 @@ io.on("connection", (socket) => {
   
   socket.on("disconnect", (reason) => {
     closeAsrConnection(socket);
-    clientConversations.delete(clientId);
     cleanupClient(clientId, clients, io);
   });
 
   socket.on("error", (error) => {
     closeAsrConnection(socket);
-    clientConversations.delete(clientId);
     cleanupClient(clientId, clients, io);
   });
 });

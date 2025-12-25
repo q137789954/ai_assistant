@@ -83,6 +83,12 @@ export const processTextToSpeechChatFlow = async ({
       error,
     });
   }
+  socket.data.clientConversations.push({
+      "role": "user",
+      content,
+  })
+
+  console.log(socket.data.clientConversations, 'socket.data.clientConversations')
   const responseStream = await socket.data.llmClient.chat.completions.create({
     // model: "grok-4-fast-non-reasoning",
     model: "qwen-turbo",
@@ -146,7 +152,7 @@ export const processTextToSpeechChatFlow = async ({
   };
 
   try {
-    // 遍历 Grok 的流式响应，逐步构建助手回复并推送 chunk
+    // 遍历的流式响应，逐步构建助手回复并推送 chunk
     for await (const chunk of responseStream) {
       const delta = chunk.choices?.[0]?.delta;
       const deltaContent =
@@ -161,7 +167,6 @@ export const processTextToSpeechChatFlow = async ({
 
       assistantContent += deltaContent;
       chunkIndex += 1;
-
       // 把当前 chunk 和上一轮未完成的片段拼接，提取出已经完整的句子
       const combinedText = pendingSentence + deltaContent;
       const { sanitized, action } = stripActionMarker(combinedText);
@@ -220,6 +225,12 @@ export const processTextToSpeechChatFlow = async ({
         error,
       });
     }
+
+    // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
+    socket.data.clientConversations.push({
+      role: "assistant",
+      content: assistantContent,
+    });
   }
 
   return true;
