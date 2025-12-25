@@ -226,14 +226,15 @@ export const processTextToSpeechChatFlow = async ({
     }
 
     // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
-    socket.data.clientConversations.push({
-      role: "user",
-      content,
-    });
-    socket.data.clientConversations.push({
-      role: "assistant",
-      content: assistantContent,
-    });
+    socket.data.clientConversations.push(
+      { role: "user", content },
+      { role: "assistant", content: assistantContent }
+    );
+    // 超过则删掉最前面的（保留最后 20 条）
+    const overflow = socket.data.clientConversations.length - 20;
+    if (overflow > 0) {
+      socket.data.clientConversations.splice(0, overflow);
+    }
   }
 
   return true;
