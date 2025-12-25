@@ -83,16 +83,10 @@ export const processTextToSpeechChatFlow = async ({
       error,
     });
   }
-
-  console.log(
-    socket.data.clientConversations,
-    "socket.data.clientConversations"
-  );
   // 复用当前 socket 中的历史对话上下文以便生成连续的 Chat 结果
   const chatHistory = Array.isArray(socket.data.clientConversations)
     ? socket.data.clientConversations
     : [];
-    console.log(chatHistory, 'chatHistory')
   const responseStream = await socket.data.llmClient.chat.completions.create({
     // model: "grok-4-fast-non-reasoning",
     model: "qwen-turbo",
