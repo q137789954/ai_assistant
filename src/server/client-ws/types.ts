@@ -25,4 +25,5 @@ export interface ChatInputPayload {
   content: string | Float32Array;
   chunkId?: string;
   requestId: string;
+  timestamp: number;
 }

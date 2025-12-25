@@ -12,6 +12,7 @@ interface textToSpeechChatFlowParams {
   socket: Socket;
   content: unknown;
   requestId: string;
+  timestamp: number;
 }
 
 const TTS_END_PUNCTUATIONS = /[。！？!?]/;
@@ -49,9 +50,9 @@ export const processTextToSpeechChatFlow = async ({
   userId,
   socket,
   content,
-  requestId
+  requestId,
+  timestamp,
 }: textToSpeechChatFlowParams): Promise<boolean> => {
-  console.log(requestId, 'requestId11111')
   // 只有字符串才能写入文本列，先做类型校验以防异常
   if (typeof content !== "string") {
     console.error("textChatFlow: 收到的文本内容非法，要求字符串", {
@@ -131,7 +132,8 @@ export const processTextToSpeechChatFlow = async ({
           userId,
           action: actionForSentence,
           llmAction: pendingAction ?? undefined,
-          requestId
+          requestId,
+          timestamp
         })
       )
       .catch((error) => {
@@ -260,9 +262,10 @@ async function streamSentenceToTts(params: {
   action?: string;
   llmAction?: string;
   requestId:string;
+  timestamp: number
 }) {
   console.log(new Date().toISOString(), '开始处理 TTS 句子：', params.sentence);
-  const { sentence, clientId, conversationId, socket, userId, action, llmAction, requestId } = params;
+  const { sentence, clientId, conversationId, socket, userId, action, llmAction, requestId, timestamp } = params;
   const sentenceId = randomUUID();
 
   // Openspeech 接口要求的认证头与资源 ID，避免硬编码的时机可通过环境变量替换
@@ -305,14 +308,14 @@ async function streamSentenceToTts(params: {
   }
 
   // 首先通知客户端 TTS 流即将开始，方便前端初始化解码缓冲区与播放流水线，同时把动作信息补传
-  console.log(requestId, 'requestId')
   const startData: Record<string, unknown> = {
     clientId,
     conversationId,
     sentenceId,
     sentence,
     timestamp: new Date().toISOString(),
-    requestId
+    requestId,
+    echoTimestamp: timestamp,
   };
   const actionField = llmAction ?? action;
   if (actionField) {
@@ -352,7 +355,8 @@ async function streamSentenceToTts(params: {
           sentence,
           chunkCount: chunkIndex,
           timestamp: new Date().toISOString(),
-          requestId
+          requestId,
+          echoTimestamp: timestamp
         },
       })
     );
@@ -417,7 +421,8 @@ async function streamSentenceToTts(params: {
             chunkIndex,
             base64: parsed.data,
             timestamp: new Date().toISOString(),
-            requestId
+            requestId,
+            echoTimestamp: timestamp
           },
         })
       );
