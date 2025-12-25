@@ -23,7 +23,7 @@ export interface PreloadProgress {
   total: number
 }
 
-// 默认的视频列表，可由外部通过 props 覆盖
+// 默认的视频播放列表，确保在未传视频配置时仍有可用资源
 const DEFAULT_VIDEO_PLAYLIST: VideoMeta[] = [
   {
     id: 'entrance',
@@ -52,7 +52,7 @@ const DEFAULT_VIDEO_PLAYLIST: VideoMeta[] = [
   },
 ]
 
-// Context 暴露的能力，用于外部控制播放/暂停/切换/预加载状态读取
+// Context 暴露的能力，可供下游组件控制播放器并查询预加载状态等
 interface VideoProviderContext {
   videos: VideoMeta[]
   currentVideo: VideoMeta | null
@@ -82,7 +82,9 @@ export interface VideoProviderProps {
 }
 
 export default function VideoProvider({ videos: rawVideos, children }: VideoProviderProps) {
-  const videos = useMemo(() => rawVideos && rawVideos.length > 0 ? rawVideos : DEFAULT_VIDEO_PLAYLIST, [rawVideos])
+  // 生成为渲染使用的有效视频列表，优先使用 props，如果为空则回退到默认列表
+  const videos = useMemo(() => (rawVideos && rawVideos.length > 0 ? rawVideos : DEFAULT_VIDEO_PLAYLIST), [rawVideos])
+  // 通过 next-auth 获取认证状态，用于决定是否可以预加载视频
   const { status } = useSession()
 
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(videos[0]?.id ?? null)
@@ -96,7 +98,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
   const videoElementRef = useRef<HTMLVideoElement | null>(null)
   const preloadAbortRef = useRef<() => void>(() => {})
 
-  // 视频列表变化时重置预加载状态，并清理之前的资源
+  // 视频资源列表变更时需要重置预加载状态，并清理之前的临时资源
   useEffect(() => {
     setPreloadProgress({ loaded: 0, total: videos.length })
     setAllVideosLoaded(false)
@@ -104,6 +106,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     preloadAbortRef.current()
   }, [videos])
 
+  // 当前选中视频元数据，优先匹配当前 id，若不存在则退回到第一个视频或 null
   const currentVideo = useMemo(
     () => videos.find((item) => item.id === currentVideoId) ?? videos[0] ?? null,
     [currentVideoId, videos]
@@ -121,7 +124,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     setCurrentVideoId(videos[0].id)
   }, [videos, currentVideoId])
 
-  // 每次切换视频时重新加载并尝试播放，避免残留旧资源
+  // 每次切换 videoMeta 都派发一次资源刷新以及尝试自动播放
   useEffect(() => {
     if (!currentVideo || !videoElementRef.current) {
       return
@@ -135,7 +138,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     })
   }, [currentVideo])
 
-  // 外部组件将 video DOM 注入到 Provider，由此统一控制播放源
+  // 注册视频 DOM 元素，使 Provider 可以统一切换 src 并管理播放
   const registerVideoElement = useCallback(
     (element: HTMLVideoElement | null) => {
       videoElementRef.current = element
@@ -148,6 +151,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     [currentVideo]
   )
 
+  // 对外暴露的播放函数，容错处理缺失元素
   const play = useCallback(() => {
     const element = videoElementRef.current
     if (!element) {
@@ -156,6 +160,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     void element.play().catch(() => {})
   }, [])
 
+  // 对外暴露的暂停函数，直接调用 DOM pause
   const pause = useCallback(() => {
     const element = videoElementRef.current
     if (!element) {
@@ -164,6 +169,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     element.pause()
   }, [])
 
+  // 回退到当前视频的起始帧
   const resetToFirstFrame = useCallback(() => {
     const element = videoElementRef.current
     if (!element) {
@@ -173,6 +179,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     element.currentTime = 0
   }, [])
 
+  // 通过 VIDEO ID 切换到某个合法的视频
   const switchToVideoById = useCallback(
     (id: string) => {
       if (!id || !videos.some((item) => item.id === id)) {
@@ -183,7 +190,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     [videos]
   )
 
-  // 只有登录后才会触发预加载流程，避免未授权用户占用带宽
+  // 只有登录后才会执行资源预加载逻辑，防止匿名访问消耗过多带宽
   useEffect(() => {
     if (status !== 'authenticated' || videos.length === 0 || allVideosLoaded) {
       return
@@ -205,6 +212,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
       })
     }
 
+    // 遍历准备好的每个视频，动态创建 video 元素并监听加载结果
     videos.forEach((video) => {
       const preloadElement = document.createElement('video')
       preloadElement.preload = 'auto'
@@ -231,6 +239,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
       })
     })
 
+    // 提供在组件卸载或视频列表变化时中断预加载的能力
     preloadAbortRef.current = () => {
       aborted = true
       cleanupFns.forEach((fn) => fn())
@@ -243,6 +252,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     }
   }, [status, videos, allVideosLoaded])
 
+  // 利用 memo 保证 context value 仅在依赖变更时更新，降低多余渲染
   const value = useMemo(
     () => ({
       videos,
@@ -270,6 +280,7 @@ export default function VideoProvider({ videos: rawVideos, children }: VideoProv
     ]
   )
 
+  // 提供 context 给下游组件
   return (
     <VideoProviderContext.Provider value={value}>
       {children}

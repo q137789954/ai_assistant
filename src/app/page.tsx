@@ -4,7 +4,7 @@ import { useCallback, useContext, useEffect, useState, useRef } from "react";
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
 import VideoPlayer from "./page/components/VideoPlayer";
-import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
+import { useVoiceInputListener, useTtsAudioPlayer, } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
@@ -14,7 +14,8 @@ export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
 
-  const { allVideosLoaded, preloadProgress } = useVideoPlayer();
+  const { allVideosLoaded, preloadProgress, resetToFirstFrame, switchToVideoById } = useVideoPlayer();
+  const { stopTtsPlayback } = useTtsAudioPlayer();
   const [showAnimationLoader, setShowAnimationLoader] = useState(true);
   const { emitEvent, subscribe } = useWebSocketContext();
 
@@ -27,8 +28,12 @@ export default function Home() {
     requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     speechStartTimestamp.current = Date.now();
     dispatch?.({ type: "SET_TIMESTAMP_WATERMARK", payload: speechStartTimestamp.current });
+    // 发送新指令前重置语音播放与视频帧
+    stopTtsPlayback();
+    resetToFirstFrame();
+    switchToVideoById('think')
   }
-}, [dispatch]);
+}, [dispatch, stopTtsPlayback, resetToFirstFrame, switchToVideoById]);
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端

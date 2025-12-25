@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useContext } from "react";
-import { Textarea, Button } from "@/app/components/ui";
+import { Textarea } from "@/app/components/ui";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
 import { useVideoPlayer } from "@/app/providers/VideoProvider";
-import { SendHorizontal } from "lucide-react";
 import { VoiceInputToggle } from "@/app/components/features";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
