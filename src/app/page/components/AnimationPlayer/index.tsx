@@ -116,10 +116,12 @@ export default function AnimationPlayer() {
         spineModuleRef.current = spineModule
         const app = new PIXI.Application({
           backgroundColor: 0x111111,
+          backgroundAlpha: 0,
           resizeTo: hostElement,
           antialias: true,
           autoDensity: true,
         })
+        app.view.style.backgroundColor = 'transparent'
         app.ticker.maxFPS = 30
         appRef.current = app
         hostElement.appendChild(app.view)
@@ -182,7 +184,15 @@ export default function AnimationPlayer() {
         if (!PIXI || !spineModule) {
           return
         }
-        const resource = await PIXI.Assets.load(currentAnimation.json)
+        // 先并行加载 Spine JSON/atlas/贴图，确保后续实例化时所有纹理都已经准备好
+        const spinePromise = PIXI.Assets.load(currentAnimation.json)
+        const atlasPromise = currentAnimation.atlas
+          ? PIXI.Assets.load(currentAnimation.atlas)
+          : Promise.resolve(null)
+        const texturePromise = currentAnimation.image
+          ? PIXI.Assets.load(currentAnimation.image)
+          : Promise.resolve(null)
+        const [resource] = await Promise.all([spinePromise, atlasPromise, texturePromise])
         if (canceled) {
           return
         }
@@ -270,10 +280,10 @@ export default function AnimationPlayer() {
   }, [allAnimationsLoaded, preloadProgress])
 
   return (
-    <section className="flex flex-col items-center gap-4 w-full h-full">
+    <section className="flex flex-col items-center gap-4 w-full h-full bg-[url('/home/lamplight.jpeg')] bg-cover bg-center bg-no-repeat">
       <div
         ref={hostRef}
-        className="relative w-full min-h-[320px] h-full overflow-hidden bg-slate-950"
+        className="relative w-full min-h-[320px] h-full overflow-hidden"
       >
         {errorMessage && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-red-900/80 text-sm font-semibold text-white">

@@ -134,7 +134,7 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
       <div className="py-4 px-6 shrink-0">
         <Tabbar />
       </div>
-      <div className="flex flex-1 justify-center items-center px-6 py-8 grow shrink max-h-[calc(100%-132px)]">
+      <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-132px)]">
         {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
         <AnimationPlayer />
       </div>
