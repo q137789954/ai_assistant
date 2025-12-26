@@ -29,25 +29,39 @@ export interface PreloadProgress {
 // 默认的 Spine 动画列表，确保在未提供参数时也有可播放的骨骼资源
 const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
   {
-    id: 'laugh',
-    description: '笑的动作',
-    json: '/animation/laugh/animation.json',
-    atlas: '/animation/laugh/animation.atlas',
-    image: '/animation/laugh/animation.png',
+    id: 'idle1',
+    description: '待机动画1',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+  },
+  {
+    id: 'idle2',
+    description: '待机动画2',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+  },
+  {
+    id: 'idle3',
+    description: '待机动画3',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
   },
   {
     id: 'listen',
     description: '听动作',
-    json: '/animation/listen/animation.json',
-    atlas: '/animation/listen/animation.atlas',
-    image: '/animation/listen/animation.png',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
   },
   {
     id: 'talk',
     description: '说动作',
-    json: '/animation/talk/animation.json',
-    atlas: '/animation/talk/animation.atlas',
-    image: '/animation/talk/animation.png',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
   },
 ]
 
