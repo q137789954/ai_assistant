@@ -238,38 +238,19 @@ export default function AnimationPlayer() {
   }, [currentAnimation, fitStage, modulesReady, registerSpineInstance])
 
   useEffect(() => {
-    if (!modulesReady || !appRef.current || typeof document === 'undefined') {
+    if (!modulesReady || !appRef.current) {
       return undefined
     }
     const app = appRef.current
-    const handlePlaybackChange = () => {
-      const shouldPause = document.hidden || chatbotVisible
-      if (shouldPause) {
-        pause()
-        app.ticker?.stop()
-        return
-      }
+    const shouldPause = chatbotVisible
+    if (shouldPause) {
+      pause()
+      app.ticker?.stop()
+    } else {
       play()
       app.ticker?.start()
     }
-    handlePlaybackChange()
-
-    const handleVisibility = () => handlePlaybackChange()
-    const handleWindowBlur = () => {
-      pause()
-      app.ticker?.stop()
-    }
-    const handleWindowFocus = () => handlePlaybackChange()
-
-    window.addEventListener('visibilitychange', handleVisibility)
-    window.addEventListener('blur', handleWindowBlur)
-    window.addEventListener('focus', handleWindowFocus)
-
-    return () => {
-      window.removeEventListener('visibilitychange', handleVisibility)
-      window.removeEventListener('blur', handleWindowBlur)
-      window.removeEventListener('focus', handleWindowFocus)
-    }
+    return undefined
   }, [chatbotVisible, modulesReady, pause, play])
 
   const statusHint = useMemo(() => {
