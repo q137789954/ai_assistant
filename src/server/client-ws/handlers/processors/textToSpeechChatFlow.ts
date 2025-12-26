@@ -306,15 +306,16 @@ async function streamSentenceToTts(params: {
       id: userId,
     },
     req_params: {
-      speaker: "saturn_zh_female_keainvsheng_tob", // 语音角色，可根据需求调整
+      speaker: "zh_female_vv_uranus_bigtts", // 语音角色，可根据需求调整
       text: sentence,
       audio_params: {
         format: "pcm",
         sample_rate: 16000,
         // 情绪
-        emotion:'excited',
+        emotion_scale:5,
+        emotion:'angry',
         // 语速
-        speech_rate:60
+        // speech_rate:50
       },
     },
   };
