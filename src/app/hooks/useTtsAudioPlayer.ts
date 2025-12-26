@@ -353,6 +353,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
           if(!isRepeatRequest&&actionId && allAnimationsLoaded) {
             const animationExists = animations.some((animation) => animation.id === actionId);
+            console.log(animationExists,actionId, 'animationExists')
             if (animationExists) {
               // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
               switchToAnimationById(actionId);
