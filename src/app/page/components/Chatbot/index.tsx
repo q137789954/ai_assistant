@@ -33,6 +33,10 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   // 当前输入框中的草稿内容，用于实时编辑
   const [draft, setDraft] = useState('')
+  // 定义大屏宽度阈值，便于后续判断抽屉应该从右侧还是底部弹出
+  const LARGE_SCREEN_MIN_WIDTH = 1024
+  // 控制抽屉的方向，小屏默认底部弹出，大屏右侧弹出
+  const [drawerPlacement, setDrawerPlacement] = useState<'bottom' | 'right'>('bottom')
   // 聊天内容容器的 DOM 引用，方便实现自动滚动
   const viewportRef = useRef<HTMLDivElement>(null)
   // 记录正在流式更新的助手消息 ID，避免重复插入
@@ -44,6 +48,19 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
   useEffect(() => {
     viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight })
   }, [messages])
+
+  // 监听窗口大小变化，根据设定阈值切换抽屉的弹出方向
+  useEffect(() => {
+    // 依据当前视口宽度判断应该走哪一侧
+    const updatePlacement = () => {
+      const isLargeScreen = window.innerWidth >= LARGE_SCREEN_MIN_WIDTH
+      setDrawerPlacement(isLargeScreen ? 'right' : 'bottom')
+    }
+
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    return () => window.removeEventListener('resize', updatePlacement)
+  }, [])
 
   useEffect(() => {
     if (!open) {
@@ -167,13 +184,17 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
     <Drawer
       open={open}
       onClose={() => onOpenChange(false)}
-      placement="bottom"
+      placement={drawerPlacement}
       size="large"
       closable={false}
       maskClosable
       className="chatbot-drawer"
+      classNames={{
+        section: 'bg-[rgba(30,30,30,1)]!',
+        mask:"backdrop-blur-lg!"
+      }}
     >
-      <div className="flex h-full flex-col rounded-t-[32px] border border-slate-200/80 bg-slate-50 shadow-2xl">
+      <div className="flex h-full flex-col rounded-t-[32px]">
         <DrawerHeader>
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -183,7 +204,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+              className="rounded-full border border-slate-200/10 bg-white/10 p-2 text-slate-500! transition hover:border-slate-300/10 hover:text-slate-900!"
               aria-label="关闭聊天抽屉"
             >
               <X size={16} />
@@ -195,7 +216,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
           {/* 聊天内容展示区域：根据 role 分别渲染左右气泡 */}
           <div
             ref={viewportRef}
-            className="flex flex-1 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/70 bg-white/60 p-4 text-sm text-slate-900 shadow-inner"
+            className="flex flex-1 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-900 shadow-inner my-6"
           >
             {messages.map((message) => (
               <div
@@ -214,11 +235,11 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
         </div>
 
         {/* 底部固定的输入栏，保持输入框在视口可见 */}
-        <DrawerFooter className="sticky bottom-0 w-full border-t border-slate-200/70 bg-slate-100/70 px-6 py-4">
+        <DrawerFooter className="sticky bottom-0 w-full border-t px-6 py-4">
           {/* 用户输入区域：支持多行输入和发送按钮 */}
           <div onSubmit={handleSubmit} className="flex w-full items-center gap-3">
             <textarea
-              className="flex-1 resize-none rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none"
+              className="flex-1 resize-none rounded-2xl border border-white/70 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none"
               placeholder="输入消息..."
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
