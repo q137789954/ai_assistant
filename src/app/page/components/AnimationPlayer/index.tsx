@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useAnimationPlayer } from '@/app/providers/AnimationProvider'
+import { useAnimationPlayer, type AnimationMeta } from '@/app/providers/AnimationProvider'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 
 export default function AnimationPlayer() {
@@ -89,6 +89,8 @@ export default function AnimationPlayer() {
   const transitionHandleRef = useRef<number | null>(null)
   // 记录当前正在淡出的 Spine，便于在快速切换时提前清理残存实例
   const fadingFromRef = useRef<SpineInstance | null>(null)
+  // 记录当前已加载的 Skeleton JSON 路径，用于判断是否需重新加载
+  const loadedSkeletonPathRef = useRef<string | null>(null)
 
   // 负责在画布尺寸变化时重新适配 Spine 的位置和缩放
   const fitStage = useCallback(() => {
@@ -109,6 +111,24 @@ export default function AnimationPlayer() {
     spine.pivot.set(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
     spine.scale.set(scale)
   }, [])
+
+  const applyAnimationToSpine = useCallback(
+    (spine: SpineInstance, animationMeta: AnimationMeta) => {
+      const animationList = (spine.spineData?.animations || []) as Array<{ name: string }>
+      const requested = animationMeta.animationName ?? animationMeta.id
+      const preferred = animationList.find((animation) => animation.name === requested)
+      const animationName = preferred?.name ?? animationList[0]?.name
+      if (!animationName) {
+        return null
+      }
+      spine.state.setAnimation(0, animationName, true)
+      spine.state.timeScale = 1
+      fitStage()
+      registerSpineInstance({ spine, defaultAnimationName: animationName })
+      return animationName
+    },
+    [fitStage, registerSpineInstance]
+  )
 
   // 初始化 Pixi 与 Spine 运行时，并在组件卸载时做清理
   useEffect(() => {
@@ -172,21 +192,38 @@ export default function AnimationPlayer() {
   }, [fitStage, registerSpineInstance])
 
   useEffect(() => {
-    if (!currentAnimation || !modulesReady || !appRef.current) {
-      if (!currentAnimation) {
-        const previousSpine = spineRef.current
-        if (previousSpine && appRef.current) {
-          appRef.current.stage.removeChild(previousSpine)
-          safeDestroySpine(previousSpine)
-          spineRef.current = null
-        }
-        registerSpineInstance({ spine: null, defaultAnimationName: null })
+    if (!appRef.current || !modulesReady) {
+      return undefined
+    }
+    if (!currentAnimation) {
+      const previousSpine = spineRef.current
+      if (previousSpine && appRef.current) {
+        appRef.current.stage.removeChild(previousSpine)
+        safeDestroySpine(previousSpine)
+        spineRef.current = null
+      }
+      registerSpineInstance({ spine: null, defaultAnimationName: null })
+      loadedSkeletonPathRef.current = null
+      return undefined
+    }
+
+    const app = appRef.current
+    const reused =
+      spineRef.current &&
+      loadedSkeletonPathRef.current &&
+      loadedSkeletonPathRef.current === currentAnimation.json
+    if (reused && spineRef.current) {
+      setErrorMessage(null)
+      const animationName = applyAnimationToSpine(spineRef.current, currentAnimation)
+      if (!animationName) {
+        setErrorMessage('未能识别 Spine 动画名称，请检查 animation.json')
+      } else {
+        spineRef.current.alpha = 1
       }
       return undefined
     }
 
     let canceled = false
-    let attachedSpine: SpineInstance | null = null
 
     const loadAnimation = async () => {
       try {
@@ -196,7 +233,6 @@ export default function AnimationPlayer() {
         if (!PIXI || !spineModule) {
           return
         }
-        // 先并行加载 Spine JSON/atlas/贴图，确保后续实例化时所有纹理都已经准备好
         const spinePromise = PIXI.Assets.load(currentAnimation.json)
         const atlasPromise = currentAnimation.atlas
           ? PIXI.Assets.load(currentAnimation.atlas)
@@ -212,19 +248,14 @@ export default function AnimationPlayer() {
         const spineInstance = new Spine(resource.spineData)
         const previous = spineRef.current
         spineRef.current = spineInstance
-        attachedSpine = spineInstance
-        appRef.current?.stage.addChild(spineInstance)
+        app.stage.addChild(spineInstance)
         spineInstance.alpha = 0
-        const animationList = (spineInstance.spineData?.animations || []) as Array<{ name: string }>
-        const firstAnimation = animationList[0]?.name
-        if (!firstAnimation) {
+        const animationName = applyAnimationToSpine(spineInstance, currentAnimation)
+        if (!animationName) {
           throw new Error('未能识别 Spine 动画名称，请检查 animation.json')
         }
-        spineInstance.state.setAnimation(0, firstAnimation, true)
-        spineInstance.state.timeScale = 1
-        fitStage()
-        registerSpineInstance({ spine: spineInstance, defaultAnimationName: firstAnimation })
-        if (previous && appRef.current) {
+        loadedSkeletonPathRef.current = currentAnimation.json ?? null
+        if (previous && app) {
           crossfadeSpines(previous, spineInstance)
         } else {
           spineInstance.alpha = 1
@@ -247,7 +278,13 @@ export default function AnimationPlayer() {
         transitionHandleRef.current = null
       }
     }
-  }, [currentAnimation, fitStage, modulesReady, registerSpineInstance])
+  }, [
+    currentAnimation,
+    fitStage,
+    modulesReady,
+    registerSpineInstance,
+    applyAnimationToSpine,
+  ])
 
   useEffect(() => {
     if (!modulesReady || !appRef.current) {

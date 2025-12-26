@@ -19,6 +19,7 @@ export interface AnimationMeta {
   json: string
   atlas?: string
   image?: string
+  animationName?: string
 }
 
 export interface PreloadProgress {
@@ -31,6 +32,7 @@ const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
   {
     id: 'idle1',
     description: '待机动画1',
+    animationName: 'idle1',
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
@@ -38,6 +40,7 @@ const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
   {
     id: 'idle2',
     description: '待机动画2',
+    animationName: 'idle2',
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
@@ -45,6 +48,7 @@ const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
   {
     id: 'idle3',
     description: '待机动画3',
+    animationName: 'idle3',
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
@@ -52,6 +56,7 @@ const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
   {
     id: 'listen',
     description: '听动作',
+    animationName: 'listen',
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
@@ -59,6 +64,7 @@ const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
   {
     id: 'talk',
     description: '说动作',
+    animationName: 'talk',
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
