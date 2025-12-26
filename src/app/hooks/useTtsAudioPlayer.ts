@@ -196,7 +196,7 @@ export const useTtsAudioPlayer = () => {
       return;
     }
     record.triggered = true;
-    switchToAnimationById("dance");
+    switchToAnimationById("laugh");
     play();
   };
 

@@ -1,0 +1,181 @@
+
+animation.png
+size: 4522,1208
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+frame_0
+  rotate: false
+  xy: 2, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_1
+  rotate: false
+  xy: 454, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_2
+  rotate: false
+  xy: 906, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_3
+  rotate: false
+  xy: 1358, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_4
+  rotate: false
+  xy: 1810, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_5
+  rotate: false
+  xy: 2262, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_6
+  rotate: false
+  xy: 2714, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_7
+  rotate: false
+  xy: 3166, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_8
+  rotate: false
+  xy: 3618, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_9
+  rotate: false
+  xy: 4070, 2
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_10
+  rotate: false
+  xy: 2, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_11
+  rotate: false
+  xy: 454, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_12
+  rotate: false
+  xy: 906, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_13
+  rotate: false
+  xy: 1358, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_14
+  rotate: false
+  xy: 1810, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_15
+  rotate: false
+  xy: 2262, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_16
+  rotate: false
+  xy: 2714, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_17
+  rotate: false
+  xy: 3166, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_18
+  rotate: false
+  xy: 3618, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_19
+  rotate: false
+  xy: 4070, 404
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_20
+  rotate: false
+  xy: 2, 806
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_21
+  rotate: false
+  xy: 454, 806
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_22
+  rotate: false
+  xy: 906, 806
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_23
+  rotate: false
+  xy: 1358, 806
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_24
+  rotate: false
+  xy: 1810, 806
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1

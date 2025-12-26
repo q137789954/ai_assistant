@@ -2,7 +2,6 @@ import React, { useEffect, useState, useContext } from "react";
 import { Textarea } from "@/app/components/ui";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
-import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
 import { VoiceInputToggle } from "@/app/components/features";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
@@ -10,7 +9,6 @@ const AvatarCommandInput = () => {
   const [input, setInput] = useState("");
   const { emitEvent, subscribe } = useWebSocketContext();
   const { stopTtsPlayback } = useTtsAudioPlayer();
-  const { resetToFirstFrame } = useAnimationPlayer();
 
   const globals = useContext(GlobalsContext);
     const { dispatch } = globals ?? {};
@@ -63,7 +61,6 @@ const AvatarCommandInput = () => {
     }
     // 发送新指令前重置语音播放与视频帧
     stopTtsPlayback();
-    resetToFirstFrame();
 
     // 构建消息元数据，包含唯一 ID 及格式要求
     const messageMeta = {

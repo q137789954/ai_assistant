@@ -32,7 +32,7 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
     // 发送新指令前重置语音播放与动画帧
     stopTtsPlayback();
     // resetToFirstFrame();
-    switchToAnimationById('think')
+    switchToAnimationById('listen')
   }
 }, [dispatch, stopTtsPlayback, switchToAnimationById]);
 

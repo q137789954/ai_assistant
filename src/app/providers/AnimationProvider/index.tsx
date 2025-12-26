@@ -29,25 +29,25 @@ export interface PreloadProgress {
 // 默认的 Spine 动画列表，确保在未提供参数时也有可播放的骨骼资源
 const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
   {
-    id: 'dance',
-    description: '基础舞蹈动作',
-    json: '/animation/dance/animation.json',
-    atlas: '/animation/dance/animation.atlas',
-    image: '/animation/dance/animation.png',
+    id: 'laugh',
+    description: '笑的动作',
+    json: '/animation/laugh/animation.json',
+    atlas: '/animation/laugh/animation.atlas',
+    image: '/animation/laugh/animation.png',
   },
   {
-    id: 'jeer',
-    description: '嘲讽动作演示',
-    json: '/animation/jeer/animation.json',
-    atlas: '/animation/jeer/animation.atlas',
-    image: '/animation/jeer/animation.png',
+    id: 'listen',
+    description: '听动作',
+    json: '/animation/listen/animation.json',
+    atlas: '/animation/listen/animation.atlas',
+    image: '/animation/listen/animation.png',
   },
   {
-    id: 'think',
-    description: 'think动作演示',
-    json: '/animation/think/animation.json',
-    atlas: '/animation/think/animation.atlas',
-    image: '/animation/think/animation.png',
+    id: 'talk',
+    description: '说动作',
+    json: '/animation/talk/animation.json',
+    atlas: '/animation/talk/animation.atlas',
+    image: '/animation/talk/animation.png',
   },
 ]
 

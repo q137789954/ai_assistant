@@ -5,7 +5,7 @@ export const irritablePrompt = {
 - 句式：阴阳怪气。
 
 【可调用动作列表（从中选 1 个）】
-dance, jeer.
+talk
 - 每次回复必须只选 1 个动作名，且必须来自上述列表。
 
 【输出长度与结构（强制）】
