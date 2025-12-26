@@ -191,13 +191,10 @@ export default function AnimationProvider({
       if (!id || !animations.some((item) => item.id === id)) {
         return
       }
-      // 如果目标动画与当前播放一致，则跳过切换
-      if (currentAnimationId === id) {
-        return
-      }
-      setCurrentAnimationId(id)
+      // 只有在确实发生动画切换时才调用 setState，避免 setter 依赖 currentAnimationId 导致函数身份变化
+      setCurrentAnimationId((prevId) => (prevId === id ? prevId : id))
     },
-    [animations, currentAnimationId]
+    [animations]
   )
 
   // 认证用户才会执行预加载，依赖状态控制取消与进度反馈
