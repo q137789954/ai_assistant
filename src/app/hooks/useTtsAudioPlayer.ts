@@ -7,14 +7,24 @@ import { GlobalsContext } from "@/app/providers/GlobalsProviders";
  * 用于跟踪每个 TTS 句子的状态，包含格式、Worklet 缓存与播放标识。
  */
 type SentenceState = {
+  // 记录当前句子的音频格式，例如 mp3、wav，用于决定是否走 Worklet 流程
   format: string;
+  // 标记是否已经入列，避免重复处理
   enqueued?: boolean;
+  // 标记服务端是否告知该句子已全部发送完毕
   isComplete?: boolean;
+  // 指示当前格式是否支持透传到 Web Audio Worklet 进行自定义播放
   useWorklet?: boolean;
+  // Worklet 等待推送的每次 PCM 通道数组
   workletBuffers?: Float32Array[][];
+  // 缓冲区是否已经被 Worklet 消耗完，播放完成时会触发清理逻辑
   workletDrained?: boolean;
+  // 记录第一块音频到达时的时间戳，用于统计延迟
   firstChunkTimestamp?: number;
+  // 避免多次记录播放延迟
   hasLoggedPlayback?: boolean;
+  // 当前句子所属的 requestId（可能包含多个句子），用于聚合播放完成时机
+  requestId?: string;
 };
 
 const base64ToUint8Array = (base64: string) => {
@@ -31,6 +41,7 @@ const buildFloat32ChannelFromPcm = (chunk: Uint8Array) => {
   const view = new DataView(chunk.buffer, chunk.byteOffset, sampleCount * Int16Array.BYTES_PER_ELEMENT);
   const float32 = new Float32Array(sampleCount);
   for (let i = 0; i < sampleCount; i += 1) {
+    // 将 16 位 PCM 采样值映射到 [-1,1] 之间的浮点数，对 outlier 做夹取处理
     float32[i] = Math.max(-1, Math.min(1, view.getInt16(i * 2, true) / 32768));
   }
   return float32;
@@ -65,6 +76,7 @@ const logPlaybackLatency = (sentenceId: string, entry: SentenceState) => {
 
 const supportsWorkletFormat = (format: string | undefined) => {
   const raw = (format ?? "mp3").trim().toLowerCase();
+  // 只允许少数音频格式走 Worklet，避免浏览器解码失败
   return !!raw && /(?:audio\/)?(wav|pcm|raw|linear16|mp3|mpeg|ogg)/.test(raw);
 };
 
@@ -74,10 +86,15 @@ export const useTtsAudioPlayer = () => {
   // 读取全局的 timestampWatermark，确保旧指令的 TTS 语音在新指令发出后不会继续执行
   const globalsContext = useContext(GlobalsContext);
   const timestampWatermark = globalsContext?.timestampWatermark ?? null;
+  // 存放每个 sentenceId 对应的播放与缓存状态，跨事件保持持久性
   const sentencesRef = useRef(new Map<string, SentenceState>());
+  // FIFO 队列用于串行播放多个 TTS 句子
   const queueRef = useRef<string[]>([]);
+  // 标记当前是否已有 Worklet 正在播放
   const isPlayingRef = useRef(false);
+  // 当前正在播放的 sentenceId（包括发送与 Worklet 的状态一致性判断）
   const currentSentenceIdRef = useRef<string | null>(null);
+  // 音频上下文与 Worklet 节点相关引用
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const workletPortRef = useRef<MessagePort | null>(null);
@@ -85,7 +102,12 @@ export const useTtsAudioPlayer = () => {
   const currentWorkletSentenceIdRef = useRef<string | null>(null);
   const currentWorkletEntryRef = useRef<SentenceState | null>(null);
   const lastRequestIdRef = useRef<string | null>(null);
+  // 追踪每个 requestId 下尚未完成的 sentenceId 集合及动画是否已触发
+  const requestSentenceMapRef = useRef(
+    new Map<string, { pending: Set<string>; triggered: boolean }>(),
+  );
 
+  // 一个句子多个 chunk 到来时缓存提供到 Worklet 的通道数组
   // 将解码后的 PCM 数据暂存到句子的队列里，等待此句子被激活后再推送到 Worklet。
   const queueWorkletChannels = (entry: SentenceState, channelData: Float32Array[]) => {
     if (!entry.workletBuffers) {
@@ -94,6 +116,7 @@ export const useTtsAudioPlayer = () => {
     entry.workletBuffers.push(channelData);
   };
 
+  // 每次向 Worklet 推送数据前确保时序正确，并把 channel.buffer 归还给 Worklet
   // 把 PCM 通道数据通过 MessagePort 发送给 Worklet，并做好环形缓冲状态重置。
   const sendToWorklet = (entry: SentenceState, channelData: Float32Array[]) => {
     const port = workletPortRef.current;
@@ -117,6 +140,7 @@ export const useTtsAudioPlayer = () => {
     entry: SentenceState,
     channelData: Float32Array[],
   ) => {
+    // 如果当前正在播放的句子就是目标句子则直接推送，否则做异步缓存
     if (
       currentSentenceIdRef.current === sentenceId &&
       currentWorkletSentenceIdRef.current === sentenceId
@@ -138,8 +162,46 @@ export const useTtsAudioPlayer = () => {
     entry.workletBuffers = [];
   };
 
+  // 注册 requestId 与句子的对应关系，方便识别整轮 TTS 是否完成
+  const registerSentenceForRequest = (requestId: string, sentenceId: string) => {
+    if (!requestId) {
+      return;
+    }
+    const record = requestSentenceMapRef.current.get(requestId);
+    if (record) {
+      record.pending.add(sentenceId);
+      return;
+    }
+    requestSentenceMapRef.current.set(requestId, {
+      pending: new Set([sentenceId]),
+      triggered: false,
+    });
+  };
+
+  // 当某句播放结束时，通知对应的 request 集合并在全部完成时切换舞蹈动画
+  const handleRequestCompletionForSentence = (sentenceId: string, requestId?: string) => {
+    if (!requestId) {
+      return;
+    }
+    const record = requestSentenceMapRef.current.get(requestId);
+    if (!record) {
+      return;
+    }
+    record.pending.delete(sentenceId);
+    if (record.pending.size !== 0) {
+      return;
+    }
+    requestSentenceMapRef.current.delete(requestId);
+    if (record.triggered) {
+      return;
+    }
+    record.triggered = true;
+    switchToAnimationById("dance");
+    play();
+  };
+
   // 使用 AudioContext 解码当前 chunk 为 PCM，并交由上面的发送/排队逻辑处理。
-const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: Uint8Array) => {
+  const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: Uint8Array) => {
     if (!entry.useWorklet) {
       return;
     }
@@ -166,15 +228,19 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
 
   // 对外提供的快速中断逻辑：立即停止播放、清空队列并重置音频上下文。
   const stopTtsPlayback = useCallback(() => {
+    // 清理播放队列与正在播放标记
     queueRef.current = [];
     isPlayingRef.current = false;
     currentSentenceIdRef.current = null;
     currentWorkletSentenceIdRef.current = null;
     currentWorkletEntryRef.current = null;
+    // 清空所有缓存的句子状态
     const pendingIds = Array.from(sentencesRef.current.keys());
     pendingIds.forEach((id) => cleanupEntry(id));
     sentencesRef.current.clear();
+    // 通知 Worklet 复位，防止保留旧的缓冲
     workletPortRef.current?.postMessage({ type: "resetState" });
+    requestSentenceMapRef.current.clear();
     const context = audioContextRef.current;
     if (context) {
       void context.suspend().catch(() => {});
@@ -192,7 +258,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     playNextFromQueue();
   };
 
-  // 启动 Worklet 路径，恢复上下文并把当前句子的缓存推到音频处理器。
+  // 启动 Worklet 播放路径：恢复音频上下文，刷新 Worklet 状态，立刻消费缓冲并标记当前播放句子。
   const startWorkletPlayback = (sentenceId: string, entry: SentenceState) => {
     const context = audioContextRef.current;
     const port = workletPortRef.current;
@@ -212,7 +278,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     return true;
   };
 
-  // 根据当前播放状态调度 Worklet，只在 Worklet 可用时播放。
+  // 根据当前播放状态调度 Worklet，只在 Worklet 可用且 idle 时将队列头送入播放。
   const playNextFromQueue = () => {
     if (isPlayingRef.current) {
       return;
@@ -222,11 +288,13 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
       const nextId = queueRef.current[0];
       const entry = sentencesRef.current.get(nextId);
       if (!entry) {
+        // 未找到条目可能因为播放过程中被删除，直接跳过
         queueRef.current.shift();
         continue;
       }
 
       if (!entry.useWorklet) {
+        // 当前音频格式不支持 Worklet，跳过以免卡住队列
         console.warn("ttsAudioPlayer: 当前格式不支持 Worklet，忽略句子", nextId, entry.format);
         queueRef.current.shift();
         cleanupEntry(nextId);
@@ -249,13 +317,16 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     }
   };
 
-  // Worklet 播放完成后的回调，释放状态并继续队列。
+  // Worklet 播放完成后的回调：清理当前句子，重置播放标记并尝试下一个队列。
   const finalizeWorkletPlayback = () => {
     const sentenceId = currentWorkletSentenceIdRef.current;
     if (!sentenceId) {
       return;
     }
+    const entry = sentencesRef.current.get(sentenceId);
+    const requestId = entry?.requestId;
     cleanupEntry(sentenceId);
+    handleRequestCompletionForSentence(sentenceId, requestId);
     currentWorkletSentenceIdRef.current = null;
     currentWorkletEntryRef.current = null;
     isPlayingRef.current = false;
@@ -263,7 +334,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     playNextFromQueue();
   };
 
-  // 监听 Worklet 发来的事件，用于记录开始时延或监听缓冲耗尽。
+  // 监听 Worklet 发来的事件，用于记录播放延迟及判断缓冲区是否耗尽。
   const handleWorkletMessage = (event: MessageEvent) => {
     const data = event.data;
     if (!data || typeof data.type !== "string") {
@@ -272,6 +343,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     const entry = currentWorkletEntryRef.current;
     const sentenceId = currentWorkletSentenceIdRef.current;
     if (data.type === "started" && entry && sentenceId) {
+      // Worklet 首次启动输出时刻，记录播放延迟
       logPlaybackLatency(sentenceId, entry);
     }
     if (data.type === "buffer-drained" && entry) {
@@ -290,6 +362,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     let canceled = false;
     const context = new AudioContext({ sampleRate: 16000 });
     audioContextRef.current = context;
+    // 异步加载自定义的 Worklet 处理器，回调中再连接到音频图。
     const initWorklet = async () => {
       try {
         await context.audioWorklet.addModule("/audio-worklets/tts-ring-processor.js");
@@ -323,6 +396,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
   }, []);
 
   useEffect(() => {
+    // 订阅后台 WebSocket 消息，按事件类型构建句子数据上下文
     const dismantle = subscribe((event) => {
       const parsed = describeEvent(event);
       if (!parsed || typeof parsed.event !== "string") {
@@ -351,6 +425,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
           const actionId = safeString(payload.action);
           const requestId = safeString(payload.requestId);
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
+          // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
           if(!isRepeatRequest&&actionId && allAnimationsLoaded) {
             const animationExists = animations.some((animation) => animation.id === actionId);
             console.log(animationExists,actionId, 'animationExists')
@@ -364,12 +439,17 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
             lastRequestIdRef.current = requestId;
           }
           const format = safeString(payload.format) || "mp3";
+          // 创建句子的播放状态，初始缓存准备空数组
           sentencesRef.current.set(sentenceId, {
             format,
             useWorklet: supportsWorkletFormat(format),
             workletBuffers: [],
             workletDrained: false,
+            requestId: requestId || undefined,
           });
+          if (requestId) {
+            registerSentenceForRequest(requestId, sentenceId);
+          }
           enqueueSentence(sentenceId);
           break;
         }
@@ -383,9 +463,10 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
             break;
           }
           if (!entry.firstChunkTimestamp) {
-            entry.firstChunkTimestamp = getNow();
+            entry.firstChunkTimestamp = getNow(); // 记录首次 chunk 到达的时间戳供延迟分析
           }
           const chunk = base64ToUint8Array(base64);
+          // 将 chunk 解码并推入 Worklet 缓存
           decodeChunkForWorklet(sentenceId, entry, chunk);
           if (!isPlayingRef.current) {
             playNextFromQueue();
@@ -400,11 +481,14 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
           if (!entry) {
             break;
           }
+          // 收到 complete 表示不会再有 chunk，尝试让 Worklet 结束并清理缓存
           entry.isComplete = true;
           if (entry.useWorklet && entry.workletDrained) {
             finalizeWorkletPlayback();
           } else if (!entry.useWorklet) {
+            const requestId = entry.requestId;
             cleanupEntry(sentenceId);
+            handleRequestCompletionForSentence(sentenceId, requestId);
             queueRef.current = queueRef.current.filter((id) => id !== sentenceId);
           }
           break;
@@ -415,6 +499,7 @@ const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: 
     });
 
     return () => {
+      // 取消订阅并立即停止所有未完成的播放，避免内存泄漏
       dismantle();
       stopTtsPlayback();
     };
