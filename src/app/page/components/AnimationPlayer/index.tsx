@@ -29,7 +29,7 @@ export default function AnimationPlayer() {
       return
     }
     try {
-      instance.destroy({ children: true, texture: true, baseTexture: true })
+      instance.destroy({ children: true })
     } catch (error) {
       console.warn('Spine 销毁失败（可能已经被销毁）：', error)
     }
@@ -165,7 +165,7 @@ export default function AnimationPlayer() {
         const previousSpine = spineRef.current
         if (previousSpine && appRef.current) {
           appRef.current.stage.removeChild(previousSpine)
-          previousSpine.destroy({ children: true, texture: true, baseTexture: true })
+          safeDestroySpine(previousSpine)
           spineRef.current = null
         }
         registerSpineInstance({ spine: null, defaultAnimationName: null })
