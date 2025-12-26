@@ -69,6 +69,10 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
   const vadRef = useRef<MicVAD | null>(null)
   const initializingRef = useRef(false)
+  // 记录上一次是否因 VoiceInputToggle 关闭而暂停了 VAD，方便再次打开时恢复
+  const pausedRef = useRef(false)
+  // 代替原先的局部 cancelled 标志，确保回调在重启 VAD 后仍能感知最新状态
+  const cancelledRef = useRef(false)
 
   // 是否处于“VAD 认为用户在说话”的状态
   const speakingRef = useRef(false)
@@ -105,10 +109,12 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
   // 根据全局开关启动 / 暂停 VAD
   useEffect(() => {
+    cancelledRef.current = false
     if (!voiceInputEnabled) {
       if (vadRef.current) {
         try {
           vadRef.current.pause()
+          pausedRef.current = true
         } catch (e) {
           console.warn('[useVoiceInputListener] pause VAD 出错', e)
         }
@@ -118,10 +124,31 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
       dispatch({ type: 'SET_USER_SPEAKING', payload: false })
 
       // 当全局关闭语音输入时马上终止推送并标记状态
+      cancelledRef.current = true
       return
     }
 
-    let cancelled = false
+    // 重新开启因开关关闭而暂停的 VAD 实例
+    const resumePausedVad = () => {
+      if (!pausedRef.current || !vadRef.current) {
+        return false
+      }
+
+      try {
+        vadRef.current.start()
+        pausedRef.current = false
+        return true
+      } catch (e) {
+        console.warn('[useVoiceInputListener] resume VAD 出错', e)
+        return false
+      }
+    }
+
+    if (resumePausedVad()) {
+      return () => {
+        cancelledRef.current = true
+      }
+    }
 
     const ensureVad = async () => {
       if (vadRef.current || initializingRef.current) return
@@ -152,7 +179,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
           },
 
           onSpeechStart: () => {
-            if (cancelled) return
+            if (cancelledRef.current) return
             if(optionOnSpeechStart) {
               optionOnSpeechStart()
             }
@@ -162,7 +189,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
           },
 
           onSpeechEnd: () => {
-            if (cancelled) return
+            if (cancelledRef.current) return
             if(optionOnSpeechEnd) {
               optionOnSpeechEnd()
             }
@@ -174,7 +201,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
           },
         })
 
-        if (cancelled) {
+        if (cancelledRef.current) {
           instance.destroy()
           return
         }
@@ -196,7 +223,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
     void ensureVad()
 
     return () => {
-      cancelled = true
+      cancelledRef.current = true
     }
   }, [voiceInputEnabled, dispatch, onError, vadOptions, handleFrameProcessed])
 
@@ -215,6 +242,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
       // 清理语音相关的状态，以免残留影响下一次激活
       // 退出时确保 speaking 状态复位
       speakingRef.current = false
+      pausedRef.current = false
     }
   }, [])
 }

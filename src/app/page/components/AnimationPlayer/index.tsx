@@ -355,7 +355,7 @@ export default function AnimationPlayer() {
   }, [allAnimationsLoaded, preloadProgress])
 
   return (
-    <section className="flex flex-col items-center gap-4 w-full h-full bg-[url('/home/lamplight.jpeg')] bg-cover bg-center bg-no-repeat">
+    <section className="flex flex-col items-center gap-4 w-full h-full">
       <div
         ref={hostRef}
         className="relative w-full min-h-[320px] h-full overflow-hidden"

@@ -121,7 +121,7 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
   // 所有动画资源加载完之前展示一个加载中组件（最多10秒）
 
   return (
-    <main className="h-full w-full relative flex flex-col">
+    <main className="h-full w-full relative flex flex-col bg-[url('/home/lamplight.jpeg')] bg-cover bg-center bg-no-repeat">
       {showAnimationLoader && (
         <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-slate-950/90 text-center text-white">
           <div className="text-xl font-semibold">资源加载中……</div>
