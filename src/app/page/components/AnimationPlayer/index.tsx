@@ -122,7 +122,7 @@ export default function AnimationPlayer() {
         return null
       }
       spine.state.setAnimation(0, animationName, true)
-      spine.state.timeScale = 1
+      spine.state.timeScale = 0.8
       fitStage()
       registerSpineInstance({ spine, defaultAnimationName: animationName })
       return animationName
