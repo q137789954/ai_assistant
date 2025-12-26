@@ -311,6 +311,10 @@ async function streamSentenceToTts(params: {
       audio_params: {
         format: "pcm",
         sample_rate: 16000,
+        // 情绪
+        emotion:'excited',
+        // 语速
+        speech_rate:60
       },
     },
   };
