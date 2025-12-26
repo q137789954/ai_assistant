@@ -191,9 +191,13 @@ export default function AnimationProvider({
       if (!id || !animations.some((item) => item.id === id)) {
         return
       }
+      // 如果目标动画与当前播放一致，则跳过切换
+      if (currentAnimationId === id) {
+        return
+      }
       setCurrentAnimationId(id)
     },
-    [animations]
+    [animations, currentAnimationId]
   )
 
   // 认证用户才会执行预加载，依赖状态控制取消与进度反馈
