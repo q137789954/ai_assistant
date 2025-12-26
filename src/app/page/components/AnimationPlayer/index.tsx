@@ -14,6 +14,9 @@ import {
 import { useAnimationPlayer, type AnimationMeta } from '@/app/providers/AnimationProvider'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 
+const DEFAULT_TIME_SCALE = 0.6
+const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3'] as const
+
 export default function AnimationPlayer() {
   const {
     currentAnimation,
@@ -22,6 +25,7 @@ export default function AnimationPlayer() {
     registerSpineInstance,
     play,
     pause,
+    switchToAnimationById,
   } = useAnimationPlayer()
 
   const safeDestroySpine = (instance: SpineInstance | null) => {
@@ -82,6 +86,7 @@ export default function AnimationPlayer() {
   const spineRef = useRef<SpineInstance | null>(null)
   const pixiRef = useRef<typeof import('pixi.js') | null>(null)
   const spineModuleRef = useRef<typeof import('@pixi-spine/all-4.1') | null>(null)
+  const stateListenerRef = useRef<any>(null)
   const [modulesReady, setModulesReady] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const globals = useContext(GlobalsContext)
@@ -112,6 +117,31 @@ export default function AnimationPlayer() {
     spine.scale.set(scale)
   }, [])
 
+  const pickNextIdle = useCallback(
+    (current?: string) => {
+      const candidates = IDLE_ANIMATIONS.filter((id) => id !== current)
+      if (!candidates.length) {
+        return IDLE_ANIMATIONS[0]!
+      }
+      return candidates[Math.floor(Math.random() * candidates.length)]
+    },
+    []
+  )
+
+  const ensureIdleChain = useCallback(
+    (animationName?: string) => {
+      if (!animationName || !IDLE_ANIMATIONS.includes(animationName as any)) {
+        return
+      }
+      const nextIdle = pickNextIdle(animationName)
+      if (!nextIdle || nextIdle === currentAnimation?.id) {
+        return
+      }
+      switchToAnimationById(nextIdle)
+    },
+    [currentAnimation?.id, pickNextIdle, switchToAnimationById]
+  )
+
   const applyAnimationToSpine = useCallback(
     (spine: SpineInstance, animationMeta: AnimationMeta) => {
       const animationList = (spine.spineData?.animations || []) as Array<{ name: string }>
@@ -122,12 +152,23 @@ export default function AnimationPlayer() {
         return null
       }
       spine.state.setAnimation(0, animationName, true)
-      spine.state.timeScale = 0.8
+      spine.state.timeScale = DEFAULT_TIME_SCALE
       fitStage()
       registerSpineInstance({ spine, defaultAnimationName: animationName })
+      if (stateListenerRef.current) {
+        spine.state.removeListener(stateListenerRef.current)
+        stateListenerRef.current = null
+      }
+      const listener = {
+        complete: (entry: { animation?: { name?: string } }) => {
+          ensureIdleChain(entry.animation?.name)
+        },
+      }
+      spine.state.addListener(listener)
+      stateListenerRef.current = listener
       return animationName
     },
-    [fitStage, registerSpineInstance]
+    [fitStage, registerSpineInstance, ensureIdleChain]
   )
 
   // 初始化 Pixi 与 Spine 运行时，并在组件卸载时做清理
@@ -173,6 +214,10 @@ export default function AnimationPlayer() {
       const app = appRef.current
       if (spine && app) {
         app.stage.removeChild(spine)
+        if (stateListenerRef.current) {
+          spine.state.removeListener(stateListenerRef.current)
+          stateListenerRef.current = null
+        }
         safeDestroySpine(spine)
         spineRef.current = null
       }
