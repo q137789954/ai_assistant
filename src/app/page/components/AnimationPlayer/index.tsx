@@ -40,12 +40,21 @@ export default function AnimationPlayer() {
     if (!app) {
       safeDestroySpine(from)
       to.alpha = 1
+      fadingFromRef.current = null
       return
     }
     if (transitionHandleRef.current !== null) {
+      // 取消尚未完成的淡出，并把残留 Spine 从舞台移除，防止累计重影
       cancelAnimationFrame(transitionHandleRef.current)
       transitionHandleRef.current = null
+      const lingering = fadingFromRef.current
+      if (lingering && lingering.parent === app.stage) {
+        app.stage.removeChild(lingering)
+      }
+      safeDestroySpine(lingering)
+      fadingFromRef.current = null
     }
+    fadingFromRef.current = from
     const duration = 200
     const startTime = performance.now()
     const step = () => {
@@ -62,6 +71,7 @@ export default function AnimationPlayer() {
         app.stage.removeChild(from)
       }
       safeDestroySpine(from)
+      fadingFromRef.current = null
       transitionHandleRef.current = null
     }
     transitionHandleRef.current = requestAnimationFrame(step)
@@ -77,6 +87,8 @@ export default function AnimationPlayer() {
   const globals = useContext(GlobalsContext)
   const chatbotVisible = globals?.chatbotVisible ?? false
   const transitionHandleRef = useRef<number | null>(null)
+  // 记录当前正在淡出的 Spine，便于在快速切换时提前清理残存实例
+  const fadingFromRef = useRef<SpineInstance | null>(null)
 
   // 负责在画布尺寸变化时重新适配 Spine 的位置和缩放
   const fitStage = useCallback(() => {
