@@ -120,10 +120,10 @@ io.on("connection", (socket) => {
   socket.data.clientConversations = [];
 
   const llmClient = new OpenAI({
-    // apiKey: process.env.GROKKINGAI_API_KEY?.trim(),
-    // baseURL: "https://api.x.ai/v1",
-    apiKey:"sk-b907c100bb864db1871df86fb1b224e7",
-    baseURL:"https://dashscope.aliyuncs.com/compatible-mode/v1",
+    apiKey: process.env.GROKKINGAI_API_KEY?.trim(),
+    baseURL: "https://api.x.ai/v1",
+    // apiKey:"sk-b907c100bb864db1871df86fb1b224e7",
+    // baseURL:"https://dashscope.aliyuncs.com/compatible-mode/v1",
     timeout: 360000, // Override default timeout with longer timeout for reasoning models
   });
 

@@ -88,8 +88,8 @@ export const processTextToSpeechChatFlow = async ({
     ? socket.data.clientConversations
     : [];
   const responseStream = await socket.data.llmClient.chat.completions.create({
-    // model: "grok-4-fast-non-reasoning",
-    model: "qwen-turbo",
+    model: "grok-4-fast-non-reasoning",
+    // model: "qwen-turbo",
     stream: true, // 开启流式返回以便后续使用 for-await 读取每个 chunk
     messages: [
       {
