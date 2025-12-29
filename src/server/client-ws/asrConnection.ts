@@ -5,7 +5,7 @@ import { processTextToSpeechChatFlow } from "./handlers/processors/textToSpeechC
 /**
  * 默认 ASR 服务地址，可通过环境变量覆盖，方便不同部署环境切换。
  */
-const ASR_WS_ENDPOINT = process.env.ASR_WS_ENDPOINT?.trim() || "ws://192.168.3.88:8000/ws/asr";
+const ASR_WS_ENDPOINT = process.env.ASR_WS_ENDPOINT?.trim() || "ws://192.168.3.228:8000/ws/asr";
 const HEARTBEAT_INTERVAL_MS = 10_000;
 
 /**

@@ -28,7 +28,7 @@ export const FAST_VAD_PRESET: Partial<RealTimeVADOptions> = {
   redemptionMs: 200,
 
   // 在语音片段前补一点，避免吃掉开头音节
-  preSpeechPadMs: 100,
+  preSpeechPadMs: 150,
 
   // 片段最短时长（ms），太短的直接视为误触发
   minSpeechMs: 100,
