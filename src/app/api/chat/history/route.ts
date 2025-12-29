@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     // ✅ 新参数：limit + cursor
     // （如果你想彻底不兼容旧参数，这两行就只用 limit/cursor，不用 fallback）
-    const limit = parseLimit(searchParams.get("limit") ?? searchParams.get("pageSize"));
+    const limit = parseLimit(searchParams.get("limit"));
     const cursor = searchParams.get("cursor") ?? searchParams.get("lastMessageId") ?? undefined;
 
     const baseArgs: Prisma.ConversationMessageFindManyArgs = {
