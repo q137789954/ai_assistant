@@ -3,7 +3,7 @@
 /**
  * 聊天消息的角色类型：区分助手与用户
  */
-export type MessageRole = 'assistant' | 'user'
+export type MessageRole = 'ASSISTANT' | 'USER'
 
 /**
  * 统一的聊天消息数据结构定义，供 Chatbot 相关组件共享

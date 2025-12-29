@@ -61,7 +61,7 @@ export default function ChatHistory({
           ? payload.messages
               .map((item: Record<string, unknown>) => ({
                 id: String(item.id ?? createMessageId()),
-                role: item.role === 'assistant' ? 'assistant' : 'user',
+                role: item.role === 'ASSISTANT' ? 'ASSISTANT' : 'USER',
                 content: typeof item.content === 'string' ? item.content : '',
               }))
               .reverse()
@@ -103,7 +103,6 @@ export default function ChatHistory({
     onPendingUserMessageRendered?.()
   }, [pendingUserMessage, onPendingUserMessageRendered])
 
-  // 处理助手流式响应
   useEffect(() => {
     if (!open) {
       streamingAssistantMessageIdRef.current = null
@@ -132,7 +131,7 @@ export default function ChatHistory({
           ...prev,
           {
             id: newId,
-            role: 'assistant',
+            role: 'ASSISTANT',
             content: text,
           },
         ]
@@ -157,25 +156,13 @@ export default function ChatHistory({
 
       const payloadData = parsed.data ?? {}
 
-      if (parsed.event === 'chat-response-chunk') {
-        const aggregated = payloadData.aggregated
-        if (typeof aggregated === 'string') {
-          appendOrUpdateAssistantMessage(aggregated)
-        }
-        return
-      }
-
       if (parsed.event === 'chat-response-complete') {
-        const finalContent = payloadData.assistantContent
+        const finalContent = payloadData.content
         if (typeof finalContent === 'string') {
           appendOrUpdateAssistantMessage(finalContent)
         }
         streamingAssistantMessageIdRef.current = null
         return
-      }
-
-      if (parsed.event === 'chat-response-error') {
-        console.error('助手响应错误：', payloadData.message)
       }
     })
 
@@ -205,18 +192,35 @@ export default function ChatHistory({
         style={{ height: '100%', width: '100%' }}
         data={messages}
         computeItemKey={(index, message) => message.id}
-        itemContent={(index, message) => (
-          <div
-            className={clsx(
-              'max-w-[20rem] rounded-[22px] px-4 py-3 leading-relaxed shadow-sm mb-4',
-              message.role === 'assistant'
-                ? 'bg-slate-100 text-slate-900'
-                : 'ml-auto bg-sky-100 text-sky-900',
-            )}
-          >
-            {message.content}
-          </div>
-        )}
+        itemContent={(index, message) => {
+          console.log(message)
+          const isAssistant = message.role === 'ASSISTANT'
+          return (
+            <div
+              className={clsx(
+                'flex w-full items-end px-1',
+                isAssistant ? 'justify-start' : 'justify-end',
+              )}
+            >
+              {/* 聊天气泡布局：助手靠左并显示默认头像，用户靠右展示无头像 */}
+              {isAssistant && (
+                <div className="mr-2 flex-shrink-0">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                    AI
+                  </div>
+                </div>
+              )}
+              <div
+                className={clsx(
+                  'max-w-[20rem] rounded-[22px] px-4 py-3 leading-relaxed shadow-sm mb-4 whitespace-pre-line text-sm',
+                  isAssistant ? 'bg-slate-100 text-slate-900' : 'bg-sky-100 text-sky-900',
+                )}
+              >
+                {message.content}
+              </div>
+            </div>
+          )
+        }}
         className="h-full"
       />
 

@@ -2,7 +2,6 @@ import { Socket } from "socket.io";
 import { randomUUID } from "crypto";
 import { ConversationMessageRole } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { grokCreateChatCompletionStream } from "@/server/llm";
 import { irritablePrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
 
@@ -49,13 +48,12 @@ export const processTextChatFlow = async ({
   userMessageCreatePromise.catch((error) => {
     console.error("textChatFlow: 存储用户输入时异常", { clientId, conversationId, error });
   });
-  const responseStream = await socket.data.llmClient.chat.completions.create({
+  const responseStream = await socket.data.llmClient.responses.create({
     model: "grok-4-fast-non-reasoning",
-    stream: true, // 开启流式返回以便后续使用 for-await 读取每个 chunk
-    messages: [
+    input: [
       {
         role: "system",
-        content: irritablePrompt.systemPrompt,
+        content: irritablePrompt.textChatSystemPrompt,
       },
       {
         role: "user",
@@ -64,79 +62,30 @@ export const processTextChatFlow = async ({
     ],
   });
 
-  let assistantContent = "";
-  let chunkIndex = 0;
-  let firstChunkLogged = false;
+  console.log(responseStream.output_text, 'responseStream.output[0].content');
 
   try {
-    for await (const chunk of responseStream) {
-      const delta = chunk.choices?.[0]?.delta;
-      const deltaContent = typeof delta?.content === "string" ? delta.content : "";
-      if (!deltaContent) {
-        continue;
-      }
-
-      if (!firstChunkLogged) {
-        firstChunkLogged = true;
-      }
-
-      assistantContent += deltaContent;
-      chunkIndex += 1;
-
-      const chunkPayload = serializePayload({
-        event: "chat-response-chunk",
+    const text = responseStream.output_text;
+    const chunkPayload = serializePayload({
+        event: "chat-response-complete",
         data: {
           clientId,
           conversationId,
           role: "assistant",
-          delta: deltaContent,
-          aggregated: assistantContent,
-          chunkIndex,
+          content: text,
           timestamp: new Date().toISOString(),
         },
       });
-
       socket.emit("message", chunkPayload);
-    }
-  } catch (error) {
-    console.error("textChatFlow: Grok 流式响应处理失败", {
-      clientId,
-      conversationId,
-      error,
-    });
-    const errorPayload = serializePayload({
-      event: "chat-response-error",
-      data: {
-        clientId,
-        conversationId,
-        message: error instanceof Error ? error.message : "未知的 Grok 流式响应异常",
-      },
-    });
-    socket.emit("message", errorPayload);
-    return false;
-  }
 
-  const completionPayload = serializePayload({
-    event: "chat-response-complete",
-    data: {
-      clientId,
-      conversationId,
-      assistantContent,
-      chunkCount: chunkIndex,
-      timestamp: new Date().toISOString(),
-    },
-  });
-
-  socket.emit("message", completionPayload);
-
-  if (assistantContent) {
+      if (text) {
     try {
       await prisma.conversationMessage.create({
         data: {
           id: randomUUID(),
           conversationId,
           role: ConversationMessageRole.ASSISTANT,
-          content: assistantContent,
+          content: text,
           isVoice: false,
           userId,
         },
@@ -148,6 +97,15 @@ export const processTextChatFlow = async ({
         error,
       });
     }
+  }
+
+  } catch (error) {
+    console.error("textChatFlow: Grok响应处理失败", {
+      clientId,
+      conversationId,
+      error,
+    });
+    return false;
   }
 
   return true;
