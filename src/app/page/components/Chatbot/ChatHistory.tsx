@@ -186,7 +186,7 @@ export default function ChatHistory({
   }, [messages.length])
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-900 shadow-inner my-6">
+    <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 py-4 px-2 text-sm text-slate-900 shadow-inner my-6">
       <Virtuoso
         ref={virtuosoRef}
         style={{ height: '100%', width: '100%' }}

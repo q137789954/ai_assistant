@@ -3,12 +3,25 @@
 
 :root {
   --primary: #CCFF00;
-    --danger: #FF0055;
-    --bg: #0a0a0a;
-    --text: #ffffff;
-    --secondary-text: #888888;
-}
+  --danger: #FF0055;
+  --bg: #0a0a0a;
+  --text: #ffffff;
+  --secondary-text: #888888;
 
+  /* =========================
+     Scrollbar (Global)
+     ========================= */
+  --sb-size: 10px; /* 滚动条宽/高 */
+  --sb-radius: 999px;
+  --sb-track: transparent;
+  --sb-thumb: rgba(255, 255, 255, 0.22);
+  --sb-thumb-hover: rgba(255, 255, 255, 0.35);
+  --sb-thumb-active: rgba(255, 255, 255, 0.5);
+
+  /* 用边框“挖空”让滑块更细更高级 */
+  --sb-thumb-border: 2px;
+  --sb-thumb-border-color: rgba(0, 0, 0, 0);
+}
 
 body {
   color: var(--text);
@@ -22,9 +35,56 @@ body {
 
 .border-default {
   border: 1px solid rgb(34, 34, 34) !important;
-  /* border-color: rgb(34, 34, 34) !important; */
 }
 
-/* .ant-drawer-mask-blur {
-  backdrop-filter: blur(16px)!important;
-} */
+/* =========================
+   Scrollbar (Global)
+   ========================= */
+
+/* 防止滚动条出现/消失导致布局抖动（支持度较新，但很实用） */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* Firefox：只能控制宽度 + 颜色 */
+html {
+  scrollbar-width: thin; /* auto | thin | none */
+  scrollbar-color: var(--sb-thumb) var(--sb-track);
+}
+
+/* Chrome / Edge / Safari */
+*::-webkit-scrollbar {
+  width: var(--sb-size);
+  height: var(--sb-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--sb-track);
+}
+
+*::-webkit-scrollbar-track-piece {
+  background: var(--sb-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--sb-thumb);
+  border-radius: var(--sb-radius);
+
+  /* 关键：挖空让滑块更细、更像 macOS */
+  border: var(--sb-thumb-border) solid var(--sb-thumb-border-color);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--sb-thumb-hover);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: var(--sb-thumb-active);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
