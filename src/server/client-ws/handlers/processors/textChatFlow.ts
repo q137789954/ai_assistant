@@ -62,8 +62,6 @@ export const processTextChatFlow = async ({
     ],
   });
 
-  console.log(responseStream.output_text, 'responseStream.output[0].content');
-
   try {
     const text = responseStream.output_text;
     const chunkPayload = serializePayload({

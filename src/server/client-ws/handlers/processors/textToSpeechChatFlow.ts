@@ -353,7 +353,6 @@ async function streamSentenceToTts(params: {
     // 在 TTS 音频开始事件中同步传递 LLM 本次回复的动作字段，避免客户端异步等待
     startData.action = actionField;
   }
-  console.log(requestId, 'requestId')
   socket.emit(
     "message",
     serializePayload({
