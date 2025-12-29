@@ -68,7 +68,7 @@ const Tabbar = () => {
         open={personalCenterVisible}
         onClose={handleClosePersonalCenter}
         placement="left"
-        width={360}
+        size={360}
         className="personal-center-drawer"
       >
         <div
