@@ -8,6 +8,7 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
+  Textarea
 } from '@/app/components/ui'
 import { Send, X } from 'lucide-react'
 import { useWebSocketContext } from '@/app/providers/WebSocketProviders'
@@ -15,6 +16,7 @@ import { useWebSocketContext } from '@/app/providers/WebSocketProviders'
 import ChatHistory from './ChatHistory'
 import type { Message } from './types'
 import { createMessageId } from './types'
+import clsx from 'clsx'
 
 interface ChatbotProps {
   open: boolean
@@ -83,7 +85,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
       maskClosable
       className="chatbot-drawer"
       classNames={{
-        section: 'bg-[rgba(30,30,30,1)]!',
+        section: 'bg-[rgba(30,30,30,.6)]!',
         mask: 'backdrop-blur-lg!',
       }}
     >
@@ -91,13 +93,13 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
         <DrawerHeader>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <DrawerTitle>AI 助手</DrawerTitle>
-              <DrawerDescription>实时语音 + 文本交互，支持持续对话。</DrawerDescription>
+              <DrawerTitle className='text-white'>AI 助手</DrawerTitle>
+              <DrawerDescription className='text-white'>实时语音 + 文本交互，支持持续对话。</DrawerDescription>
             </div>
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="rounded-full border border-slate-200/10 bg-white/10 p-2 text-slate-500! transition hover:border-slate-300/10 hover:text-slate-900!"
+              className="rounded-full cursor-pointer border border-slate-200/10 bg-white/60 p-2 text-slate-600! transition hover:bg-white hover:border-slate-300/10 hover:text-slate-900!"
               aria-label="关闭聊天抽屉"
             >
               <X size={16} />
@@ -114,22 +116,28 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
         </div>
 
         <DrawerFooter className="sticky bottom-0 w-full border-t px-6 py-4">
-          <div onSubmit={handleSubmit} className="flex w-full items-center gap-3">
-            <textarea
-              className="flex-1 resize-none rounded-2xl border border-white/70 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none"
+          <div className="flex w-full items-center gap-3">
+            <Textarea
+              className="flex-1 rounded-full! resize-none! bg-white/20!"
               placeholder="输入消息..."
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               rows={1}
             />
-            <Button
-              variant="outline"
+            {/* <Button
+              variant="outlined"
               className="h-10 w-10 rounded-full p-0 text-lg"
               aria-label="发送消息"
               onClick={handleSubmit}
             >
               <Send size={18} />
-            </Button>
+            </Button> */}
+            <div
+              className={clsx("flex cursor-default items-center justify-center h-8! w-8! rounded-full! p-0! shrink-0 bg-white/20 text-black text-sm transition", draft.trim() ? 'cursor-pointer bg-white/90!':'')}
+              onClick={handleSubmit}
+            >
+              ➤
+            </div>
           </div>
         </DrawerFooter>
       </div>
