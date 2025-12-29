@@ -30,9 +30,15 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
 
   const { emitEvent } = useWebSocketContext()
 
+  // 关闭抽屉时异步清除待处理消息，避免同步在 effect 中 setState 导致级联渲染
   useEffect(() => {
     if (!open) {
-      setPendingUserMessage(null)
+      const timeoutId = window.setTimeout(() => {
+        setPendingUserMessage(null)
+      })
+      return () => {
+        window.clearTimeout(timeoutId)
+      }
     }
   }, [open])
 
