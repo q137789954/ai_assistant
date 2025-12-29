@@ -69,11 +69,21 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
 
     setPendingUserMessage({
       id: messageId,
-      role: 'user',
+      role: 'USER',
       content: trimmed,
     })
     setDraft('')
   }
+
+  const handleTextareaKeyDown = (
+      event: React.KeyboardEvent<HTMLTextAreaElement>
+    ) => {
+      // 按下 Enter 且未按住 Shift 时提交，避免默认换行行为
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        handleSubmit();
+      }
+    };
 
   return (
     <Drawer
@@ -123,6 +133,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               rows={1}
+              onKeyDown={handleTextareaKeyDown}
             />
             {/* <Button
               variant="outlined"
