@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useContext, useRef, type TouchEvent } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type TouchEvent } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { Drawer } from "@/app/components/ui";
 import { Typography } from "antd";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
-import { Pencil, Copy, Check, Settings } from "lucide-react";
+import { Copy, Check, Settings } from "lucide-react";
+
+import UserNameEditor from "./UserNameEditor";
 
 const { Paragraph } = Typography;
 
@@ -13,9 +15,14 @@ const Tabbar = () => {
   const { data: session } = useSession();
   const globals = useContext(GlobalsContext);
 
-  const name = session?.user?.name ?? "";
+  const sessionName = session?.user?.name ?? "";
+  const [displayName, setDisplayName] = useState(sessionName);
+  useEffect(() => {
+    setDisplayName(sessionName);
+  }, [sessionName]);
+
   const uid = session?.user?.id ?? session?.user?.email ?? "8848123";
-  const initial = (name?.[0] ?? "U").toUpperCase();
+  const initial = (displayName?.[0] ?? "U").toUpperCase();
 
   // 利用 Context 统一控制抽屉显示/隐藏，便于后续多处复用
   const { personalCenterVisible = false, dispatch } = globals ?? {};
@@ -84,17 +91,7 @@ const Tabbar = () => {
                   {initial}
                 </span>
               </div>
-              <div className="username-container flex items-center justify-center gap-2 text-white">
-                <span
-                  id="user-name-display"
-                  className="username-text text-lg font-semibold"
-                >
-                  {name}
-                </span>
-                <span className="edit-name-btn text-sm text-slate-400 cursor-pointer hover:text-slate-500">
-                  <Pencil size={12} />
-                </span>
-              </div>
+              <UserNameEditor name={displayName} onNameUpdated={setDisplayName} />
               <Paragraph
                 className="text-xs font-medium text-slate-400 flex items-center gap-1 justify-center"
                 copyable={{
