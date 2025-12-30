@@ -238,7 +238,13 @@ export default function RegisterPage() {
             <button
               className="w-50 mx-auto rounded-full bg-primary px-4 py-3 text-sm! font-black! text-black! italic text-center hover:bg-slate-800 disabled:opacity-60 cursor-pointer"
               type="submit"
-              disabled={submitting || !agree}
+              disabled={
+                submitting ||
+                !agree ||
+                !email.trim() ||
+                !password.trim() ||
+                !code.trim()
+              }
             >
               ENTER THE ARENA {submitting ? "..." : ""}
             </button>
