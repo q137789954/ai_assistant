@@ -115,101 +115,110 @@ export default function RegisterPage() {
     }
   }
 
+  // 布局与登录页保持一致，统一品牌视觉
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6 py-10">
-      <h1 className="text-2xl font-semibold text-slate-900">注册</h1>
-      <p className="mt-2 text-sm text-slate-900">创建一个账号用于登录。</p>
+    <main className="flex min-h-dvh w-full flex-col items-center justify-center">
+      <div className="w-full max-w-md px-6 py-10">
+        <h1 className="text-5xl font-black! text-primary italic text-center">
+          ROAST.AI
+        </h1>
+        <p className="mt-2 text-sm text-white/80 font-bold">
+          Create an account to enter the arena.
+        </p>
 
-      <form onSubmit={handleRegister} className="mt-6 space-y-4">
-        <label className="block">
-          <span className="text-sm text-slate-700">昵称（可选）</span>
-          <input
-            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="你的名字"
-            autoComplete="nickname"
-          />
-        </label>
+        <form onSubmit={handleRegister} className="mt-6 space-y-4">
+          <label className="block">
+            <input
+              className="mt-1 w-full rounded-sm border-strong bg-surface-2 p-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your nickname (optional)"
+              autoComplete="nickname"
+            />
+          </label>
 
-        <label className="block">
-          <span className="text-sm text-slate-700">邮箱</span>
-          <input
-            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-          />
-        </label>
+          <label className="block">
+            <input
+              className="mt-1 w-full rounded-sm border-strong bg-surface-2 p-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              required
+            />
+          </label>
 
-        <label className="block">
-          <span className="text-sm text-slate-700">密码（至少 6 位）</span>
-          <input
-            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={6}
-        />
-      </label>
+          <label className="block">
+            <input
+              className="mt-1 w-full rounded-sm border-strong bg-surface-2 p-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              placeholder="Password (at least 6 characters)"
+            />
+          </label>
 
-      <label className="block">
-        <span className="text-sm text-slate-700">邮箱验证码</span>
-        <div className="mt-1 flex gap-2">
-          <input
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="输入邮箱收到的 6 位验证码"
-            required
-          />
-          <button
-            type="button"
-            onClick={handleSendCode}
-            className="whitespace-nowrap rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-            disabled={sendingCode || countdown > 0}
+          <label className="block">
+            <div className="mt-1 flex gap-3">
+              <input
+                className="w-full rounded-sm border-strong bg-surface-2 p-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Enter 6-digit code"
+                required
+              />
+              <button
+                type="button"
+                onClick={handleSendCode}
+                // 发送验证码按钮，倒计时期间禁用以避免重复请求
+                className="w-30! shrink-0 whitespace-nowrap rounded-sm border-strong bg-surface-2 px-3 py-2 text-sm font-semibold text-secondary hover:bg-surface-3 disabled:opacity-60 cursor-pointer"
+                disabled={sendingCode || countdown > 0}
+              >
+                {countdown > 0
+                  ? `Resend (${countdown}s)`
+                  : sendingCode
+                    ? "Sending..."
+                    : "Get code"}
+              </button>
+            </div>
+          </label>
+
+          {notice && (
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {notice}
+            </p>
+          )}
+
+          {error && (
+            <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
+          <div className="w-full flex justify-center">
+            <button
+              className="w-50 mx-auto rounded-full bg-primary px-4 py-3 text-sm! font-black! text-black! italic text-center hover:bg-slate-800 disabled:opacity-60 cursor-pointer"
+              type="submit"
+              disabled={submitting}
+            >
+              ENTER THE ARENA {submitting ? "..." : ""}
+            </button>
+          </div>
+        </form>
+
+        <div className="flex justify-center mt-5">
+          <a
+            className="text-sm text-center font-medium text-secondary underline trans-base hover:text-primary"
+            href="/login"
           >
-            {countdown > 0
-              ? `重新发送(${countdown}s)`
-              : sendingCode
-                ? "发送中..."
-                : "发送验证码"}
-          </button>
+            Already have an account? <span>Log in</span>
+          </a>
         </div>
-      </label>
-
-      {notice && (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          {notice}
-        </p>
-      )}
-
-      {error && (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
-      )}
-
-        <button
-          className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-          type="submit"
-          disabled={submitting}
-        >
-          {submitting ? "注册中..." : "注册并登录"}
-        </button>
-      </form>
-
-      <p className="mt-6 text-sm text-slate-600">
-        已有账号？{" "}
-        <a className="font-medium text-slate-900 underline" href="/login">
-          去登录
-        </a>
-      </p>
+      </div>
     </main>
   );
 }
