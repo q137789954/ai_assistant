@@ -5,9 +5,12 @@
   --primary: #CCFF00;
   --danger: #FF0055;
   --bg: #0a0a0a;
+   --surface-2: #222222;
+   --surface-3: #444444;
+   --surface-4: #666666;
   --text: #ffffff;
   --secondary-text: #888888;
-
+  --border-muted: #444444;
   /* =========================
      Scrollbar (Global)
      ========================= */
@@ -21,11 +24,15 @@
   /* 用边框“挖空”让滑块更细更高级 */
   --sb-thumb-border: 2px;
   --sb-thumb-border-color: rgba(0, 0, 0, 0);
+
+  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-arial: Arial, Helvetica, sans-serif;
 }
 
 body {
   color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-system);
   background-color: var(--bg);
   width: 100%;
   height: 100dvh;
@@ -34,6 +41,7 @@ body {
 .border-default {
   border: 1px solid rgb(34, 34, 34) !important;
 }
+.border-strong { border-color: var(--border-strong); }
 
 /* =========================
    Scrollbar (Global)
@@ -94,41 +102,57 @@ html {
 
 /* 背景 */
 .bg-app {
-  background-color: var(--bg) !important;
+  background-color: var(--bg);
 }
 .bg-primary {
-  background-color: var(--primary) !important;
+  background-color: var(--primary);
 }
 .bg-danger {
-  background-color: var(--danger) !important;
+  background-color: var(--danger);
 }
+.bg-surface-2 {
+  background-color: var(--surface-2);
+}
+.bg-surface-3 { background-color: var(--surface-3); }
+.bg-surface-4 { background-color: var(--surface-4); }
 
 /* 文本 */
 .text-app {
-  color: var(--text) !important;
+  color: var(--text);
 }
 .text-secondary {
-  color: var(--secondary-text) !important;
+  color: var(--secondary-text);
+}
+.text-surface-4 {
+  color: var(--surface-4);
 }
 .text-primary {
-  color: var(--primary) !important;
+  color: var(--primary);
 }
 .text-danger {
-  color: var(--danger) !important;
+  color: var(--danger);
+}
+
+.font-system {
+  font-family: var(--font-system);
+}
+
+.font-arial {
+  font-family: var(--font-arial);
 }
 
 /* 边框 */
 .border-app {
-  border: 1px solid rgb(34, 34, 34) !important;
+  border: 1px solid rgb(34, 34, 34);
 }
 
 /* 常用组合 */
 .surface {
-  background-color: var(--bg) !important;
-  color: var(--text) !important;
+  background-color: var(--bg);
+  color: var(--text);
 }
 .muted {
-  color: var(--secondary-text) !important;
+  color: var(--secondary-text);
 }
 
 /* =========================
@@ -137,41 +161,51 @@ html {
 
 /* 背景 hover */
 .hover\:bg-app:hover {
-  background-color: var(--bg) !important;
+  background-color: var(--bg);
 }
 .hover\:bg-primary:hover {
-  background-color: var(--primary) !important;
+  background-color: var(--primary);
 }
 .hover\:bg-danger:hover {
-  background-color: var(--danger) !important;
+  background-color: var(--danger);
 }
+.hover\:bg-surface-2:hover {
+  background-color: var(--surface-2);
+}
+.hover\:bg-surface-3:hover {
+  background-color: var(--surface-3);
+}
+
 
 /* 文本 hover */
 .hover\:text-app:hover {
-  color: var(--text) !important;
+  color: var(--text);
 }
 .hover\:text-secondary:hover {
-  color: var(--secondary-text) !important;
+  color: var(--secondary-text);
+}
+.hover\:text-surface-4:hover {
+  color: var(--surface-4);
 }
 .hover\:text-primary:hover {
-  color: var(--primary) !important;
+  color: var(--primary);
 }
 .hover\:text-danger:hover {
-  color: var(--danger) !important;
+  color: var(--danger);
 }
 
 /* 边框 hover（只改颜色不改宽度） */
 .hover\:border-app:hover {
-  border-color: rgb(34, 34, 34) !important;
+  border-color: rgb(34, 34, 34);
 }
 
 /* 常用组合 hover */
 .hover\:surface:hover {
-  background-color: var(--bg) !important;
-  color: var(--text) !important;
+  background-color: var(--bg);
+  color: var(--text);
 }
 .hover\:muted:hover {
-  color: var(--secondary-text) !important;
+  color: var(--secondary-text);
 }
 
 /* =========================
@@ -180,38 +214,38 @@ html {
 
 /* 过渡时长 */
 .trans-fast {
-  transition-duration: 120ms !important;
+  transition-duration: 120ms;
 }
 .trans-base {
-  transition-duration: 200ms !important;
+  transition-duration: 200ms;
 }
 .trans-slow {
-  transition-duration: 320ms !important;
+  transition-duration: 320ms;
 }
 
 /* 缓动曲线（更顺滑） */
 .trans-ease {
-  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* 过渡范围 */
 .trans-colors {
   transition-property: color, background-color, border-color, fill, stroke,
-    opacity, box-shadow, transform !important;
+    opacity, box-shadow, transform;
 }
 .trans-opacity {
-  transition-property: opacity !important;
+  transition-property: opacity;
 }
 .trans-transform {
-  transition-property: transform !important;
+  transition-property: transform;
 }
 
 /* 一键组合（最常用） */
 .trans-ui {
   transition-property: color, background-color, border-color, opacity, box-shadow,
-    transform !important;
-  transition-duration: 200ms !important;
-  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+    transform;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* 尊重系统“减少动态效果”设置 */
@@ -223,6 +257,6 @@ html {
   .trans-opacity,
   .trans-transform,
   .trans-ui {
-    transition: none !important;
+    transition: none;
   }
 }
