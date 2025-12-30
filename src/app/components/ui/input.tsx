@@ -19,7 +19,7 @@ const inputVariants = cva(
   ].join(' '),
   {
     variants: {
-      uiSize: {
+      size: {
         default: 'h-10',
         sm: 'h-9 text-sm',
         lg: 'h-11 text-base',
@@ -30,7 +30,7 @@ const inputVariants = cva(
       },
     },
     defaultVariants: {
-      uiSize: 'default',
+      size: 'default',
       invalid: false,
     },
   }
@@ -44,8 +44,8 @@ export interface InputProps
  * 使用 Ant Design 的 Input 作为基础，className 通过 variants 统一管理。
  */
 const Input = React.forwardRef<AntdInputRef, InputProps>(
-  ({ className, uiSize, invalid, ...props }, ref) => {
-    const classes = clsx(inputVariants({ uiSize, invalid }), className)
+  ({ className, size, invalid, ...props }, ref) => {
+    const classes = clsx(inputVariants({ size, invalid }), className)
     return <AntdInput ref={ref} className={classes} {...props} />
   }
 )

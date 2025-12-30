@@ -131,9 +131,14 @@ export const authOptions: NextAuthOptions = {
     /**
      * 认证后把初始用户 ID 放在 JWT 里，后续再由 session 回调复用；
      */
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user?.id) {
         token.id = user.id;
+      }
+
+      // 如果客户端调用 session.update 触发 refresh，把最新的 name 写回 token
+      if (trigger === "update" && session?.name) {
+        token.name = session.name;
       }
       return token;
     },
@@ -144,6 +149,12 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (session.user as any).id = token.sub ?? token.id;
+        // 同步 token 中的基础信息，确保更新昵称后立刻体现在 session
+        session.user.name = typeof token.name === "string" ? token.name : session.user.name;
+        session.user.email =
+          typeof token.email === "string" ? token.email : session.user.email ?? null;
+        session.user.image =
+          typeof token.picture === "string" ? token.picture : session.user.image ?? null;
       }
       return session;
     },

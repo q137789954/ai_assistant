@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Input, Button, message } from "antd";
+import { useSession } from "next-auth/react";
+import { message } from "antd";
 import { Pencil } from "lucide-react";
+import { Input, Button } from "@/app/components/ui";
 
 type UserNameEditorProps = {
   /** 父组件传入的当前用户名 */
@@ -22,6 +24,7 @@ export default function UserNameEditor({ name, onNameUpdated }: UserNameEditorPr
   const [editing, setEditing] = useState(false);
   const [inputValue, setInputValue] = useState(name ?? "");
   const [saving, setSaving] = useState(false);
+  const { update: updateSession } = useSession();
 
   // 外部 session 切换时同步内部展示；编辑中不抢输入框
   useEffect(() => {
@@ -67,6 +70,8 @@ export default function UserNameEditor({ name, onNameUpdated }: UserNameEditorPr
       setDisplayName(nextName);
       setEditing(false);
       onNameUpdated?.(nextName);
+      // 同步 next-auth 会话，确保 cookie/session.name 立即更新
+      updateSession?.({ name: nextName });
       message.success("用户名已更新");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "更新失败，请稍后重试");
@@ -79,7 +84,7 @@ export default function UserNameEditor({ name, onNameUpdated }: UserNameEditorPr
     return (
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Input
-          size="small"
+          size="sm"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="请输入用户名"
@@ -87,14 +92,14 @@ export default function UserNameEditor({ name, onNameUpdated }: UserNameEditorPr
         />
         <Button
           type="primary"
-          size="small"
+          size="md"
           loading={saving}
           onClick={handleSave}
           className="px-3"
         >
           确定
         </Button>
-        <Button size="small" onClick={handleCancel} disabled={saving} className="px-3">
+        <Button size="md" onClick={handleCancel} disabled={saving} className="px-3">
           取消
         </Button>
       </div>
