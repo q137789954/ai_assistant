@@ -26,6 +26,7 @@ export default function RegisterPage() {
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [agree, setAgree] = useState(false);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -75,9 +76,14 @@ export default function RegisterPage() {
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
     setNotice(null);
+    // 未勾选协议时不允许提交
+    if (!agree) {
+      setError("请先勾选同意条款与隐私政策");
+      return;
+    }
+    setSubmitting(true);
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -199,11 +205,40 @@ export default function RegisterPage() {
             </p>
           )}
 
+          <label className="flex items-center gap-2 text-sm text-white/80">
+            <input
+              type="checkbox"
+              checked={agree}
+              onChange={(e) => setAgree(e.target.checked)}
+              className="h-4 w-4 rounded-sm border-strong bg-surface-2 text-primary focus:ring-2 focus:ring-primary"
+            />
+            <span>
+              I agree to{" "}
+              <a
+                className="font-semibold text-secondary underline hover:text-primary"
+                href="/terms"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Terms
+              </a>{" "}
+              &{" "}
+              <a
+                className="font-semibold text-secondary underline hover:text-primary"
+                href="/privacy"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Privacy
+              </a>
+            </span>
+          </label>
+
           <div className="w-full flex justify-center">
             <button
               className="w-50 mx-auto rounded-full bg-primary px-4 py-3 text-sm! font-black! text-black! italic text-center hover:bg-slate-800 disabled:opacity-60 cursor-pointer"
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !agree}
             >
               ENTER THE ARENA {submitting ? "..." : ""}
             </button>
