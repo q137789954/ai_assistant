@@ -7,6 +7,7 @@ import { Typography } from "antd";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { Copy, Check, Settings } from "lucide-react";
 
+import ChangePasswordDialog from "./ChangePasswordDialog";
 import UserNameEditor from "./UserNameEditor";
 
 const { Paragraph } = Typography;
@@ -57,8 +58,11 @@ const Tabbar = () => {
     touchStartXRef.current = null;
   }, []);
 
+  // 修改密码弹窗受控状态
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+
   const menuItems = [
-    { label: "🔒 Change Password" },
+    { label: "🔒 Change Password", onClick: () => setPasswordModalOpen(true) },
     { label: "🛡️ Privacy Policy" },
   ];
 
@@ -122,6 +126,7 @@ const Tabbar = () => {
                 <button
                   key={item.label}
                   type="button"
+                  onClick={item.onClick}
                   className="menu-item flex items-center justify-between rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-500 hover:bg-white/5"
                 >
                   <span className="flex items-center gap-2">{item.label}</span>
@@ -146,6 +151,12 @@ const Tabbar = () => {
           </div>
         </div>
       </Drawer>
+
+      {/* 修改密码弹窗组件独立管理表单逻辑 */}
+      <ChangePasswordDialog
+        open={passwordModalOpen}
+        onOpenChange={setPasswordModalOpen}
+      />
     </>
   );
 };
