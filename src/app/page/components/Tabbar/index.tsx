@@ -91,7 +91,11 @@ const Tabbar = () => {
                   {initial}
                 </span>
               </div>
-              <UserNameEditor name={displayName} onNameUpdated={setDisplayName} />
+              <UserNameEditor
+                name={displayName}
+                onNameUpdated={setDisplayName}
+                isOpen={personalCenterVisible}
+              />
               <Paragraph
                 className="text-xs font-medium text-slate-400 flex items-center gap-1 justify-center"
                 copyable={{

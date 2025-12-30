@@ -11,6 +11,8 @@ type UserNameEditorProps = {
   name: string;
   /** 更新成功后回调，便于父组件同步展示/首字母 */
   onNameUpdated?: (name: string) => void;
+  /** 控制抽屉是否展开，便于收起时重置编辑态 */
+  isOpen?: boolean;
 };
 
 /**
@@ -19,7 +21,7 @@ type UserNameEditorProps = {
  * - 点击铅笔进入编辑态，支持提交/取消
  * - 成功后回填展示并回调父组件
  */
-export default function UserNameEditor({ name, onNameUpdated }: UserNameEditorProps) {
+export default function UserNameEditor({ name, onNameUpdated, isOpen }: UserNameEditorProps) {
   const [displayName, setDisplayName] = useState(name ?? "");
   const [editing, setEditing] = useState(false);
   const [inputValue, setInputValue] = useState(name ?? "");
@@ -33,6 +35,14 @@ export default function UserNameEditor({ name, onNameUpdated }: UserNameEditorPr
       setInputValue(name ?? "");
     }
   }, [name, editing]);
+
+  // 抽屉关闭时重置未保存的编辑内容，避免下次打开残留输入
+  useEffect(() => {
+    if (!isOpen && editing) {
+      setEditing(false);
+      setInputValue(name ?? "");
+    }
+  }, [isOpen, editing, name]);
 
   const handleStartEdit = useCallback(() => {
     setEditing(true);
