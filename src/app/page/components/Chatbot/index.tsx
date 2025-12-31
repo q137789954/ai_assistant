@@ -105,7 +105,9 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
         mask: 'backdrop-blur-lg!',
       }}
     >
-      <div className="flex h-full flex-col rounded-t-[32px]">
+      {
+        open && (
+          <div className="flex h-full flex-col rounded-t-[32px]">
         <DrawerHeader>
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -158,6 +160,8 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
           </div>
         </DrawerFooter>
       </div>
+        )
+      }
     </Drawer>
   )
 }
