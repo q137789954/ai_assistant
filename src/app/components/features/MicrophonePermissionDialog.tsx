@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/app/components/ui/dialog'
+} from '@/app/components/ui'
 import type { GlobalsContextValue } from '@/app/providers/GlobalsProviders/types'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 

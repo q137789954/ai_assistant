@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { Modal, type ModalProps } from 'antd'
 import clsx from 'clsx'
+import styles from './index.module.css'
 
 /**
  * 统一封装 Ant Design Modal，提供 open/onOpenChange 接口以及默认的遮罩/边距控制。
@@ -22,22 +23,10 @@ const Dialog = ({
   width = 560,
   maskClosable = true,
   closable = false,
-  styles,
-  bodyStyle,
   className,
   children,
   ...props
 }: DialogProps) => {
-  // 合并样式以保持默认 padding/背景，并兼容旧的 bodyStyle 配置
-  const mergedStyles: ModalProps['styles'] = {
-    ...(styles ?? {}),
-    body: {
-      padding: 0,
-      backgroundColor: 'transparent',
-      ...(styles?.body ?? {}),
-      ...bodyStyle,
-    },
-  }
 
   return (
     <Modal
@@ -48,8 +37,7 @@ const Dialog = ({
       width={width}
       maskClosable={maskClosable}
       closable={closable}
-      styles={mergedStyles}
-      className={clsx('custom-dialog-root', className)}
+      className={clsx(styles.dialog, className)}
       {...props}
     >
       {children}
@@ -63,7 +51,8 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
     <div
       ref={ref}
       className={clsx(
-        'rounded-[20px] border border-slate-200 bg-white p-6 shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
+        // 'rounded-[20px] border border-slate-200 bg-white/20 p-6 shadow-lg backdrop-blur-xl',
+        'bg-transparent',
         className
       )}
       {...props}

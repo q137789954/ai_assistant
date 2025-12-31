@@ -1,5 +1,5 @@
 export * from './button'
-export * from './dialog'
+export * from './Dialog'
 export * from './input'
 export * from './textarea'
 export * from './drawer'

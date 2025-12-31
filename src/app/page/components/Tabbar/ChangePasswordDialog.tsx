@@ -84,18 +84,18 @@ const ChangePasswordDialog = ({ open, onOpenChange }: ChangePasswordDialogProps)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} width={520}>
-      <DialogContent className="bg-slate-900 text-slate-100 border-slate-700">
+      <DialogContent className="bg-slate-900 text-secondary border-slate-700">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-slate-100">
+          <DialogTitle className="text-xl font-bold text-white">
             修改密码
           </DialogTitle>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-white">
             为保障账号安全，需要先验证原密码，再设置新密码。
           </p>
         </DialogHeader>
 
         <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
-          <label className="block text-sm text-slate-200">
+          <label className="block text-sm text-white">
             原密码
             <Input
               type="password"
@@ -106,7 +106,7 @@ const ChangePasswordDialog = ({ open, onOpenChange }: ChangePasswordDialogProps)
             />
           </label>
 
-          <label className="block text-sm text-slate-200">
+          <label className="block text-sm text-white">
             新密码（至少 6 位）
             <Input
               type="password"
@@ -117,7 +117,7 @@ const ChangePasswordDialog = ({ open, onOpenChange }: ChangePasswordDialogProps)
             />
           </label>
 
-          <label className="block text-sm text-slate-200">
+          <label className="block text-sm text-white">
             确认新密码
             <Input
               type="password"
