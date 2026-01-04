@@ -31,6 +31,8 @@ model User {
   image         String?   @db.Text
   /// 密码哈希，可选，用于本地登录方案
   passwordHash  String?   @db.Text
+  /// 聊天洞察 JSON 数据，结构由业务自定义
+  chatInsights  Json?     @db.JsonB @map("chat_insights")
   /// 记录创建时间，默认当前时间
   createdAt     DateTime  @default(now()) @db.Timestamp(3)
   /// 更新时间，需要由业务自行更新
