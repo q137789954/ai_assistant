@@ -14,7 +14,6 @@ const ModeSwitch = () => {
     () => [
       { name: "Roast battle", introVoice: "/voice/roast_battle_Intro.mp3" },
       { name: "Let’s rant together", introVoice: "/voice/rant_together_Intro.mp3" },
-      { name: "Regional beef", introVoice: "/voice/regional_beef_Intro.mp3" },
     ],
     []
   );

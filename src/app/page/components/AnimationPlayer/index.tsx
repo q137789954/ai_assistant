@@ -14,8 +14,8 @@ import {
 import { useAnimationPlayer, type AnimationMeta } from '@/app/providers/AnimationProvider'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 
-const DEFAULT_TIME_SCALE = 0.6
-const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3'] as const
+const DEFAULT_TIME_SCALE = 1
+const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4'] as const
 
 export default function AnimationPlayer() {
   const {

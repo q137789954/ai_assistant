@@ -585,10 +585,21 @@ export const useTtsAudioPlayer = () => {
       requestId,
     };
     sentencesRef.current.set(sentenceId, entry);
-    // 本地播放也要切换到说话动画，保持与服务端 TTS 一致的交互反馈
-    if (allAnimationsLoaded && animations.some((animation) => animation.id === "talk")) {
-      switchToAnimationById("talk");
-      play();
+    // 本地播放也要切换到说话动画，随机选择 talk1/talk2（若都不存在则不切换）
+    if (allAnimationsLoaded) {
+      const talkCandidates = ["talk1", "talk2"].filter((id) =>
+        animations.some((animation) => animation.id === id),
+      );
+      const chosenTalk =
+        talkCandidates.length > 0
+          ? talkCandidates[Math.floor(Math.random() * talkCandidates.length)]
+          : null;
+
+      console.log('chosenTalk', chosenTalk);
+      if (chosenTalk) {
+        switchToAnimationById(chosenTalk);
+        play();
+      }
     }
     registerSentenceForRequest(requestId, sentenceId);
     // 将本地语音直接送入 Worklet，如果当前未轮到该句子会先暂存
