@@ -45,8 +45,15 @@ export const processTextChatFlow = async ({
       userId,
     },
   });
+  const chatHistory = Array.isArray(socket.data.clientConversations)
+    ? socket.data.clientConversations
+    : [];
   userMessageCreatePromise.catch((error) => {
-    console.error("textChatFlow: 存储用户输入时异常", { clientId, conversationId, error });
+    console.error("textChatFlow: 存储用户输入时异常", {
+      clientId,
+      conversationId,
+      error,
+    });
   });
   const responseStream = await socket.data.llmClient.responses.create({
     model: "grok-4-fast-non-reasoning",
@@ -55,6 +62,7 @@ export const processTextChatFlow = async ({
         role: "system",
         content: irritablePrompt.textChatSystemPrompt,
       },
+      ...chatHistory,
       {
         role: "user",
         content,
@@ -65,38 +73,47 @@ export const processTextChatFlow = async ({
   try {
     const text = responseStream.output_text;
     const chunkPayload = serializePayload({
-        event: "chat-response-complete",
-        data: {
-          clientId,
-          conversationId,
-          role: "assistant",
-          content: text,
-          timestamp: new Date().toISOString(),
-        },
-      });
-      socket.emit("message", chunkPayload);
-
-      if (text) {
-    try {
-      await prisma.conversationMessage.create({
-        data: {
-          id: randomUUID(),
-          conversationId,
-          role: ConversationMessageRole.ASSISTANT,
-          content: text,
-          isVoice: false,
-          userId,
-        },
-      });
-    } catch (error) {
-      console.error("textChatFlow: 存储助手回复时出错", {
+      event: "chat-response-complete",
+      data: {
         clientId,
         conversationId,
-        error,
-      });
-    }
-  }
+        role: "assistant",
+        content: text,
+        timestamp: new Date().toISOString(),
+      },
+    });
+    socket.emit("message", chunkPayload);
 
+    if (text) {
+      // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
+      socket.data.clientConversations.push(
+        { role: "user", content },
+        { role: "assistant", content: text }
+      );
+      // 超过则删掉最前面的（保留最后 20 条）
+      const overflow = socket.data.clientConversations.length - 20;
+      if (overflow > 0) {
+        socket.data.clientConversations.splice(0, overflow);
+      }
+      try {
+        await prisma.conversationMessage.create({
+          data: {
+            id: randomUUID(),
+            conversationId,
+            role: ConversationMessageRole.ASSISTANT,
+            content: text,
+            isVoice: false,
+            userId,
+          },
+        });
+      } catch (error) {
+        console.error("textChatFlow: 存储助手回复时出错", {
+          clientId,
+          conversationId,
+          error,
+        });
+      }
+    }
   } catch (error) {
     console.error("textChatFlow: Grok响应处理失败", {
       clientId,
