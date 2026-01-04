@@ -27,6 +27,16 @@ type SentenceState = {
   requestId?: string;
 };
 
+/**
+ * 本地直接播放语音时的可选参数。
+ */
+type PlaySpeechOptions = {
+  // 指定音频格式，主要用于判断是否走 Worklet 通路
+  format?: string;
+  // 透传 requestId，便于和原有播放完成逻辑对齐（可选）
+  requestId?: string;
+};
+
 const base64ToUint8Array = (base64: string) => {
   // 将服务端返回的 Base64 PCM 数据解码为字节数组，后续再转换为 Float32
   const binary = globalThis.atob(base64);
@@ -78,6 +88,43 @@ const supportsWorkletFormat = (format: string | undefined) => {
   const raw = (format ?? "mp3").trim().toLowerCase();
   // 只允许少数音频格式走 Worklet，避免浏览器解码失败
   return !!raw && /(?:audio\/)?(wav|pcm|raw|linear16|mp3|mpeg|ogg)/.test(raw);
+};
+
+// 将传入的音频数据统一转换为 Float32Array，方便直接推送到 Worklet。
+const normalizeToFloat32 = (
+  audio: Float32Array | Int16Array | Uint8Array | number[] | null | undefined,
+) => {
+  if (!audio) {
+    return null;
+  }
+  if (audio instanceof Float32Array) {
+    return audio.length ? audio : null;
+  }
+  if (audio instanceof Int16Array) {
+    const output = new Float32Array(audio.length);
+    for (let i = 0; i < audio.length; i += 1) {
+      // 将 16 位有符号整数映射到 [-1, 1]
+      output[i] = Math.max(-1, Math.min(1, audio[i] / 32768));
+    }
+    return output;
+  }
+  if (audio instanceof Uint8Array) {
+    const output = new Float32Array(audio.length);
+    for (let i = 0; i < audio.length; i += 1) {
+      // 8 位无符号整数转为中心为 0 的浮点数
+      output[i] = Math.max(-1, Math.min(1, (audio[i] - 128) / 128));
+    }
+    return output;
+  }
+  if (Array.isArray(audio)) {
+    const output = new Float32Array(audio.length);
+    for (let i = 0; i < audio.length; i += 1) {
+      const value = Number(audio[i]);
+      output[i] = Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
+    }
+    return output;
+  }
+  return null;
 };
 
 export const useTtsAudioPlayer = () => {
@@ -513,5 +560,45 @@ export const useTtsAudioPlayer = () => {
     timestampWatermark,
   ]);
 
-  return { stopTtsPlayback };
+  /**
+   * 直接播放一段外部传入的语音数据（支持 Float32/Int16/Uint8/普通数字数组）。
+   * 会复用现有 Worklet 播放链路，自动排队并在播放完成后回收状态。
+   */
+  const playSpeechBuffer = (
+    audio: Float32Array | Int16Array | Uint8Array | number[],
+    options?: PlaySpeechOptions,
+  ) => {
+    const floatChannel = normalizeToFloat32(audio);
+    if (!floatChannel?.length) {
+      console.warn("ttsAudioPlayer: playSpeechBuffer 收到的音频为空，已跳过");
+      return;
+    }
+
+    const format = options?.format ?? "pcm";
+    const sentenceId = `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const requestId = options?.requestId ?? sentenceId;
+    const entry: SentenceState = {
+      format,
+      useWorklet: supportsWorkletFormat(format),
+      workletBuffers: [],
+      workletDrained: false,
+      requestId,
+    };
+    sentencesRef.current.set(sentenceId, entry);
+    // 本地播放也要切换到说话动画，保持与服务端 TTS 一致的交互反馈
+    if (allAnimationsLoaded && animations.some((animation) => animation.id === "talk")) {
+      switchToAnimationById("talk");
+      play();
+    }
+    registerSentenceForRequest(requestId, sentenceId);
+    // 将本地语音直接送入 Worklet，如果当前未轮到该句子会先暂存
+    sendOrQueueWorkletChannels(sentenceId, entry, [floatChannel]);
+    entry.isComplete = true; // 声明不会再追加 chunk，方便 Worklet 耗尽后及时收尾
+    enqueueSentence(sentenceId);
+    if (!isPlayingRef.current) {
+      playNextFromQueue();
+    }
+  };
+
+  return { stopTtsPlayback, playSpeechBuffer };
 };
