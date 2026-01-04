@@ -91,7 +91,7 @@ const AvatarCommandInput = () => {
   return (
     <div className="w-full flex gap-1 items-center">
       <Textarea
-        className="h-11! rounded-full! resize-none!"
+        className="h-11! rounded-full! border-none! resize-none! bg-black/5 backdrop-blur-lg! shadow-none!"
         placeholder="请输入指令"
         value={input}
         onChange={(e) => setInput(e.target.value)}

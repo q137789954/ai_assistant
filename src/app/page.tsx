@@ -4,6 +4,7 @@ import { useCallback, useContext, useEffect, useState, useRef } from "react";
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
 import AnimationPlayer from "./page/components/AnimationPlayer";
+import ModeSwitch from "./page/components/ModeSwitch";
 import { useVoiceInputListener, useTtsAudioPlayer, } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
@@ -158,6 +159,9 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
           }
         }}
       />
+      <div className="absolute w-full bottom-16">
+        <ModeSwitch />
+      </div>
     </main>
   );
 }

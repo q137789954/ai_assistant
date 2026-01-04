@@ -332,6 +332,7 @@ export default function ChatHistory({
         className="h-full"
         data={messages}
         firstItemIndex={firstItemIndex}
+        initialTopMostItemIndex={FIRST_ITEM_INDEX-1}
         computeItemKey={(index, message) => message.id}
         // 上滑到顶部：触发加载更多（防抖）
         startReached={() => {
