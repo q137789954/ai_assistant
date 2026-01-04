@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useTtsAudioPlayer } from "@/app/hooks";
+import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 
 const ModeSwitch = () => {
   const { stopTtsPlayback, playSpeechBuffer } = useTtsAudioPlayer();
+  const { emitEvent, subscribe } = useWebSocketContext();
   // 复用解码用的 AudioContext，减少频繁创建带来的开销
   const decodeContextRef = useRef<AudioContext | null>(null);
   // 跟踪当前点击的播放令牌，防止旧请求完成后抢占播放
@@ -17,6 +19,11 @@ const ModeSwitch = () => {
     ],
     []
   );
+
+  useEffect(() => {
+    const unsubscribe = subscribe(() => {});
+    return unsubscribe;
+  }, [subscribe]);
 
   /**
    * 拉取并解码 mp3 资源后，通过 playSpeechBuffer 交给 Worklet 播放。
