@@ -31,6 +31,7 @@ export const handleChatInput = async (
       userId,
       socket,
       content,
+      timestamp,
     });
     if (!flowSuccess) {
       return;

@@ -54,6 +54,7 @@ export const processTextToSpeechChatFlow = async ({
   requestId,
   timestamp,
 }: textToSpeechChatFlowParams): Promise<boolean> => {
+  console.log(timestamp, 'timestamp');
   // 只有字符串才能写入文本列，先做类型校验以防异常
   if (typeof content !== "string") {
     console.error("textChatFlow: 收到的文本内容非法，要求字符串", {
@@ -238,8 +239,8 @@ export const processTextToSpeechChatFlow = async ({
 
     // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
     socket.data.clientConversations.push(
-      { role: "user", content },
-      { role: "assistant", content: assistantContent }
+      { role: "user", content, timestamp },
+      { role: "assistant", content: assistantContent, timestamp: Date.now() }
     );
     if (socket.data.clientConversations.length >= 100) {
       compressClientConversations({

@@ -12,6 +12,7 @@ interface TextChatFlowParams {
   userId: string;
   socket: Socket;
   content: unknown;
+  timestamp: number;
 }
 
 /**
@@ -25,6 +26,7 @@ export const processTextChatFlow = async ({
   userId,
   socket,
   content,
+  timestamp
 }: TextChatFlowParams): Promise<boolean> => {
   // 只有字符串才能写入文本列，先做类型校验以防异常
   if (typeof content !== "string") {
@@ -72,6 +74,7 @@ export const processTextChatFlow = async ({
   });
 
   try {
+    const assistantTimestamp = Date.now();
     const text = responseStream.output_text;
     const chunkPayload = serializePayload({
       event: "chat-response-complete",
@@ -80,7 +83,7 @@ export const processTextChatFlow = async ({
         conversationId,
         role: "assistant",
         content: text,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(assistantTimestamp).toISOString(),
       },
     });
     socket.emit("message", chunkPayload);
@@ -88,8 +91,8 @@ export const processTextChatFlow = async ({
     if (text) {
       // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
       socket.data.clientConversations.push(
-        { role: "user", content },
-        { role: "assistant", content: text }
+        { role: "user", content, timestamp },
+        { role: "assistant", content: text, timestamp: assistantTimestamp }
       );
       if (socket.data.clientConversations.length >= 100) {
         compressClientConversations({
