@@ -469,7 +469,8 @@ export const useTtsAudioPlayer = () => {
           if (!sentenceId) {
             break;
           }
-          const actionId = safeString(payload.action);
+          // 后端 payload 不再返回 action 字段，这里随机选择 talk1/talk2 作为动作 id，保持动画交互
+          const actionId = Math.random() < 0.5 ? "talk1" : "talk2";
           const requestId = safeString(payload.requestId);
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
