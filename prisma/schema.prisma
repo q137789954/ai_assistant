@@ -118,8 +118,8 @@ model ConversationMessage {
 model UserDailyThread {
   /// 自增主键
   id        BigInt   @id @default(autoincrement())
-  /// 归属用户 ID（对应 user.id）
-  userId    BigInt   @map("user_id")
+  /// 归属用户 ID（对应 user.id 的字符串主键）
+  userId    String   @map("user_id")
   /// 业务日期，仅保留日期部分（示例：2026-01-05）
   day       DateTime @db.Date
   /// 主题文本，最长 120 字符（业务要求 ≤ 30 字）
