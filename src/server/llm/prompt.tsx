@@ -70,3 +70,99 @@ export const getThreadCompressorPrompt = ({
 `;
   return prompt;
 };
+
+
+export const getUserProfileUpdatePrompt = ({ user_profile_old, session_log}: { user_profile_old: string; session_log: string }) => {
+  const prompt = `# Role: 用户画像侧写师 (Profile Profiler)
+
+## Goal
+基于「旧画像 Old Profile（JSON）」与「本次会话 Session Log（完整文本）」生成“更新后的用户画像（JSON）”。
+只记录确凿事实：必须能在 Session Log 中找到明确文本依据；不推测、不脑补、不做心理分析。
+
+## Inputs
+1) Old Profile: ${user_profile_old}
+2) Session Log: ${session_log}
+
+## Core Principle（保守更新 + 新优先）
+- 只能从 Session Log 抽取“新增/更新”信息；Old Profile 只用于“继承补全”。
+- 若 Session Log 与 Old Profile 冲突：以 Session Log 为准。
+- 若 Session Log 未涉及某字段：默认继承 Old Profile 原值。
+- 但一旦触发“落库限制”（数量/长度/总大小超限），允许为了控体积裁剪继承的旧值（见 Storage Constraints）。
+
+## Evidence Gate（证据门槛：必须执行但不输出证据）
+- 任何“新增/更新”的字段值或数组项，必须能在 Session Log 中找到语义一致的明确表述，且符合字段规则。
+- 不满足证据门槛：丢弃该新增/更新，不得写入。
+
+## Extraction Rules（字段提取规则）
+### nickname
+仅当用户明确表达“叫我X / 请叫我X / 我是X（指称呼）”时更新，否则继承旧值。
+
+### relation
+仅当用户明确给出双方关系定义（如“你是我的…/我们是…”）时更新，否则继承旧值。
+
+### self_tags
+仅收录用户第一人称明确“身份/标签/状态”的陈述（例如“我是前端工程师”）。
+禁止通过推断。
+
+### preferences
+仅当用户明确表达“喜欢/偏好/更想要”或“不喜欢/讨厌/不想要”且对象清晰时收录。
+
+### taboos
+仅当用户使用强硬语气明确禁止（强约束 + 明确对象）时收录：
+如“别提X / 不要再说X / 禁止X / 闭嘴别讲X / 别问X”。
+
+## Normalization（规范化）
+- 字符串：去首尾空格；连续空白压缩为单个空格；去掉换行。
+- 数组：去重（完全相同字符串）；保持稳定顺序（按“在 Session Log 的首次出现顺序”，继承项排在新增项之后）。
+- 不添加解释、括号备注、前后缀。
+
+## Storage Constraints（落库约束：必须满足；优先丢弃旧数据）
+### 字段长度/数量硬限制
+- nickname：最大 32 字符；超长则不更新（保留旧值；若旧值也超长则置为 null）
+- relation：最大 32 字符；同上
+- self_tags：最多 12 条；每条最大 24 字符；超长条目丢弃
+- taboos：最多 12 条；每条最大 24 字符；超长条目丢弃
+- preferences.likes：最多 20 条；每条最大 24 字符；超长条目丢弃
+- preferences.dislikes：最多 20 条；每条最大 24 字符；超长条目丢弃
+
+### 继承裁剪优先级（你要的“先丢弃老数据”）
+当某数组超过最大条数时：
+1) 先裁剪“从 Old Profile 继承来的旧条目”（从尾部开始丢弃）
+2) 若仍超限，再裁剪“本次会话新增条目”（从尾部开始丢弃）
+
+### 总大小限制
+- 最终 JSON 序列化为字符串后的总长度不得超过 4096 字符。
+- 若超限：按以下顺序丢弃内容直到不超限（不要截断字符串本体）：
+
+优先丢弃“继承的旧数据”：
+1) preferences.likes / preferences.dislikes 的【继承项】尾部
+2) self_tags 的【继承项】尾部
+3) taboos 的【继承项】尾部
+4) nickname / relation 若是继承且仍超限，可置为 null（仅在必须控体积时）
+
+若继承项已尽仍超限，再丢弃“本次会话新增数据”：
+5) preferences.likes / preferences.dislikes 的【新增项】尾部
+6) self_tags 的【新增项】尾部
+7) taboos 的【新增项】尾部
+8) 最后手段：nickname / relation 若为新增且仍超限，可置为 null
+
+## Forbidden（严禁）
+- 心理/性格推断、价值判断
+- 隐私信息（手机号、住址、账号等）
+- 任何不在 Session Log 中明确出现的信息
+- 输出中夹带说明文字、Markdown、代码块
+
+## Output（只输出纯 JSON，字段必须齐全）
+{
+  "nickname": string | null,
+  "relation": string | null,
+  "self_tags": string[],
+  "taboos": string[],
+  "preferences": {
+    "likes": string[],
+    "dislikes": string[]
+  }
+}
+`
+  return prompt;
+};
