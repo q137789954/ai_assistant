@@ -5,6 +5,7 @@ import { prisma } from "@/server/db/prisma";
 import { irritablePrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
 import { compressClientConversations } from '../clientConversationsProcessors';
+import { refreshRecentUserDailyThreads } from "../userContextLoader";
 
 interface textToSpeechChatFlowParams {
   clientId: string;
@@ -244,10 +245,28 @@ export const processTextToSpeechChatFlow = async ({
       { role: "user", content, timestamp },
       { role: "assistant", content: assistantContent, timestamp: assistantTimestamp }
     );
-    if (socket.data.clientConversations.length >= 100) {
+    console.log(socket.data.clientConversations.length);
+    if (socket.data.clientConversations.length >= 10) {
+      console.log('textToSpeechChatFlow: 截断会话上下文');
+      // 异步触发线程压缩，压缩成功后刷新本次连接的最近 7 天 threads
       compressClientConversations({
-        socket
+        socket,
+        batchSize: 10,
       })
+        .then((result) => {
+          if (!result) {
+            return;
+          }
+          console.log('textToSpeechChatFlow: 触发线程压缩成功', result)
+          return refreshRecentUserDailyThreads(socket);
+        })
+        .catch((error) => {
+          console.error("textToSpeechChatFlow: 线程压缩触发失败", {
+            clientId,
+            conversationId,
+            error,
+          });
+        });
     }
   }
 

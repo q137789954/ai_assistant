@@ -9,6 +9,7 @@ import OpenAI from "openai";
 import { closeAsrConnection, initializeAsrConnection } from "./asrConnection";
 import { updateUserProfileOnDisconnect } from "./handlers/userProfileUpdater";
 import { compressClientConversations } from "./handlers/clientConversationsProcessors";
+import { loadUserContextOnConnect } from "./handlers/userContextLoader";
 
 /**
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
@@ -129,7 +130,7 @@ const clients = new Map<string, Socket>();
 /**
  * 每当新的连接建立则注册各类事件。
  */
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   const clientId = randomUUID();
   const conversationId = randomUUID();
   // 把本次会话的 conversationId 暂存到 socket.data，方便 ASR 连接等后续处理读取
@@ -146,6 +147,9 @@ io.on("connection", (socket) => {
   socket.data.clientConversations = [];
   // 记录本次连接期间出现过的日期，断开时用于更新用户画像
   socket.data.userProfileUpdateDays = [];
+
+  // 建立连接后加载用户画像与 userDailyThreads，供本次 WebSocket 流程复用
+  await loadUserContextOnConnect(socket);
 
   const llmClient = new OpenAI({
     apiKey: process.env.GROKKINGAI_API_KEY?.trim(),

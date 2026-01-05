@@ -5,6 +5,7 @@ import { prisma } from "@/server/db/prisma";
 import { irritablePrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
 import { compressClientConversations } from '../clientConversationsProcessors';
+import { refreshRecentUserDailyThreads } from "../userContextLoader";
 
 interface TextChatFlowParams {
   clientId: string;
@@ -37,6 +38,8 @@ export const processTextChatFlow = async ({
     });
     return false;
   }
+  console.log(socket.data.userDailyThreadsRecent, '最近 threads');
+  console.log(socket.data.userDailyThreadsTop, '历史热门 threads');
   // 打开“火力全开”模式：不等待写库完成就继续后续流程，但要专门捕获异常避免未处理的 Promise 拒绝
   const userMessageCreatePromise = prisma.conversationMessage.create({
     data: {
@@ -94,11 +97,28 @@ export const processTextChatFlow = async ({
         { role: "user", content, timestamp },
         { role: "assistant", content: text, timestamp: assistantTimestamp }
       );
-      if (socket.data.clientConversations.length >= 100) {
+      console.log(socket.data.clientConversations.length, '长度');
+      if (socket.data.clientConversations.length >= 10) {
+        // 异步触发线程压缩，成功落库后刷新本次连接的最近 7 天 threads
         compressClientConversations({
-          socket
+          socket,
+          batchSize: 10,
         })
-      };
+          .then((result) => {
+            if (!result) {
+              return;
+            }
+            console.log('textToSpeechChatFlow: 触发线程压缩成功', result)
+            return refreshRecentUserDailyThreads(socket);
+          })
+          .catch((error) => {
+            console.error("textChatFlow: 线程压缩触发失败", {
+              clientId,
+              conversationId,
+              error,
+            });
+          });
+      }
       try {
         await prisma.conversationMessage.create({
           data: {
