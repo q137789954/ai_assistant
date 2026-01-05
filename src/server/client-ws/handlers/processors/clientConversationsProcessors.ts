@@ -258,6 +258,13 @@ export const compressClientConversations = async ({
       console.log("normalizedThreads", normalizedThreads);
 
       try {
+        // 先清理当天已有线程，确保本次生成结果覆盖旧数据
+        await prisma.userDailyThread.deleteMany({
+          where: {
+            userId,
+            day: dayDate,
+          },
+        });
         // 批量写入当日线程，使用 skipDuplicates 避免重复插入
         await prisma.userDailyThread.createMany({
           data: normalizedThreads.map((thread) => ({
