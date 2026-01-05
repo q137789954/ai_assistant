@@ -122,7 +122,6 @@ export const updateUserProfileOnDisconnect = async (socket: Socket) => {
       if (!sessionLog) {
         continue;
       }
-      console.log(sessionLog, 'sessionLog');
 
       // 构建 LLM 提示词，传入旧画像与当天聊天记录
       const prompt = getUserProfileUpdatePrompt({
@@ -164,7 +163,6 @@ export const updateUserProfileOnDisconnect = async (socket: Socket) => {
       let parsedProfile: unknown = null;
       try {
         parsedProfile = JSON.parse(responseText);
-        console.log(parsedProfile, 'parsedProfile');
       } catch (error) {
         console.error("updateUserProfileOnDisconnect: JSON 解析失败", {
           dayKey,

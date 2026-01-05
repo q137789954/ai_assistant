@@ -4,7 +4,7 @@ import { ConversationMessageRole } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { irritablePrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
-import { compressClientConversations } from './clientConversationsProcessors';
+import { compressClientConversations } from '../clientConversationsProcessors';
 
 interface textToSpeechChatFlowParams {
   clientId: string;
