@@ -4,6 +4,7 @@ import { ConversationMessageRole } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { irritablePrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
+import { compressClientConversations } from './clientConversationsProcessors';
 
 interface textToSpeechChatFlowParams {
   clientId: string;
@@ -87,6 +88,16 @@ export const processTextToSpeechChatFlow = async ({
   const chatHistory = Array.isArray(socket.data.clientConversations)
     ? socket.data.clientConversations
     : [];
+
+    const chatHistorySummary = socket.data.chatHistorySummary;
+    if (chatHistorySummary) {
+      // 如果存在历史摘要，则将其作为系统提示的一部分传入
+      chatHistory.unshift({
+        role: "system",
+        content: `这是此前的对话摘要，请在新的摘要中延续其关键信息：${chatHistorySummary}`,
+      });
+    }
+
   const responseStream = await socket.data.llmClient.chat.completions.create({
     model: "grok-4-fast-non-reasoning",
     // model: "qwen-turbo",
@@ -230,10 +241,10 @@ export const processTextToSpeechChatFlow = async ({
       { role: "user", content },
       { role: "assistant", content: assistantContent }
     );
-    // 超过则删掉最前面的（保留最后 20 条）
-    const overflow = socket.data.clientConversations.length - 20;
-    if (overflow > 0) {
-      socket.data.clientConversations.splice(0, overflow);
+    if (socket.data.clientConversations.length >= 100) {
+      compressClientConversations({
+        socket
+      })
     }
   }
 

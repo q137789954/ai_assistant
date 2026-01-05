@@ -8,12 +8,10 @@ import { Socket } from "socket.io";
  */
 export const compressClientConversations = async ({
   socket,
-  previousSummary,
   batchSize = 100,
   model = "grok-4-fast-non-reasoning",
 }: {
   socket: Socket;
-  previousSummary?: string;
   batchSize?: number;
   model?: string;
 }): Promise<string | null> => {
@@ -22,6 +20,7 @@ export const compressClientConversations = async ({
     return null;
   }
   socket.data.clientConversationsCompressing = true;
+  const chatHistorySummary = socket.data.chatHistorySummary;
 
   // 安全兜底，确保 clientConversations 始终是数组，避免后续 splice 触发异常
   const conversations = Array.isArray(socket.data.clientConversations)
@@ -50,11 +49,11 @@ export const compressClientConversations = async ({
       content:
         "你是对话整理助手，需要把提供的多轮对话压缩成一条中文摘要，保留人物关系、关键事实、决策与未解决问题，避免冗余与情绪化措辞。",
     },
-    ...(previousSummary
+    ...(chatHistorySummary
       ? [
           {
-            role: "user",
-            content: `这是此前的对话摘要，请在新的摘要中延续其关键信息：${previousSummary}`,
+            role: "system",
+            content: `这是此前的对话摘要，请在新的摘要中延续其关键信息：${chatHistorySummary}`,
           },
         ]
       : []),
@@ -84,10 +83,8 @@ export const compressClientConversations = async ({
     }
 
     // 用摘要替换掉被压缩的历史消息，避免上下文无限增长
-    conversations.splice(0, chunk.length, {
-      role: "assistant",
-      content: `对话摘要：${summaryText}`,
-    });
+    conversations.splice(0, chunk.length);
+    socket.data.chatHistorySummary = summaryText;
 
     return summaryText;
   } catch (error) {

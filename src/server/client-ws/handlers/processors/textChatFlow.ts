@@ -4,6 +4,7 @@ import { ConversationMessageRole } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { irritablePrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
+import { compressClientConversations } from './clientConversationsProcessors';
 
 interface TextChatFlowParams {
   clientId: string;
@@ -90,11 +91,11 @@ export const processTextChatFlow = async ({
         { role: "user", content },
         { role: "assistant", content: text }
       );
-      // 超过则删掉最前面的（保留最后 20 条）
-      const overflow = socket.data.clientConversations.length - 20;
-      if (overflow > 0) {
-        socket.data.clientConversations.splice(0, overflow);
-      }
+      if (socket.data.clientConversations.length >= 100) {
+        compressClientConversations({
+          socket
+        })
+      };
       try {
         await prisma.conversationMessage.create({
           data: {
