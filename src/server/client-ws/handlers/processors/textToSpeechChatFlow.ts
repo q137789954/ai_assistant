@@ -247,7 +247,7 @@ export const processTextToSpeechChatFlow = async ({
       { role: "user", content, timestamp },
       { role: "assistant", content: assistantContent, timestamp: assistantTimestamp }
     );
-    if (socket.data.clientConversations.length >= 100) {
+    if (socket.data.clientConversations.length >= 20) {
       compressClientConversations({
         socket
       })

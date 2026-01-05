@@ -10,7 +10,7 @@ import { getThreadCompressorPrompt } from "@/server/llm/prompt";
  */
 export const compressClientConversations = async ({
   socket,
-  batchSize = 100,
+  batchSize = 20,
   model = "grok-4-fast-non-reasoning",
 }: {
   socket: Socket;
@@ -254,6 +254,8 @@ export const compressClientConversations = async ({
       if (normalizedThreads.length === 0) {
         continue;
       }
+
+      console.log("normalizedThreads", normalizedThreads);
 
       try {
         // 批量写入当日线程，使用 skipDuplicates 避免重复插入
