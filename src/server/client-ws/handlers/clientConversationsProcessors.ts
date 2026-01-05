@@ -10,7 +10,7 @@ import { getThreadCompressorPrompt } from "@/server/llm/prompt";
  */
 export const compressClientConversations = async ({
   socket,
-  batchSize = 20,
+  batchSize = 100,
   model = "grok-4-fast-non-reasoning",
 }: {
   socket: Socket;
@@ -85,7 +85,7 @@ export const compressClientConversations = async ({
     }
 
     // 未超过阈值时无需压缩，直接返回
-    if (conversations.length <= batchSize) {
+    if (conversations.length < batchSize) {
       return null;
     }
 
@@ -222,6 +222,8 @@ export const compressClientConversations = async ({
         ? (parsedResult as { threads: Array<{ text?: unknown; score?: unknown }> })
             .threads
         : [];
+
+      console.log(threads, 'threads');
       // 过滤空文本与非法评分，统一裁剪到数据库字段允许范围
       const normalizedThreads = threads
         .map((thread) => {

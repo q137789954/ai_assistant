@@ -54,7 +54,6 @@ export const processTextToSpeechChatFlow = async ({
   requestId,
   timestamp,
 }: textToSpeechChatFlowParams): Promise<boolean> => {
-  console.log(timestamp, 'timestamp');
   // 只有字符串才能写入文本列，先做类型校验以防异常
   if (typeof content !== "string") {
     console.error("textChatFlow: 收到的文本内容非法，要求字符串", {
@@ -67,7 +66,6 @@ export const processTextToSpeechChatFlow = async ({
   // 验证成功后立即将用户输入写入数据库，便于会话记录与问题追踪
   // 读取 Grok 流式响应，累计文本并在每次收到 chunk 后尝试分句。
   try {
-    console.log('尝试把用户输入写入消息表');
     // 尝试把用户输入写入消息表，便于后续会话追踪
     await prisma.conversationMessage.create({
       data: {
@@ -222,7 +220,6 @@ export const processTextToSpeechChatFlow = async ({
     const assistantTimestamp = Date.now();  
     // 如果助手生成了文字回复，同步写入数据库以完整记录会话
     try {
-      console.log('尝试把助手回复写入消息表');
       await prisma.conversationMessage.create({
         data: {
           id: randomUUID(),
@@ -247,7 +244,7 @@ export const processTextToSpeechChatFlow = async ({
       { role: "user", content, timestamp },
       { role: "assistant", content: assistantContent, timestamp: assistantTimestamp }
     );
-    if (socket.data.clientConversations.length >= 20) {
+    if (socket.data.clientConversations.length >= 100) {
       compressClientConversations({
         socket
       })

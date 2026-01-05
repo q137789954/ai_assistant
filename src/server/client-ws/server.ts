@@ -8,6 +8,7 @@ import { ChatInputPayload } from "./types";
 import OpenAI from "openai";
 import { closeAsrConnection, initializeAsrConnection } from "./asrConnection";
 import { updateUserProfileOnDisconnect } from "./handlers/userProfileUpdater";
+import { compressClientConversations } from "./handlers/clientConversationsProcessors";
 
 /**
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
@@ -168,6 +169,10 @@ io.on("connection", (socket) => {
   
   socket.on("disconnect", async (reason) => {
     await updateUserProfileOnDisconnect(socket);
+    // 断开时若对话上下文足够，尝试压缩并更新 userDailyThread
+    if (Array.isArray(socket.data.clientConversations) && socket.data.clientConversations.length >= 2) {
+      await compressClientConversations({ socket,batchSize: 2 });
+    }
     closeAsrConnection(socket);
     cleanupClient(clientId, clients, io);
   });
