@@ -134,3 +134,26 @@ model ConversationMessage {
   @@index([userId], map: "conversation_message_user_id_idx")
   @@map("conversation_message")
 }
+
+/// 用户每日主题线程表，用于记录用户在某个业务日期的文本主题与评分
+model UserDailyThread {
+  /// 自增主键
+  id        BigInt   @id @default(autoincrement()) @db.BigInt
+  /// 归属用户 ID（业务侧用户主键）
+  userId    BigInt   @map("user_id") @db.BigInt
+  /// 业务日期，仅保留日期部分（示例：2026-01-05）
+  day       DateTime @db.Date
+  /// 主题文本，最长 120 字符（业务要求 ≤ 30 字）
+  text      String   @db.VarChar(120)
+  /// 评分，0-100 之间的整数
+  score     Int      @db.SmallInt
+  /// 创建时间
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// 更新时间（自动更新）
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, day, text], map: "uq_user_day_text")
+  @@index([userId, day(sort: Desc)], map: "idx_user_day")
+  @@index([userId, day(sort: Desc), score(sort: Desc)], map: "idx_user_day_score")
+  @@map("user_daily_threads")
+}
