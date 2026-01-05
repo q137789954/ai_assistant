@@ -1,81 +1,66 @@
-/// Prisma Client 生成器，负责根据 schema 自动生成类型安全的客户端代码
 generator client {
   provider = "prisma-client-js"
 }
 
-/// 数据源配置，使用 PostgreSQL 并通过环境变量读取连接字符串
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-/// 会话消息角色枚举，用于区分系统/用户/助手/工具来源
-enum ConversationMessageRole {
-  SYSTEM
-  USER
-  ASSISTANT
-  TOOL
-}
-
 /// 用户核心信息表，存储登录所需的基本字段
 model User {
   /// 唯一主键字符串，由业务层生成后写入
-  id            String    @id @default(cuid()) @db.Text
+  id            String                @id @default(cuid())
   /// 用户的展示名称，可选
-  name          String?   @db.Text
+  name          String?
   /// 用户邮箱，可选但确保全局唯一
-  email         String?   @unique(map: "user_email_key") @db.Text
+  email         String?               @unique
   /// 邮箱验证时间戳，允许为空
-  emailVerified DateTime? @db.Timestamp(3)
+  emailVerified DateTime?
   /// 头像链接，可选
-  image         String?   @db.Text
+  image         String?
   /// 密码哈希，可选，用于本地登录方案
-  passwordHash  String?   @db.Text
+  passwordHash  String?
   /// 记录创建时间，默认当前时间
-  createdAt     DateTime  @default(now()) @db.Timestamp(3)
+  createdAt     DateTime              @default(now())
   /// 更新时间，需要由业务自行更新
-  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamp(3)
-
-  /// 关联的账户记录列表
+  updatedAt     DateTime              @default(now()) @updatedAt
   accounts      Account[]
-  /// 关联的会话记录列表
-  sessions      Session[]
-  /// 关联的聊天消息，用于统计和回溯
   messages      ConversationMessage[]
+  sessions      Session[]
+  profile       UserProfile?
 
   @@map("user")
 }
 
 /// 第三方 OAuth / 本地账号绑定表，关联 User
 model Account {
-  id                String   @id @default(cuid()) @db.Text
+  id                String   @id @default(cuid())
   /// 所属用户 ID
-  userId            String   @db.Text
+  userId            String
   /// 账户类型（例如 oauth）
-  type              String   @db.Text
+  type              String
   /// 提供商名称（如 google）
-  provider          String   @db.Text
+  provider          String
   /// 第三方账号 ID
-  providerAccountId String   @db.Text
+  providerAccountId String
   /// 刷新令牌
-  refresh_token     String?  @db.Text
+  refresh_token     String?
   /// 访问令牌
-  access_token      String?  @db.Text
+  access_token      String?
   /// 过期时间（秒）
-  expires_at        Int?     @db.Integer
+  expires_at        Int?
   /// 令牌类型
-  token_type        String?  @db.Text
+  token_type        String?
   /// 授权范围
-  scope             String?  @db.Text
+  scope             String?
   /// ID 令牌
-  id_token           String?  @db.Text
+  id_token          String?
   /// 会话状态
-  session_state      String?  @db.Text
-  createdAt         DateTime @default(now()) @db.Timestamp(3)
-  updatedAt         DateTime @default(now()) @updatedAt @db.Timestamp(3)
-
-  /// 关联的用户记录
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId], map: "account_provider_provider_account_id_key")
   @@index([userId], map: "account_user_id_idx")
@@ -84,15 +69,13 @@ model Account {
 
 /// 会话表，用于管理当前登录会话
 model Session {
-  id           String   @id @default(cuid()) @db.Text
-  sessionToken String   @unique(map: "session_session_token_key") @db.Text
-  userId       String   @db.Text
-  expires      DateTime @db.Timestamp(3)
-  createdAt    DateTime @default(now()) @db.Timestamp(3)
-  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamp(3)
-
-  /// 当前会话对应的用户
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  id           String   @id @default(cuid())
+  sessionToken String   @unique(map: "session_session_token_key")
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "session_user_id_idx")
   @@map("session")
@@ -100,35 +83,31 @@ model Session {
 
 /// 验证令牌表，用于短信/邮箱验证码等场景
 model VerificationToken {
-  identifier String   @db.Text
-  token      String   @db.Text
-  expires    DateTime @db.Timestamp(3)
+  identifier String
+  token      String   @unique
+  expires    DateTime
 
   @@id([identifier, token])
-  @@unique([token], map: "verification_token_token_key")
   @@map("verification_token")
 }
 
 /// 会话中的消息详情，包含文本或语音参数
 model ConversationMessage {
-  id              String                  @id @db.Text
-  conversationId  String                  @db.Text
+  id              String                  @id
+  conversationId  String
   /// 消息角色，仅允许 SYSTEM/USER/ASSISTANT/TOOL
   role            ConversationMessageRole
   /// 文本内容，非语音时必填
-  content         String?                 @db.Text
+  content         String?
   /// 是否为语音消息
   isVoice         Boolean                 @default(false)
   /// 语音时长（毫秒）
-  voiceDurationMs Int?                    @db.Integer
+  voiceDurationMs Int?
   /// 归属用户 ID，用于关联发送者
-  userId          String                  @db.Text
-  createdAt       DateTime                @default(now()) @db.Timestamp(3)
+  userId          String
+  createdAt       DateTime                @default(now())
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  /// 所属用户，用户被删除时级联删除消息
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-
-  /// 语音/文本的 payload 校验约束在数据库层实现，业务需保持字段一致性
   @@index([conversationId], map: "conversation_message_conversation_id_idx")
   @@index([conversationId, createdAt], map: "conversation_message_conversation_id_created_at_idx")
   @@index([userId], map: "conversation_message_user_id_idx")
@@ -138,9 +117,9 @@ model ConversationMessage {
 /// 用户每日主题线程表，用于记录用户在某个业务日期的文本主题与评分
 model UserDailyThread {
   /// 自增主键
-  id        BigInt   @id @default(autoincrement()) @db.BigInt
-  /// 归属用户 ID（业务侧用户主键）
-  userId    BigInt   @map("user_id") @db.BigInt
+  id        BigInt   @id @default(autoincrement())
+  /// 归属用户 ID（对应 user.id）
+  userId    BigInt   @map("user_id")
   /// 业务日期，仅保留日期部分（示例：2026-01-05）
   day       DateTime @db.Date
   /// 主题文本，最长 120 字符（业务要求 ≤ 30 字）
@@ -156,4 +135,29 @@ model UserDailyThread {
   @@index([userId, day(sort: Desc)], map: "idx_user_day")
   @@index([userId, day(sort: Desc), score(sort: Desc)], map: "idx_user_day_score")
   @@map("user_daily_threads")
+}
+
+/// 用户画像表，存储用户的结构化 profile 数据
+model UserProfile {
+  /// 自增主键
+  id        BigInt   @id @default(autoincrement())
+  /// 归属用户 ID（唯一）
+  userId    String   @unique @map("user_id")
+  /// 画像 JSON 数据
+  profile   Json
+  /// 创建时间
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// 更新时间（自动更新）
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+/// 会话消息角色枚举，用于区分系统/用户/助手/工具来源
+enum ConversationMessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+  TOOL
 }
