@@ -2,12 +2,12 @@ import http, { type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { Server, type Socket } from "socket.io";
 import { getToken } from "next-auth/jwt";
-import { queueVoiceSegment } from "./audio";
 import { cleanupClient, handleClientMessage, sendJoinNotifications } from "./clientLifecycle";
 import { handleChatInput } from "./handlers/chatInput";
 import { ChatInputPayload } from "./types";
 import OpenAI from "openai";
 import { closeAsrConnection, initializeAsrConnection } from "./asrConnection";
+import { updateUserProfileOnDisconnect } from "./handlers/userProfileUpdater";
 
 /**
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
@@ -41,6 +41,31 @@ const parseCookieHeader = (cookieHeader?: string): Partial<Record<string, string
   }
 
   return cookies;
+};
+
+/**
+ * 生成本地日期键（YYYY-MM-DD），用于记录需要更新画像的日期。
+ */
+const getDayKey = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * 记录 chat:input 发生的日期，同一天只记录一次。
+ */
+const recordUserProfileUpdateDay = (socket: Socket, timestamp: number) => {
+  const safeTimestamp = Number.isFinite(timestamp) ? timestamp : Date.now();
+  const dayKey = getDayKey(safeTimestamp);
+  if (!Array.isArray(socket.data.userProfileUpdateDays)) {
+    socket.data.userProfileUpdateDays = [];
+  }
+  if (!socket.data.userProfileUpdateDays.includes(dayKey)) {
+    socket.data.userProfileUpdateDays.push(dayKey);
+  }
 };
 
 /**
@@ -118,6 +143,8 @@ io.on("connection", (socket) => {
  * 每个连接对应的对话 ID，存储消息上下文。
  */
   socket.data.clientConversations = [];
+  // 记录本次连接期间出现过的日期，断开时用于更新用户画像
+  socket.data.userProfileUpdateDays = [];
 
   const llmClient = new OpenAI({
     apiKey: process.env.GROKKINGAI_API_KEY?.trim(),
@@ -134,10 +161,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("chat:input", (payload: ChatInputPayload) => {
+    // 每次收到输入时记录日期，同一天只保留一份
+    recordUserProfileUpdateDay(socket, payload.timestamp);
     handleChatInput(clientId, conversationId, userId, socket, payload);
   });
   
-  socket.on("disconnect", (reason) => {
+  socket.on("disconnect", async (reason) => {
+    await updateUserProfileOnDisconnect(socket);
     closeAsrConnection(socket);
     cleanupClient(clientId, clients, io);
   });
