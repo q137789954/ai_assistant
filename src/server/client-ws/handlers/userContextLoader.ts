@@ -111,7 +111,6 @@ export const refreshRecentUserDailyThreads = async (socket: Socket) => {
   const { startAt, endAt } = getRecentDayRange();
 
   try {
-    console.log("refreshRecentUserDailyThreads: 开始刷新最近 threads");
     const recentThreads = await prisma.userDailyThread.findMany({
       where: {
         userId,
@@ -129,8 +128,6 @@ export const refreshRecentUserDailyThreads = async (socket: Socket) => {
         },
       ],
     });
-
-    console.log("refreshRecentUserDailyThreads: 刷新最近 threads 成功", recentThreads);
 
     socket.data.userDailyThreadsRecent = recentThreads;
   } catch (error) {

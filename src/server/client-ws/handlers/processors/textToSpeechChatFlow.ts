@@ -2,7 +2,7 @@ import { Socket } from "socket.io";
 import { randomUUID } from "crypto";
 import { ConversationMessageRole } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { irritablePrompt } from "@/server/llm/prompt";
+import { getToSpeechPrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
 import { compressClientConversations } from '../clientConversationsProcessors';
 import { refreshRecentUserDailyThreads } from "../userContextLoader";
@@ -21,6 +21,7 @@ const TTS_END_PUNCTUATIONS = /[。！？!?]/;
 // 以上常量用于控制 Openspeech TTS 的各项参数，优先读取可调节的环境变量并保留合理默认值
 // LLM 可能会在回复中保留一个动作字段，后续需要识别并拆分出该部分。
 const ACTION_MARKER = /【动作：([^】]+)】/;
+const STREAM_REPLY_DELIMITER = "<<<END_REPLY>>>";
 
 /**
  * 试图从文本中提取动作标记，若存在则同时移除该片段并返回去除后的内容与动作名称。
@@ -86,19 +87,35 @@ export const processTextToSpeechChatFlow = async ({
       error,
     });
   }
-  // 复用当前 socket 中的历史对话上下文以便生成连续的 Chat 结果
-  const chatHistory = Array.isArray(socket.data.clientConversations)
+
+  // 组装“前情提要”：合并最近 7 天与历史高分 threads 的 text 内容
+  const recentThreads = Array.isArray(socket.data.userDailyThreadsRecent)
+    ? socket.data.userDailyThreadsRecent
+    : [];
+  const legacyRecentThreads = Array.isArray(socket.data.userDailyThreadsRecen)
+    ? socket.data.userDailyThreadsRecen
+    : [];
+  const topThreads = Array.isArray(socket.data.userDailyThreadsTop)
+    ? socket.data.userDailyThreadsTop
+    : [];
+  const runningSummary = [...recentThreads, ...legacyRecentThreads, ...topThreads]
+    .map((thread) => (typeof thread?.text === "string" ? thread.text : ""))
+    .filter(Boolean)
+    .join("\n");
+
+  // 最近对话与用户画像需要序列化为字符串，以便完整传给提示词模板
+  const recentMessagesSource = Array.isArray(socket.data.clientConversations)
     ? socket.data.clientConversations
     : [];
+  const recentMessages = JSON.stringify(recentMessagesSource);
+  const userProfile = JSON.stringify(socket.data.userProfile ?? {});
+  const systemPrompt = getToSpeechPrompt({
+    running_summary: runningSummary,
+    recent_messages: recentMessages,
+    user_profile: userProfile,
+  });
 
-    const chatHistorySummary = socket.data.chatHistorySummary;
-    if (chatHistorySummary) {
-      // 如果存在历史摘要，则将其作为系统提示的一部分传入
-      chatHistory.unshift({
-        role: "system",
-        content: `这是此前的对话摘要，请在新的摘要中延续其关键信息：${chatHistorySummary}`,
-      });
-    }
+  console.log(systemPrompt, 'systemPrompt');
 
   const responseStream = await socket.data.llmClient.chat.completions.create({
     model: "grok-4-fast-non-reasoning",
@@ -107,9 +124,8 @@ export const processTextToSpeechChatFlow = async ({
     messages: [
       {
         role: "system",
-        content: irritablePrompt.systemPrompt,
+        content: systemPrompt,
       },
-      ...chatHistory,
       {
         role: "user",
         content,
@@ -125,6 +141,12 @@ export const processTextToSpeechChatFlow = async ({
   let ttsPipeline: Promise<void> = Promise.resolve();
   let pendingAction: string | null = null;
   let actionHandledByTts = false;
+  // reply/json 是流式混合输出，需要拆分后分别处理
+  let replyEnded = false;
+  // replyBuffer 用于缓存未完全确认的文本，避免分隔符被拆段误判
+  let replyBuffer = "";
+  // jsonBuffer 累积分隔符后的结构化输出，等完整后统一解析
+  let jsonBuffer = "";
 
   // 通过 Promise 链把所有需要转换的句子串行化，避免 TTS 请求并发导致顺序错乱。
   const enqueueSentence = (sentence: string) => {
@@ -163,6 +185,22 @@ export const processTextToSpeechChatFlow = async ({
       });
   };
 
+  const handleReplyChunk = (textChunk: string) => {
+    if (!textChunk) {
+      return;
+    }
+    assistantContent += textChunk;
+    // 把当前 chunk 和上一轮未完成的片段拼接，提取出已经完整的句子并送入 TTS 管线
+    const combinedText = pendingSentence + textChunk;
+    const { sanitized, action } = stripActionMarker(combinedText);
+    if (action && !pendingAction) {
+      pendingAction = action;
+    }
+    const { sentences, remainder } = extractCompletedSentences(sanitized);
+    pendingSentence = remainder;
+    sentences.forEach(enqueueSentence);
+  };
+
   try {
     // 遍历的流式响应，逐步构建助手回复并推送 chunk
     for await (const chunk of responseStream) {
@@ -177,23 +215,78 @@ export const processTextToSpeechChatFlow = async ({
         firstChunkLogged = true;
       }
 
-      assistantContent += deltaContent;
       chunkIndex += 1;
-      // 把当前 chunk 和上一轮未完成的片段拼接，提取出已经完整的句子
-      const combinedText = pendingSentence + deltaContent;
-      const { sanitized, action } = stripActionMarker(combinedText);
-      if (action && !pendingAction) {
-        pendingAction = action;
+
+      if (!replyEnded) {
+        // LLM 先输出 reply，再输出分隔符与 JSON；这里需要按分隔符拆流
+        replyBuffer += deltaContent;
+        const delimiterIndex = replyBuffer.indexOf(STREAM_REPLY_DELIMITER);
+        if (delimiterIndex !== -1) {
+          // 找到分隔符：分隔符前是 reply，分隔符后是 JSON
+          const replyPart = replyBuffer.slice(0, delimiterIndex);
+          handleReplyChunk(replyPart);
+          const remaining = replyBuffer.slice(
+            delimiterIndex + STREAM_REPLY_DELIMITER.length
+          );
+          jsonBuffer += remaining;
+          replyBuffer = "";
+          replyEnded = true;
+          continue;
+        }
+
+        // 未找到分隔符时，保留可能是分隔符前缀的尾巴，避免误切
+        const safeLength = replyBuffer.length - (STREAM_REPLY_DELIMITER.length - 1);
+        if (safeLength > 0) {
+          const replyPart = replyBuffer.slice(0, safeLength);
+          replyBuffer = replyBuffer.slice(safeLength);
+          handleReplyChunk(replyPart);
+        }
+        continue;
       }
-      const { sentences, remainder } = extractCompletedSentences(sanitized);
-      pendingSentence = remainder;
-      sentences.forEach(enqueueSentence);
+
+      // reply 结束后，剩余流全量并入 JSON 缓冲区
+      jsonBuffer += deltaContent;
+    }
+
+    if (!replyEnded && replyBuffer) {
+      // 流式结束仍未遇到分隔符时，把剩余内容当作 reply 处理
+      handleReplyChunk(replyBuffer);
+      replyBuffer = "";
     }
 
     if (pendingSentence.trim()) {
       // 循环结束后如果还有残留片段，也需要转换为语音
       enqueueSentence(pendingSentence);
       pendingSentence = "";
+    }
+
+    if (jsonBuffer.trim()) {
+      // JSON 必须完整后再解析并下发给客户端
+      const jsonText = jsonBuffer.trim();
+      try {
+        const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+        console.log("textToSpeechChatFlow: 解析 LLM 结构化输出成功", {
+              requestId,
+              ...parsed,
+            })
+        socket.emit(
+          "message",
+          serializePayload({
+            event: "chat-response-meta",
+            data: {
+              requestId,
+              ...parsed,
+            },
+          })
+        );
+      } catch (error) {
+        console.error("textToSpeechChatFlow: 解析 LLM 结构化输出失败", {
+          clientId,
+          conversationId,
+          error,
+          jsonText,
+        });
+      }
     }
 
     // 等待所有排队的 TTS 请求完成后再继续后续流程
@@ -245,9 +338,7 @@ export const processTextToSpeechChatFlow = async ({
       { role: "user", content, timestamp },
       { role: "assistant", content: assistantContent, timestamp: assistantTimestamp }
     );
-    console.log(socket.data.clientConversations.length);
     if (socket.data.clientConversations.length >= 10) {
-      console.log('textToSpeechChatFlow: 截断会话上下文');
       // 异步触发线程压缩，压缩成功后刷新本次连接的最近 7 天 threads
       compressClientConversations({
         socket,
@@ -257,7 +348,6 @@ export const processTextToSpeechChatFlow = async ({
           if (!result) {
             return;
           }
-          console.log('textToSpeechChatFlow: 触发线程压缩成功', result)
           return refreshRecentUserDailyThreads(socket);
         })
         .catch((error) => {
