@@ -262,13 +262,31 @@ export const processTextToSpeechChatFlow = async ({
 
     if (jsonBuffer.trim()) {
       // JSON 必须完整后再解析并下发给客户端
-      const jsonText = jsonBuffer.trim();
+      const jsonTextRaw = jsonBuffer.trim();
+      let jsonText = jsonTextRaw;
+      const strayDelimiterIndex = jsonText.indexOf(STREAM_REPLY_DELIMITER);
+      if (strayDelimiterIndex !== -1) {
+        // 兜底处理：如果 JSON 后又混入分隔符，截断后再解析
+        jsonText = jsonText.slice(0, strayDelimiterIndex).trim();
+      }
+      if (!jsonText) {
+        return true;
+      }
+      const jsonStart = jsonText.indexOf("{");
+      const jsonEnd = jsonText.lastIndexOf("}");
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        // 兜底处理：只截取首尾花括号之间的 JSON，避免尾部夹杂杂讯
+        jsonText = jsonText.slice(jsonStart, jsonEnd + 1).trim();
+      }
+      if (!jsonText) {
+        return true;
+      }
       try {
         const parsed = JSON.parse(jsonText) as Record<string, unknown>;
         console.log("textToSpeechChatFlow: 解析 LLM 结构化输出成功", {
-              requestId,
-              ...parsed,
-            })
+          requestId,
+          ...parsed,
+        });
         socket.emit(
           "message",
           serializePayload({
@@ -285,6 +303,7 @@ export const processTextToSpeechChatFlow = async ({
           conversationId,
           error,
           jsonText,
+          jsonTextRaw,
         });
       }
     }
