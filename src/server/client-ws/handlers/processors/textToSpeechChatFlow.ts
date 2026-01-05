@@ -67,6 +67,7 @@ export const processTextToSpeechChatFlow = async ({
   // 验证成功后立即将用户输入写入数据库，便于会话记录与问题追踪
   // 读取 Grok 流式响应，累计文本并在每次收到 chunk 后尝试分句。
   try {
+    console.log('尝试把用户输入写入消息表');
     // 尝试把用户输入写入消息表，便于后续会话追踪
     await prisma.conversationMessage.create({
       data: {
@@ -76,6 +77,7 @@ export const processTextToSpeechChatFlow = async ({
         content,
         isVoice: false,
         userId,
+        createdAt: new Date(timestamp),
       },
     });
   } catch (error) {
@@ -217,8 +219,10 @@ export const processTextToSpeechChatFlow = async ({
   }
 
   if (assistantContent) {
+    const assistantTimestamp = Date.now();  
     // 如果助手生成了文字回复，同步写入数据库以完整记录会话
     try {
+      console.log('尝试把助手回复写入消息表');
       await prisma.conversationMessage.create({
         data: {
           id: randomUUID(),
@@ -227,6 +231,7 @@ export const processTextToSpeechChatFlow = async ({
           content: assistantContent,
           isVoice: false,
           userId,
+          createdAt: new Date(assistantTimestamp),
         },
       });
     } catch (error) {
@@ -240,7 +245,7 @@ export const processTextToSpeechChatFlow = async ({
     // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
     socket.data.clientConversations.push(
       { role: "user", content, timestamp },
-      { role: "assistant", content: assistantContent, timestamp: Date.now() }
+      { role: "assistant", content: assistantContent, timestamp: assistantTimestamp }
     );
     if (socket.data.clientConversations.length >= 100) {
       compressClientConversations({
