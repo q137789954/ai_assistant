@@ -10,7 +10,7 @@ import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
 import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
-import BreakMeter from "./page/components/BreakMeter";
+import BreakMeter, { type BreakMeterHandle } from "./page/components/BreakMeter";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -24,6 +24,7 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
 
   const requestId = useRef<string>(null);
   const speechStartTimestamp = useRef<number>(null);
+  const breakMeterRef = useRef<BreakMeterHandle | null>(null);
 
 
   const ensureSpeechSession = useCallback(() => {
@@ -62,8 +63,41 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
   );
 
   useEffect(() => {
-    const unsubscribe = subscribe(() => {});
-    return unsubscribe;
+    // 监听 WebSocket 元信息事件，将服务端结算的破防增量映射到 BreakMeter
+    const unsubscribe = subscribe((event) => {
+      if (typeof event.data !== "string") {
+        return;
+      }
+
+      let parsed: { event?: string; data?: Record<string, unknown> } | null =
+        null;
+      try {
+        parsed = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (parsed && parsed.event === "chat-response-meta") {
+        // damage_delta 可能来自字符串或数字，统一转成数字后再更新破防条
+      const payload = parsed.data ?? {};
+      console.log(payload, 'payload')
+      const damageDeltaRaw = payload.damage_delta;
+      const damageDelta =
+        typeof damageDeltaRaw === "number"
+          ? damageDeltaRaw
+          : Number(damageDeltaRaw);
+      if (!Number.isFinite(damageDelta)) {
+        return;
+      }
+
+      breakMeterRef.current?.addRage(damageDelta);
+        return;
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [subscribe]);
 
   // 所有动画资源加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
@@ -120,6 +154,13 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
     }
   }, [chatbotVisible, dispatch]);
 
+  const onOverload = useCallback(() => {
+    // 破防值满时自动关闭 Chatbot 抽屉
+    if (dispatch) {
+      
+    }
+  }, [dispatch]);
+
   // 所有动画资源加载完之前展示一个加载中组件（最多10秒）
 
   return (
@@ -137,7 +178,7 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
         <Tabbar />
       </div>
       <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-132px)] relative">
-        <BreakMeter />
+        <BreakMeter ref={breakMeterRef} autoReset={false} onOverload={onOverload} />
         {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
         <AnimationPlayer />
       </div>
