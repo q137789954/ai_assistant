@@ -10,6 +10,7 @@ import { closeAsrConnection, initializeAsrConnection } from "./asrConnection";
 import { updateUserProfileOnDisconnect } from "./handlers/userProfileUpdater";
 import { compressClientConversations } from "./handlers/clientConversationsProcessors";
 import { loadUserContextOnConnect } from "./handlers/userContextLoader";
+import { loadRoastBattleRoundOnConnect } from "./handlers/roastBattleRoundLoader";
 
 /**
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
@@ -150,6 +151,8 @@ io.on("connection", async (socket) => {
 
   // 建立连接后加载用户画像与 userDailyThreads，供本次 WebSocket 流程复用
   await loadUserContextOnConnect(socket);
+  // 建立连接后准备吐槽对战回合数据，保证本次连接始终有可用回合上下文
+  await loadRoastBattleRoundOnConnect(socket);
 
   const llmClient = new OpenAI({
     apiKey: process.env.GROKKINGAI_API_KEY?.trim(),

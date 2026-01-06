@@ -9,7 +9,7 @@ CREATE TABLE "roast_battle_rounds" (
     "score" SMALLINT NOT NULL,
     "is_win" BOOLEAN NOT NULL,
     "roast_count" INTEGER NOT NULL DEFAULT 0,
-    "started_at" TIMESTAMPTZ(6) NOT NULL,
+    "started_at" TIMESTAMPTZ(6),
     "won_at" TIMESTAMPTZ(6),
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
 

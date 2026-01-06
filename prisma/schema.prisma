@@ -173,8 +173,8 @@ model RoastBattleRound {
   /// 本轮用户吐槽次数
   roastCount Int      @default(0) @map("roast_count")
 
-  /// 本轮开始时间
-  startedAt  DateTime @map("started_at") @db.Timestamptz(6)
+  /// 本轮开始时间（未开始时允许为空）
+  startedAt  DateTime? @map("started_at") @db.Timestamptz(6)
 
   /// 本轮胜利时间（没赢就为空）
   wonAt      DateTime? @map("won_at") @db.Timestamptz(6)
