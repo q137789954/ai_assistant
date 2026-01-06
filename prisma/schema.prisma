@@ -29,6 +29,8 @@ model User {
   messages      ConversationMessage[]
   sessions      Session[]
   profile       UserProfile?
+  /// 吐槽对战回合记录
+  roastBattleRounds RoastBattleRound[]
 
   @@map("user")
 }
@@ -152,6 +154,36 @@ model UserProfile {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_profiles")
+}
+
+/// 吐槽对战回合记录
+model RoastBattleRound {
+  id         BigInt   @id @default(autoincrement())
+
+  /// 归属用户 ID（对应 user.id）
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 本轮得分 0-100
+  score      Int      @db.SmallInt
+
+  /// 是否胜利
+  isWin      Boolean  @map("is_win")
+
+  /// 本轮用户吐槽次数
+  roastCount Int      @default(0) @map("roast_count")
+
+  /// 本轮开始时间
+  startedAt  DateTime @map("started_at") @db.Timestamptz(6)
+
+  /// 本轮胜利时间（没赢就为空）
+  wonAt      DateTime? @map("won_at") @db.Timestamptz(6)
+
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, startedAt(sort: Desc)], map: "idx_roast_battle_rounds_user_time")
+  @@index([userId, isWin], map: "idx_roast_battle_rounds_user_win")
+  @@map("roast_battle_rounds")
 }
 
 /// 会话消息角色枚举，用于区分系统/用户/助手/工具来源
