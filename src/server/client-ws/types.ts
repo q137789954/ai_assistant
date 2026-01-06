@@ -22,7 +22,7 @@ export interface ChatInputPayload {
   type: "chat:input";
   outputFormat: Format;
   inputFormat: Format;
-  content: string | Float32Array;
+  content: string | Float32Array | number[];
   chunkId?: string;
   requestId: string;
   timestamp: number;

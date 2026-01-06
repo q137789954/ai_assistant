@@ -5,7 +5,8 @@ interface speechChatFlowParams {
   conversationId: string;
   userId: string;
   socket: Socket;
-  content: Float32Array;
+  // 语音数据可能来自二进制流或 JSON 数组，统一允许 Float32Array 与 number[]
+  content: Float32Array | number[];
   chunkId: string | undefined;
   type: string;
   timestamp: number

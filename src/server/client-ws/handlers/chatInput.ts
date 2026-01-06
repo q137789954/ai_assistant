@@ -53,6 +53,15 @@ export const handleChatInput = async (
   }
 
   if((outputFormat === "speech" && inputFormat === "speech")) {
+    // 语音模式只接受数值数组或 Float32Array，先过滤掉字符串以避免下游类型错误
+    if (typeof content === "string") {
+      console.error("speechChatFlow: 收到的语音内容为字符串，已拒绝处理", {
+        clientId,
+        conversationId,
+        content,
+      });
+      return;
+    }
     const flowSuccess = await processSpeechToSpeechChatFlow({
       clientId,
       conversationId,
