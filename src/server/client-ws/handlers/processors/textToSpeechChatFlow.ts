@@ -4,7 +4,7 @@ import { ConversationMessageRole } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { getToSpeechPrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
-import { compressClientConversations } from '../clientConversationsProcessors';
+import { compressClientConversations } from "../clientConversationsProcessors";
 import { refreshRecentUserDailyThreads } from "../userContextLoader";
 
 interface textToSpeechChatFlowParams {
@@ -68,7 +68,7 @@ const extractFirstJson = (buffer: string) => {
       escaped = true;
       continue;
     }
-    if (char === "\"") {
+    if (char === '"') {
       inString = !inString;
       continue;
     }
@@ -146,6 +146,10 @@ export const processTextToSpeechChatFlow = async ({
     });
   }
 
+  if(socket.data.roastBattleRound.roastBattleEnabled!==true){
+    return true;
+  }
+
   // 组装“前情提要”：合并最近 7 天与历史高分 threads 的 text 内容
   const recentThreads = Array.isArray(socket.data.userDailyThreadsRecent)
     ? socket.data.userDailyThreadsRecent
@@ -156,7 +160,11 @@ export const processTextToSpeechChatFlow = async ({
   const topThreads = Array.isArray(socket.data.userDailyThreadsTop)
     ? socket.data.userDailyThreadsTop
     : [];
-  const runningSummary = [...recentThreads, ...legacyRecentThreads, ...topThreads]
+  const runningSummary = [
+    ...recentThreads,
+    ...legacyRecentThreads,
+    ...topThreads,
+  ]
     .map((thread) => (typeof thread?.text === "string" ? thread.text : ""))
     .filter(Boolean)
     .join("\n");
@@ -172,8 +180,6 @@ export const processTextToSpeechChatFlow = async ({
     recent_messages: recentMessages,
     user_profile: userProfile,
   });
-
-  console.log(systemPrompt, 'systemPrompt');
 
   const responseStream = await socket.data.llmClient.chat.completions.create({
     model: "grok-4-fast-non-reasoning",
@@ -291,7 +297,8 @@ export const processTextToSpeechChatFlow = async ({
       }
 
       // 未找到分隔符时，保留可能是分隔符前缀的尾巴，避免误切
-      const safeLength = replyBuffer.length - (STREAM_REPLY_DELIMITER.length - 1);
+      const safeLength =
+        replyBuffer.length - (STREAM_REPLY_DELIMITER.length - 1);
       if (safeLength > 0) {
         const replyPart = replyBuffer.slice(0, safeLength);
         replyBuffer = replyBuffer.slice(safeLength);
@@ -329,9 +336,39 @@ export const processTextToSpeechChatFlow = async ({
         }
         try {
           const parsed = JSON.parse(jsonText) as Record<string, unknown>;
-          const candidate = parsed.damage_delta;
+          const candidate = parsed.damage_delta || 0;
           if (typeof candidate === "number") {
             damageDelta = candidate;
+            socket.data.roastBattleRound!.score += candidate;
+          }
+          if(socket.data.roastBattleRound!.score>=100){
+            // 分数达到 100 则关闭对战功能，等待下一回合加载
+            socket.data.roastBattleRound.roastBattleEnabled = false;
+            // 达到胜利分数线，标记回合为胜利
+            socket.data.roastBattleRound!.isWin=true;
+            // 记录胜利时间
+            socket.data.roastBattleRound!.wonAt=new Date();
+            await prisma.roastBattleRound.update({
+              where: { id: socket.data.roastBattleRound!.id },
+              data: {
+                score: 100,
+                isWin: true,
+                wonAt: socket.data.roastBattleRound!.wonAt,
+                startedAt: socket.data.roastBattleRound!.startedAt,
+                roastCount: socket.data.roastBattleRound!.roastCount + 1,
+              },
+            });
+            // 向客户端发送胜利通知
+            const victoryPayload = serializePayload({
+              event: "roast-battle-victory",
+              data: {
+                clientId,
+                conversationId,
+                message: "恭喜你在吐槽对战中取得胜利！",
+              },
+            });
+            socket.emit("message", victoryPayload);
+            return true;
           }
           headJsonParsed = true;
           headJsonBuffer = "";
@@ -426,7 +463,7 @@ export const processTextToSpeechChatFlow = async ({
           requestId,
           ...parsed,
         });
-        console.log(parsed.damage_delta, 'parsed.damage_delta')
+        console.log(parsed.damage_delta, "parsed.damage_delta");
         socket.emit(
           "message",
           serializePayload({
@@ -470,7 +507,7 @@ export const processTextToSpeechChatFlow = async ({
   }
 
   if (assistantContent) {
-    const assistantTimestamp = Date.now();  
+    const assistantTimestamp = Date.now();
     // 如果助手生成了文字回复，同步写入数据库以完整记录会话
     try {
       await prisma.conversationMessage.create({
@@ -495,7 +532,11 @@ export const processTextToSpeechChatFlow = async ({
     // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
     socket.data.clientConversations.push(
       { role: "user", content, timestamp },
-      { role: "assistant", content: assistantContent, timestamp: assistantTimestamp }
+      {
+        role: "assistant",
+        content: assistantContent,
+        timestamp: assistantTimestamp,
+      }
     );
     if (socket.data.clientConversations.length >= 10) {
       // 异步触发线程压缩，压缩成功后刷新本次连接的最近 7 天 threads
@@ -594,8 +635,8 @@ async function streamSentenceToTts(params: {
         format: "pcm",
         sample_rate: 16000,
         // 情绪
-        emotion_scale:5,
-        emotion:'angry',
+        emotion_scale: 5,
+        emotion: "angry",
         // 语速
         // speech_rate:50
       },

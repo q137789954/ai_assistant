@@ -148,7 +148,8 @@ io.on("connection", async (socket) => {
   socket.data.clientConversations = [];
   // 记录本次连接期间出现过的日期，断开时用于更新用户画像
   socket.data.userProfileUpdateDays = [];
-
+  // 默认关闭吐槽对战功能，等待加载回合数据后根据情况开启
+  socket.data.roastBattleRound.roastBattleEnabled = false;
   // 建立连接后加载用户画像与 userDailyThreads，供本次 WebSocket 流程复用
   await loadUserContextOnConnect(socket);
   // 建立连接后准备吐槽对战回合数据，保证本次连接始终有可用回合上下文

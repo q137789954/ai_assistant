@@ -25,9 +25,11 @@ export const loadRoastBattleRoundOnConnect = async (socket: Socket) => {
       },
     });
 
+    console.log(existingRound, 'existingRound')
     if (existingRound) {
       // 命中未完成回合时直接复用，确保本次连接可继续该回合
       socket.data.roastBattleRound = existingRound;
+      socket.data.roastBattleRound.roastBattleEnabled = true;
       return;
     }
 
@@ -41,7 +43,10 @@ export const loadRoastBattleRoundOnConnect = async (socket: Socket) => {
       },
     });
 
+    console.log(newRound, 'newRound')
+
     socket.data.roastBattleRound = newRound;
+    socket.data.roastBattleRound.roastBattleEnabled = true;
   } catch (error) {
     // 并发连接可能触发唯一约束冲突，命中时回退为再次查询
     const isUniqueConflict =
@@ -58,6 +63,7 @@ export const loadRoastBattleRoundOnConnect = async (socket: Socket) => {
       });
       if (fallbackRound) {
         socket.data.roastBattleRound = fallbackRound;
+        socket.data.roastBattleRound.roastBattleEnabled = true;
         return;
       }
     }
