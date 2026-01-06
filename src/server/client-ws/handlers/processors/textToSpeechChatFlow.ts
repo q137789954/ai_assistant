@@ -385,9 +385,8 @@ export const processTextToSpeechChatFlow = async ({
             await prisma.roastBattleRound.update({
               where: { id: socket.data.roastBattleRound!.id },
               data: {
-                score: Math.min(100, socket.data.roastBattleRound.score),
-                isWin: true,
-                wonAt: socket.data.roastBattleRound!.wonAt,
+                score: Math.min(99, socket.data.roastBattleRound.score),
+                isWin: false,
                 startedAt: socket.data.roastBattleRound!.startedAt,
                 roastCount: socket.data.roastBattleRound!.roastCount + 1,
               },

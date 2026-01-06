@@ -23,6 +23,7 @@ const buildRoastBattleRoundSnapshot = (round?: RoastBattleRound | null) => {
 
 // 将当前连接对应的吐槽对战回合快照发送给客户端
 export const emitRoastBattleRoundSnapshot = (socket: Socket) => {
+  console.log("Emitting roast battle round snapshot to client.");
   const snapshot = buildRoastBattleRoundSnapshot(
     socket.data.roastBattleRound as RoastBattleRound | null | undefined,
   );

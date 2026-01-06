@@ -180,6 +180,7 @@ io.on("connection", async (socket) => {
 
   // 客户端请求当前吐槽对战回合时，返回最新快照
   socket.on("roast-battle-rounds:load", () => {
+    console.log("接收到了 roast-battle-rounds:load 事件");
     emitRoastBattleRoundSnapshot(socket);
   });
   

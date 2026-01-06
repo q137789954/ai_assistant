@@ -99,6 +99,7 @@ export default function Home() {
       switch (eventType) {
         case "roast-battle-rounds": {
           // 初始化时同步当前吐槽对战回合分数，确保破防条从真实进度开始
+          console.log("Initializing roast battle score:", parsed.data);
           const payload = parsed.data ?? {};
           const round = payload.round as { score?: number | string } | null;
           const scoreRaw = round?.score;
@@ -148,6 +149,7 @@ export default function Home() {
     if (status !== "open") {
       return;
     }
+    console.log("WebSocket 连接已就绪，正在加载吐槽对战回合数据");
     emitEvent("roast-battle-rounds:load");
   }, [status, emitEvent]);
 
