@@ -10,7 +10,10 @@ import { closeAsrConnection, initializeAsrConnection } from "./asrConnection";
 import { updateUserProfileOnDisconnect } from "./handlers/userProfileUpdater";
 import { compressClientConversations } from "./handlers/clientConversationsProcessors";
 import { loadUserContextOnConnect } from "./handlers/userContextLoader";
-import { loadRoastBattleRoundOnConnect } from "./handlers/roastBattleRoundLoader";
+import {
+  emitRoastBattleRoundSnapshot,
+  loadRoastBattleRoundOnConnect,
+} from "./handlers/roastBattleRoundLoader";
 
 /**
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
@@ -173,6 +176,11 @@ io.on("connection", async (socket) => {
     // 每次收到输入时记录日期，同一天只保留一份
     recordUserProfileUpdateDay(socket, payload.timestamp);
     handleChatInput(clientId, conversationId, userId, socket, payload);
+  });
+
+  // 客户端请求当前吐槽对战回合时，返回最新快照
+  socket.on("roast-battle-rounds:load", () => {
+    emitRoastBattleRoundSnapshot(socket);
   });
   
   socket.on("disconnect", async (reason) => {

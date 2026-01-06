@@ -27,7 +27,7 @@ export default function Home() {
   } = useAnimationPlayer();
   const { stopTtsPlayback } = useTtsAudioPlayer();
   const [showAnimationLoader, setShowAnimationLoader] = useState(true);
-  const { emitEvent, subscribe } = useWebSocketContext();
+  const { emitEvent, subscribe, status } = useWebSocketContext();
 
   const requestId = useRef<string>(null);
   const speechStartTimestamp = useRef<number>(null);
@@ -97,6 +97,18 @@ export default function Home() {
       const eventType = parsed.event;
 
       switch (eventType) {
+        case "roast-battle-rounds": {
+          // 初始化时同步当前吐槽对战回合分数，确保破防条从真实进度开始
+          const payload = parsed.data ?? {};
+          const round = payload.round as { score?: number | string } | null;
+          const scoreRaw = round?.score;
+          const score = typeof scoreRaw === "number" ? scoreRaw : Number(scoreRaw);
+          if (!Number.isFinite(score)) {
+            return;
+          }
+          breakMeterRef.current?.set(score);
+          break;
+        }
         case "chat-response-meta": {
           // 处理见下方专门逻辑
           // damage_delta 可能来自字符串或数字，统一转成数字后再更新破防条
@@ -130,6 +142,14 @@ export default function Home() {
       unsubscribe();
     };
   }, [subscribe]);
+
+  useEffect(() => {
+    // WebSocket 连接就绪后主动拉取当前吐槽对战回合数据
+    if (status !== "open") {
+      return;
+    }
+    emitEvent("roast-battle-rounds:load");
+  }, [status, emitEvent]);
 
   // 所有动画资源加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
   useEffect(() => {

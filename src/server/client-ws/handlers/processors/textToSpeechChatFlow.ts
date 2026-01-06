@@ -322,7 +322,7 @@ export const processTextToSpeechChatFlow = async ({
       }
 
       chunkIndex += 1;
-
+      console.log(headJsonParsed, 'headJsonParsed')
       if (!headJsonParsed) {
         // 先解析头部 JSON（仅包含 damage_delta），解析成功后才进入 reply 阶段
         headJsonBuffer += deltaContent;
@@ -335,19 +335,34 @@ export const processTextToSpeechChatFlow = async ({
           const candidate = parsed.damage_delta || 0;
           if (typeof candidate === "number") {
             damageDelta = candidate;
-            socket.data.roastBattleRound!.score += candidate;
+            socket.data.roastBattleRound.score += candidate;
           }
-          if(socket.data.roastBattleRound!.score>=100){
+          headJsonParsed = true;
+          headJsonBuffer = "";
+        } catch (error) {
+          console.error("textToSpeechChatFlow: 解析头部 JSON 失败", {
+            clientId,
+            conversationId,
+            error,
+            jsonText,
+            rawBuffer: headJsonBuffer,
+          });
+          // 解析失败时保留缓冲区，继续等待后续数据补齐
+          continue;
+        }
+        console.log("Current roast battle score:", socket.data.roastBattleRound.score);
+        try {
+          if (socket.data.roastBattleRound!.score >= 100) {
             // 分数达到 100 则关闭对战功能，等待下一回合加载
             socket.data.roastBattleEnabled = false;
             // 达到胜利分数线，标记回合为胜利
-            socket.data.roastBattleRound!.isWin=true;
+            socket.data.roastBattleRound!.isWin = true;
             // 记录胜利时间
-            socket.data.roastBattleRound!.wonAt=new Date();
+            socket.data.roastBattleRound!.wonAt = new Date();
             await prisma.roastBattleRound.update({
               where: { id: socket.data.roastBattleRound!.id },
               data: {
-                score: 100,
+                score: Math.min(100, socket.data.roastBattleRound.score),
                 isWin: true,
                 wonAt: socket.data.roastBattleRound!.wonAt,
                 startedAt: socket.data.roastBattleRound!.startedAt,
@@ -365,19 +380,21 @@ export const processTextToSpeechChatFlow = async ({
             });
             socket.emit("message", victoryPayload);
             return true;
+          }else {
+            console.log("Updating roast battle round score:", socket.data.roastBattleRound.score);
+            await prisma.roastBattleRound.update({
+              where: { id: socket.data.roastBattleRound!.id },
+              data: {
+                score: Math.min(100, socket.data.roastBattleRound.score),
+                isWin: true,
+                wonAt: socket.data.roastBattleRound!.wonAt,
+                startedAt: socket.data.roastBattleRound!.startedAt,
+                roastCount: socket.data.roastBattleRound!.roastCount + 1,
+              },
+            });
           }
-          headJsonParsed = true;
-          headJsonBuffer = "";
         } catch (error) {
-          console.error("textToSpeechChatFlow: 解析头部 JSON 失败", {
-            clientId,
-            conversationId,
-            error,
-            jsonText,
-            rawBuffer: headJsonBuffer,
-          });
-          // 解析失败时保留缓冲区，继续等待后续数据补齐
-          continue;
+          console.error("textToSpeechChatFlow: 更新对战回合失败", error);
         }
 
         // 头部 JSON 解析完成后，剩余内容可能包含 reply 或分隔符

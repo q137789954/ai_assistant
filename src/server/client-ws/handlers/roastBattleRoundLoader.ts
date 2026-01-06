@@ -1,6 +1,40 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type RoastBattleRound } from "@prisma/client";
 import { Socket } from "socket.io";
 import { prisma } from "@/server/db/prisma";
+import { serializePayload } from "../utils";
+
+// 将 Prisma 的回合记录转换为可安全下发的快照，避免 BigInt/Date 序列化问题
+const buildRoastBattleRoundSnapshot = (round?: RoastBattleRound | null) => {
+  if (!round) {
+    return null;
+  }
+
+  return {
+    id: round.id.toString(),
+    userId: round.userId,
+    score: round.score,
+    isWin: round.isWin,
+    roastCount: round.roastCount,
+    startedAt: round.startedAt ? round.startedAt.toISOString() : null,
+    wonAt: round.wonAt ? round.wonAt.toISOString() : null,
+    createdAt: round.createdAt.toISOString(),
+  };
+};
+
+// 将当前连接对应的吐槽对战回合快照发送给客户端
+export const emitRoastBattleRoundSnapshot = (socket: Socket) => {
+  const snapshot = buildRoastBattleRoundSnapshot(
+    socket.data.roastBattleRound as RoastBattleRound | null | undefined,
+  );
+  const payload = serializePayload({
+    event: "roast-battle-rounds",
+    data: {
+      round: snapshot,
+      enabled: socket.data.roastBattleEnabled === true,
+    },
+  });
+  socket.emit("message", payload);
+};
 
 /**
  * 在连接成功时加载用户最新一条未胜利的吐槽对战回合，
