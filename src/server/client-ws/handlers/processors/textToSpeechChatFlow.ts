@@ -6,6 +6,9 @@ import { getToSpeechPrompt } from "@/server/llm/prompt";
 import { serializePayload } from "../../utils";
 import { compressClientConversations } from "../clientConversationsProcessors";
 import { refreshRecentUserDailyThreads } from "../userContextLoader";
+import {
+  updateRoastBattleRound,
+} from "../roastBattleRoundLoader";
 
 interface textToSpeechChatFlowParams {
   clientId: string;
@@ -360,16 +363,7 @@ export const processTextToSpeechChatFlow = async ({
             socket.data.roastBattleRound!.isWin = true;
             // 记录胜利时间
             socket.data.roastBattleRound!.wonAt = new Date();
-            await prisma.roastBattleRound.update({
-              where: { id: socket.data.roastBattleRound!.id },
-              data: {
-                score: 100,
-                isWin: true,
-                wonAt: socket.data.roastBattleRound!.wonAt,
-                startedAt: socket.data.roastBattleRound!.startedAt,
-                roastCount: socket.data.roastBattleRound!.roastCount + 1,
-              },
-            });
+            await updateRoastBattleRound( socket.data.roastBattleRound);
             // 向客户端发送胜利通知
             const victoryPayload = serializePayload({
               event: "roast-battle-victory",

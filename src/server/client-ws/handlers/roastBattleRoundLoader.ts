@@ -38,6 +38,36 @@ export const emitRoastBattleRoundSnapshot = (socket: Socket) => {
 };
 
 /**
+ * 在断开连接时将内存中的回合数据回写到数据库，
+ * 确保 score / roastCount / isWin 等状态不会因断线而丢失。
+ */
+export const updateRoastBattleRound = async (round: RoastBattleRound | null | undefined) => {
+  if (!round) {
+    return;
+  }
+
+  try {
+    await prisma.roastBattleRound.update({
+      where: {
+        id: round.id,
+      },
+      data: {
+        score: Math.min(100, round.score),
+        isWin: round.isWin,
+        roastCount: round.roastCount,
+        startedAt: round.startedAt,
+        wonAt: round.wonAt,
+      },
+    });
+  } catch (error) {
+    console.error("updateRoastBattleRound: 回写对战回合失败", {
+      roundId: round.id,
+      error,
+    });
+  }
+};
+
+/**
  * 在连接成功时加载用户最新一条未胜利的吐槽对战回合，
  * 若不存在则初始化一条 startedAt 为空的记录并保存到 socket.data。
  */

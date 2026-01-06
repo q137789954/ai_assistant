@@ -13,6 +13,7 @@ import { loadUserContextOnConnect } from "./handlers/userContextLoader";
 import {
   emitRoastBattleRoundSnapshot,
   loadRoastBattleRoundOnConnect,
+  updateRoastBattleRound,
 } from "./handlers/roastBattleRoundLoader";
 
 /**
@@ -187,6 +188,8 @@ io.on("connection", async (socket) => {
 
   socket.on("disconnect", async (reason) => {
     await updateUserProfileOnDisconnect(socket);
+    // 断开连接时同步吐槽对战回合数据，避免进度丢失
+    await updateRoastBattleRound(socket.data.roastBattleRound);
     // 断开时若对话上下文足够，尝试压缩并更新 userDailyThread
     if (Array.isArray(socket.data.clientConversations) && socket.data.clientConversations.length >= 2) {
       await compressClientConversations({ socket,batchSize: 2 });
