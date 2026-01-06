@@ -11,6 +11,7 @@ import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
 import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
 import BreakMeter, { type BreakMeterHandle } from "./page/components/BreakMeter";
+import DefeatOverlay from "./page/components/DefeatOverlay";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -25,6 +26,8 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
   const requestId = useRef<string>(null);
   const speechStartTimestamp = useRef<number>(null);
   const breakMeterRef = useRef<BreakMeterHandle | null>(null);
+  // 击败弹窗显隐状态，用于在破防条满值时展示全屏提示
+  const [defeatOpen, setDefeatOpen] = useState(false);
 
 
   const ensureSpeechSession = useCallback(() => {
@@ -155,9 +158,11 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
   }, [chatbotVisible, dispatch]);
 
   const onOverload = useCallback(() => {
+    // 破防值满时弹出击败提示，同时可以在这里补充其他收尾逻辑
+    setDefeatOpen(true);
     // 破防值满时自动关闭 Chatbot 抽屉
     if (dispatch) {
-      
+      dispatch({ type: "SET_CHATBOT_VISIBILITY", payload: false });
     }
   }, [dispatch]);
 
@@ -178,7 +183,7 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
         <Tabbar />
       </div>
       <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-132px)] relative">
-        <BreakMeter ref={breakMeterRef} autoReset={false} onOverload={onOverload} />
+        <BreakMeter ref={breakMeterRef} autoReset={false} onOverload={onOverload} initialValue={99} />
         {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
         <AnimationPlayer />
       </div>
@@ -205,6 +210,10 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
       <div className="absolute w-full bottom-16">
         <ModeSwitch />
       </div>
+      <DefeatOverlay
+        open={defeatOpen}
+        onClose={() => setDefeatOpen(false)}
+      />
     </main>
   );
 }
