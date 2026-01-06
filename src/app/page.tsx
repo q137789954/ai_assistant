@@ -139,6 +139,10 @@ export default function Home() {
           break;
         }
         case "roast-battle-victory": {
+          // 重置语音播放与动画帧
+          stopTtsPlayback();
+          // resetToFirstFrame();
+          switchToAnimationById("idle1");
           // 收到胜利事件,进度条直接满
           breakMeterRef.current?.set(100);
           // 弹出击败提示，同时可以在这里补充其他收尾逻辑
