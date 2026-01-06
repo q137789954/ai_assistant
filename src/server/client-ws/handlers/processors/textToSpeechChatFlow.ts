@@ -341,6 +341,10 @@ export const processTextToSpeechChatFlow = async ({
             socket.data.roastBattleRound.score += candidate;
             socket.data.roastBattleRound!.roastCount += 1;
           }
+          console.log(socket.data.roastBattleRound);
+          if(socket.data.roastBattleRound.startedAt===null){
+            socket.data.roastBattleRound.startedAt = new Date();
+          }
           headJsonParsed = true;
           headJsonBuffer = "";
         } catch (error) {
