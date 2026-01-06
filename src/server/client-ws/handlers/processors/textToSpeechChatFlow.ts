@@ -339,7 +339,7 @@ export const processTextToSpeechChatFlow = async ({
           }
           if(socket.data.roastBattleRound!.score>=100){
             // 分数达到 100 则关闭对战功能，等待下一回合加载
-            socket.data.roastBattleRound.roastBattleEnabled = false;
+            socket.data.roastBattleEnabled = false;
             // 达到胜利分数线，标记回合为胜利
             socket.data.roastBattleRound!.isWin=true;
             // 记录胜利时间

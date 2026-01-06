@@ -39,7 +39,7 @@ export const handleChatInput = async (
   }
   if(outputFormat === "speech" && inputFormat === "text") {
     // 如果吐槽对战功能未启用则直接返回 true 以跳过后续处理
-    if(socket.data.roastBattleRound.roastBattleEnabled!==true){
+    if(socket.data.roastBattleEnabled!==true){
       return true;
     }
     const flowSuccess = await processTextToSpeechChatFlow({
@@ -58,7 +58,7 @@ export const handleChatInput = async (
 
   if((outputFormat === "speech" && inputFormat === "speech")) {
     // 如果吐槽对战功能未启用则直接返回 true 以跳过后续处理
-    if(socket.data.roastBattleRound.roastBattleEnabled!==true){
+    if(socket.data.roastBattleEnabled!==true){
       return true;
     }
     // 语音模式只接受数值数组或 Float32Array，先过滤掉字符串以避免下游类型错误
