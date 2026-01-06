@@ -183,7 +183,7 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
         <Tabbar />
       </div>
       <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-132px)] relative">
-        <BreakMeter ref={breakMeterRef} autoReset={false} onOverload={onOverload} initialValue={99} />
+        <BreakMeter ref={breakMeterRef} autoReset={false} onOverload={onOverload} initialValue={0} />
         {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
         <AnimationPlayer />
       </div>

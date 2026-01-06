@@ -43,6 +43,64 @@ const stripActionMarker = (text: string) => {
 };
 
 /**
+ * 从缓冲区中提取首个完整 JSON 对象，并返回 JSON 文本与剩余内容。
+ * - 通过花括号/方括号深度与字符串状态机识别 JSON 边界，避免被字符串中的括号干扰。
+ * - 若未形成完整 JSON，则返回 null 并保留原缓冲区。
+ */
+const extractFirstJson = (buffer: string) => {
+  const startIndex = buffer.indexOf("{");
+  if (startIndex === -1) {
+    return { jsonText: null as string | null, rest: buffer };
+  }
+
+  let braceDepth = 0;
+  let bracketDepth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < buffer.length; index += 1) {
+    const char = buffer[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) {
+      continue;
+    }
+    if (char === "{") {
+      braceDepth += 1;
+      continue;
+    }
+    if (char === "}") {
+      braceDepth -= 1;
+      if (braceDepth === 0 && bracketDepth === 0) {
+        const jsonText = buffer.slice(startIndex, index + 1);
+        const rest = buffer.slice(index + 1);
+        return { jsonText, rest };
+      }
+      continue;
+    }
+    if (char === "[") {
+      bracketDepth += 1;
+      continue;
+    }
+    if (char === "]") {
+      bracketDepth -= 1;
+    }
+  }
+
+  return { jsonText: null as string | null, rest: buffer };
+};
+
+/**
  * 处理文本输入的全部流程：落库用户输入、调用 Grok 流式接口、持续推送 chunk、落库助手回复。
  * @param params 文本流处理所需的上下文与连接信息
  * @returns 流式处理是否全部完成（遇到异常时返回 false，可用于终止上游逻辑）
@@ -145,8 +203,12 @@ export const processTextToSpeechChatFlow = async ({
   let replyEnded = false;
   // replyBuffer 用于缓存未完全确认的文本，避免分隔符被拆段误判
   let replyBuffer = "";
-  // jsonBuffer 累积分隔符后的结构化输出，等完整后统一解析
-  let jsonBuffer = "";
+  // 先输出的 JSON（只包含 damage_delta）需要缓冲拼接并提前解析
+  let headJsonBuffer = "";
+  let headJsonParsed = false;
+  let damageDelta: number | null = null;
+  // 分隔符之后的结构化输出需要完整缓冲，等流式结束统一解析
+  let tailJsonBuffer = "";
 
   // 通过 Promise 链把所有需要转换的句子串行化，避免 TTS 请求并发导致顺序错乱。
   const enqueueSentence = (sentence: string) => {
@@ -201,6 +263,47 @@ export const processTextToSpeechChatFlow = async ({
     sentences.forEach(enqueueSentence);
   };
 
+  /**
+   * 处理“reply + 分隔符 + 尾部 JSON”的流式拼接逻辑。
+   * - 在 reply 阶段持续送入 TTS 分句
+   * - 捕获分隔符后将剩余内容写入尾部 JSON 缓冲区
+   */
+  const handleReplyStream = (textChunk: string) => {
+    if (!textChunk) {
+      return;
+    }
+
+    if (!replyEnded) {
+      // reply 阶段：寻找分隔符
+      replyBuffer += textChunk;
+      const delimiterIndex = replyBuffer.indexOf(STREAM_REPLY_DELIMITER);
+      if (delimiterIndex !== -1) {
+        // 找到分隔符：分隔符前是 reply，分隔符后是尾部 JSON
+        const replyPart = replyBuffer.slice(0, delimiterIndex);
+        handleReplyChunk(replyPart);
+        const remaining = replyBuffer.slice(
+          delimiterIndex + STREAM_REPLY_DELIMITER.length
+        );
+        tailJsonBuffer += remaining;
+        replyBuffer = "";
+        replyEnded = true;
+        return;
+      }
+
+      // 未找到分隔符时，保留可能是分隔符前缀的尾巴，避免误切
+      const safeLength = replyBuffer.length - (STREAM_REPLY_DELIMITER.length - 1);
+      if (safeLength > 0) {
+        const replyPart = replyBuffer.slice(0, safeLength);
+        replyBuffer = replyBuffer.slice(safeLength);
+        handleReplyChunk(replyPart);
+      }
+      return;
+    }
+
+    // reply 已结束，剩余流量全部并入尾部 JSON 缓冲区
+    tailJsonBuffer += textChunk;
+  };
+
   try {
     // 遍历的流式响应，逐步构建助手回复并推送 chunk
     for await (const chunk of responseStream) {
@@ -217,35 +320,67 @@ export const processTextToSpeechChatFlow = async ({
 
       chunkIndex += 1;
 
-      if (!replyEnded) {
-        // LLM 先输出 reply，再输出分隔符与 JSON；这里需要按分隔符拆流
-        replyBuffer += deltaContent;
-        const delimiterIndex = replyBuffer.indexOf(STREAM_REPLY_DELIMITER);
-        if (delimiterIndex !== -1) {
-          // 找到分隔符：分隔符前是 reply，分隔符后是 JSON
-          const replyPart = replyBuffer.slice(0, delimiterIndex);
-          handleReplyChunk(replyPart);
-          const remaining = replyBuffer.slice(
-            delimiterIndex + STREAM_REPLY_DELIMITER.length
-          );
-          jsonBuffer += remaining;
-          replyBuffer = "";
-          replyEnded = true;
+      if (!headJsonParsed) {
+        // 先解析头部 JSON（仅包含 damage_delta），解析成功后才进入 reply 阶段
+        headJsonBuffer += deltaContent;
+        const { jsonText, rest } = extractFirstJson(headJsonBuffer);
+        if (!jsonText) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+          const candidate = parsed.damage_delta;
+          if (typeof candidate === "number") {
+            damageDelta = candidate;
+          }
+          headJsonParsed = true;
+          headJsonBuffer = "";
+        } catch (error) {
+          console.error("textToSpeechChatFlow: 解析头部 JSON 失败", {
+            clientId,
+            conversationId,
+            error,
+            jsonText,
+            rawBuffer: headJsonBuffer,
+          });
+          // 解析失败时保留缓冲区，继续等待后续数据补齐
           continue;
         }
 
-        // 未找到分隔符时，保留可能是分隔符前缀的尾巴，避免误切
-        const safeLength = replyBuffer.length - (STREAM_REPLY_DELIMITER.length - 1);
-        if (safeLength > 0) {
-          const replyPart = replyBuffer.slice(0, safeLength);
-          replyBuffer = replyBuffer.slice(safeLength);
-          handleReplyChunk(replyPart);
+        // 头部 JSON 解析完成后，剩余内容可能包含 reply 或分隔符
+        if (rest) {
+          handleReplyStream(rest);
         }
         continue;
       }
 
-      // reply 结束后，剩余流全量并入 JSON 缓冲区
-      jsonBuffer += deltaContent;
+      handleReplyStream(deltaContent);
+    }
+
+    if (!headJsonParsed && headJsonBuffer.trim()) {
+      // 流式结束仍未解析到头部 JSON，尝试最后再提取一次
+      const { jsonText, rest } = extractFirstJson(headJsonBuffer);
+      if (jsonText) {
+        try {
+          const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+          const candidate = parsed.damage_delta;
+          if (typeof candidate === "number") {
+            damageDelta = candidate;
+          }
+          headJsonParsed = true;
+          if (rest) {
+            handleReplyStream(rest);
+          }
+        } catch (error) {
+          console.error("textToSpeechChatFlow: 解析头部 JSON 失败", {
+            clientId,
+            conversationId,
+            error,
+            jsonText,
+            rawBuffer: headJsonBuffer,
+          });
+        }
+      }
     }
 
     if (!replyEnded && replyBuffer) {
@@ -260,9 +395,9 @@ export const processTextToSpeechChatFlow = async ({
       pendingSentence = "";
     }
 
-    if (jsonBuffer.trim()) {
+    if (tailJsonBuffer.trim()) {
       // JSON 必须完整后再解析并下发给客户端
-      const jsonTextRaw = jsonBuffer.trim();
+      const jsonTextRaw = tailJsonBuffer.trim();
       let jsonText = jsonTextRaw;
       const strayDelimiterIndex = jsonText.indexOf(STREAM_REPLY_DELIMITER);
       if (strayDelimiterIndex !== -1) {
@@ -272,21 +407,26 @@ export const processTextToSpeechChatFlow = async ({
       if (!jsonText) {
         return true;
       }
-      const jsonStart = jsonText.indexOf("{");
-      const jsonEnd = jsonText.lastIndexOf("}");
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        // 兜底处理：只截取首尾花括号之间的 JSON，避免尾部夹杂杂讯
-        jsonText = jsonText.slice(jsonStart, jsonEnd + 1).trim();
+      // 尝试只解析首个完整 JSON，避免尾部夹杂多余 JSON 导致解析失败
+      const { jsonText: extractedJson } = extractFirstJson(jsonText);
+      if (!extractedJson) {
+        return true;
       }
+      jsonText = extractedJson.trim();
       if (!jsonText) {
         return true;
       }
       try {
         const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+        if (damageDelta !== null && typeof parsed.damage_delta !== "number") {
+          // 头部 JSON 已解析到 damage_delta 时补回，保持下游结构兼容
+          parsed.damage_delta = damageDelta;
+        }
         console.log("textToSpeechChatFlow: 解析 LLM 结构化输出成功", {
           requestId,
           ...parsed,
         });
+        console.log(parsed.damage_delta, 'parsed.damage_delta')
         socket.emit(
           "message",
           serializePayload({
