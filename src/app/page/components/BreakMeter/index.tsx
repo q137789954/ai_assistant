@@ -179,15 +179,12 @@ const BreakMeter = forwardRef<BreakMeterHandle, BreakMeterProps>(
       }
     }, [])
 
-    const valColorVar =
-      phase === 'safe' ? 'var(--primary)' : phase === 'warm' ? 'var(--gold)' : 'var(--danger)'
-
     return (
       <div className={[styles.rageContainer, className].filter(Boolean).join(' ')}>
         {showHeader && (
           <div className={styles.rageHeader}>
             <span className='text-app'>{title}</span>
-            <span className={styles.rageVal} style={{ color: valColorVar }}>
+            <span className='text-app'>
               {pct}%
             </span>
           </div>

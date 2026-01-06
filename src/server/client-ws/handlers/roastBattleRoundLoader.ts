@@ -37,6 +37,22 @@ export const emitRoastBattleRoundSnapshot = (socket: Socket) => {
   socket.emit("message", payload);
 };
 
+// 在“继续对战”流程中发送回合已准备完毕事件，便于客户端刷新 UI 状态
+export const emitRoastBattleRoundReady = (socket: Socket) => {
+  // 复用快照构建逻辑，确保 BigInt/Date 字段安全序列化
+  const snapshot = buildRoastBattleRoundSnapshot(
+    socket.data.roastBattleRound as RoastBattleRound | null | undefined,
+  );
+  const payload = serializePayload({
+    event: "roast-battle-rounds:ready",
+    data: {
+      round: snapshot,
+      enabled: socket.data.roastBattleEnabled === true,
+    },
+  });
+  socket.emit("message", payload);
+};
+
 /**
  * 在断开连接时将内存中的回合数据回写到数据库，
  * 确保 score / roastCount / isWin 等状态不会因断线而丢失。

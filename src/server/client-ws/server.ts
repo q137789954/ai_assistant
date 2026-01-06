@@ -12,6 +12,7 @@ import { compressClientConversations } from "./handlers/clientConversationsProce
 import { loadUserContextOnConnect } from "./handlers/userContextLoader";
 import {
   emitRoastBattleRoundSnapshot,
+  emitRoastBattleRoundReady,
   loadRoastBattleRoundOnConnect,
   updateRoastBattleRound,
 } from "./handlers/roastBattleRoundLoader";
@@ -158,6 +159,16 @@ io.on("connection", async (socket) => {
   socket.on("roast-battle-rounds:load", () => {
     console.log("接收到了 roast-battle-rounds:load 事件");
     emitRoastBattleRoundSnapshot(socket);
+  });
+  // 继续对战：重新加载回合数据并告知客户端准备完毕
+  socket.on("roast-battle-rounds:continue", async () => {
+    console.log("接收到了 roast-battle-rounds:continue 事件");
+    // 重新拉取最新未胜利回合，确保进入新的对战轮次
+    await loadRoastBattleRoundOnConnect(socket);
+    // 确保客户端可继续触发吐槽对战相关流程
+    socket.data.roastBattleEnabled = true;
+    // 将最新回合快照下发给客户端以刷新破防条与 UI
+    emitRoastBattleRoundReady(socket);
   });
   // 建立连接后加载用户画像与 userDailyThreads，供本次 WebSocket 流程复用
   await loadUserContextOnConnect(socket);

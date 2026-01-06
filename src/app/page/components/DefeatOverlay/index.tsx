@@ -7,6 +7,8 @@ export type DefeatOverlayProps = {
   open: boolean;
   // 点击关闭按钮或遮罩时触发
   onClose?: () => void;
+  // 点击“继续对战”按钮时触发
+  onContinue?: () => void;
   // 弹窗标题
   title?: string;
   // 弹窗描述文案
@@ -15,7 +17,7 @@ export type DefeatOverlayProps = {
 
 const DefeatOverlay = ({
   open,
-  onClose,
+  onContinue,
   title = "你击败了我",
   description = "破防条已满，企鹅认输。要不要继续开喷？",
 }: DefeatOverlayProps) => {
@@ -38,7 +40,6 @@ const DefeatOverlay = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={() => onClose?.()}
       role="presentation"
     >
       <div
@@ -54,7 +55,8 @@ const DefeatOverlay = ({
           <button
             type="button"
             className="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white transition hover:bg-black/80"
-            onClick={() => onClose?.()}
+            // 点击继续时只触发继续事件，避免提前关闭导致流程中断
+            onClick={() => onContinue?.()}
           >
             继续对战
           </button>

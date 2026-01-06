@@ -33,6 +33,17 @@ export default function Home() {
   const breakMeterRef = useRef<BreakMeterHandle | null>(null);
   // 击败弹窗显隐状态，用于在破防条满值时展示全屏提示
   const [defeatOpen, setDefeatOpen] = useState(false);
+  // 统一根据回合快照刷新破防条进度，避免事件处理逻辑分散
+  const syncBreakMeterFromRound = useCallback((payload?: Record<string, unknown>) => {
+    // 兼容后端返回的 round 为空/字符串的情况，保证前端解析安全
+    const round = (payload?.round as { score?: number | string } | null) ?? null;
+    const scoreRaw = round?.score;
+    const score = typeof scoreRaw === "number" ? scoreRaw : Number(scoreRaw);
+    if (!Number.isFinite(score)) {
+      return;
+    }
+    breakMeterRef.current?.set(score);
+  }, []);
 
   const ensureSpeechSession = useCallback(() => {
     if (!requestId.current) {
@@ -99,14 +110,15 @@ export default function Home() {
         case "roast-battle-rounds": {
           // 初始化时同步当前吐槽对战回合分数，确保破防条从真实进度开始
           console.log("Initializing roast battle score:", parsed.data);
-          const payload = parsed.data ?? {};
-          const round = payload.round as { score?: number | string } | null;
-          const scoreRaw = round?.score;
-          const score = typeof scoreRaw === "number" ? scoreRaw : Number(scoreRaw);
-          if (!Number.isFinite(score)) {
-            return;
-          }
-          breakMeterRef.current?.set(score);
+          const payload = (parsed.data ?? {}) as Record<string, unknown>;
+          syncBreakMeterFromRound(payload);
+          break;
+        }
+        case "roast-battle-rounds:ready": {
+          // 继续对战后收到“准备完毕”事件，刷新破防条并关闭击败弹窗
+          const payload = (parsed.data ?? {}) as Record<string, unknown>;
+          syncBreakMeterFromRound(payload);
+          setDefeatOpen(false);
           break;
         }
         case "chat-response-meta": {
@@ -141,7 +153,7 @@ export default function Home() {
     return () => {
       unsubscribe();
     };
-  }, [subscribe]);
+  }, [subscribe, syncBreakMeterFromRound]);
 
   // 所有动画资源加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
   useEffect(() => {
@@ -177,6 +189,14 @@ export default function Home() {
     requestId.current = null;
     speechStartTimestamp.current = null;
   }, [emitEvent, dispatch]);
+
+  // 继续对战按钮点击后通知服务端准备新一轮回合
+  const handleDefeatContinue = useCallback(() => {
+    const sent = emitEvent("roast-battle-rounds:continue");
+    if (!sent) {
+      console.warn("继续对战事件发送失败，请检查 WebSocket 连接状态");
+    }
+  }, [emitEvent]);
 
   useVoiceInputListener({
     onSpeechSegment: handleVoiceChunk,
@@ -245,7 +265,10 @@ export default function Home() {
       <div className="absolute w-full bottom-16">
         <ModeSwitch />
       </div>
-      <DefeatOverlay open={defeatOpen} onClose={() => setDefeatOpen(false)} />
+      <DefeatOverlay
+        open={defeatOpen}
+        onContinue={handleDefeatContinue}
+      />
     </main>
   );
 }
