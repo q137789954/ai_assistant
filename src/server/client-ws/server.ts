@@ -132,6 +132,10 @@ io.use(async (socket, next) => {
  * 当前活跃客户端映射，方便广播和统计。
  */
 const clients = new Map<string, Socket>();
+/**
+ * 记录每个用户最近的 socket，处理刷新导致的重连与断线并发。
+ */
+const userSockets = new Map<string, Socket>();
 
 /**
  * 每当新的连接建立则注册各类事件。
@@ -143,6 +147,12 @@ io.on("connection", async (socket) => {
   socket.data.conversationId = conversationId;
   const userId = socket.data.userId as string;
   clients.set(clientId, socket);
+  // 若该用户已有旧连接，先把旧连接中的回合数据回写，避免重连读到旧数据
+  const existingSocket = userSockets.get(userId);
+  if (existingSocket && existingSocket !== socket) {
+    await updateRoastBattleRound(existingSocket.data.roastBattleRound);
+  }
+  userSockets.set(userId, socket);
   sendJoinNotifications(clientId, clients);
   // 每个客户端连接时主动创建对应的 ASR WebSocket，后续语音片段将通过该通道转发
   initializeAsrConnection(socket);
@@ -201,6 +211,10 @@ io.on("connection", async (socket) => {
     await updateUserProfileOnDisconnect(socket);
     // 断开连接时同步吐槽对战回合数据，避免进度丢失
     await updateRoastBattleRound(socket.data.roastBattleRound);
+    // 仅清理当前 socket 对应的用户映射，避免误删新连接
+    if (userSockets.get(userId) === socket) {
+      userSockets.delete(userId);
+    }
     // 断开时若对话上下文足够，尝试压缩并更新 userDailyThread
     if (Array.isArray(socket.data.clientConversations) && socket.data.clientConversations.length >= 2) {
       await compressClientConversations({ socket,batchSize: 2 });

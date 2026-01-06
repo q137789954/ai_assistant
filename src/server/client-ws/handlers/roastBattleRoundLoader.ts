@@ -3,6 +3,46 @@ import { Socket } from "socket.io";
 import { prisma } from "@/server/db/prisma";
 import { serializePayload } from "../utils";
 
+// 记录每个用户的回合写入链，避免断线回写与重连读取并发导致读到旧数据
+const pendingRoundWrites = new Map<string, Promise<void>>();
+
+// 将同一用户的写入串行化，确保先写完再被读取
+const enqueueRoundWrite = (userId: string, task: () => Promise<void>) => {
+  const previous = pendingRoundWrites.get(userId) ?? Promise.resolve();
+  const next = previous
+    .catch(() => {
+      // 保证前一个写入失败时也不会阻断后续写入
+    })
+    .then(task)
+    .finally(() => {
+      // 只清理当前链尾，避免并发覆盖
+      if (pendingRoundWrites.get(userId) === next) {
+        pendingRoundWrites.delete(userId);
+      }
+    });
+  pendingRoundWrites.set(userId, next);
+  return next;
+};
+
+// 在读取回合前等待该用户的未完成写入，避免刷新重连读到旧数据
+const waitForRoastBattleRoundWrites = async (userId?: string) => {
+  if (!userId) {
+    return;
+  }
+  const pending = pendingRoundWrites.get(userId);
+  if (!pending) {
+    return;
+  }
+  try {
+    await pending;
+  } catch (error) {
+    console.error("waitForRoastBattleRoundWrites: 等待回写失败", {
+      userId,
+      error,
+    });
+  }
+};
+
 // 将 Prisma 的回合记录转换为可安全下发的快照，避免 BigInt/Date 序列化问题
 const buildRoastBattleRoundSnapshot = (round?: RoastBattleRound | null) => {
   if (!round) {
@@ -62,25 +102,27 @@ export const updateRoastBattleRound = async (round: RoastBattleRound | null | un
     return;
   }
 
-  try {
-    await prisma.roastBattleRound.update({
-      where: {
-        id: round.id,
-      },
-      data: {
-        score: Math.min(100, round.score),
-        isWin: round.isWin,
-        roastCount: round.roastCount,
-        startedAt: round.startedAt,
-        wonAt: round.wonAt,
-      },
-    });
-  } catch (error) {
-    console.error("updateRoastBattleRound: 回写对战回合失败", {
-      roundId: round.id,
-      error,
-    });
-  }
+  await enqueueRoundWrite(round.userId, async () => {
+    try {
+      await prisma.roastBattleRound.update({
+        where: {
+          id: round.id,
+        },
+        data: {
+          score: Math.min(100, round.score),
+          isWin: round.isWin,
+          roastCount: round.roastCount,
+          startedAt: round.startedAt,
+          wonAt: round.wonAt,
+        },
+      });
+    } catch (error) {
+      console.error("updateRoastBattleRound: 回写对战回合失败", {
+        roundId: round.id,
+        error,
+      });
+    }
+  });
 };
 
 /**
@@ -95,6 +137,8 @@ export const loadRoastBattleRoundOnConnect = async (socket: Socket) => {
   }
 
   try {
+    // 先等待该用户的断线回写完成，避免重连读到旧回合数据
+    await waitForRoastBattleRoundWrites(userId);
     // 查询该用户尚未胜利的回合记录，按创建时间倒序取最新一条
     const existingRound = await prisma.roastBattleRound.findFirst({
       where: {
