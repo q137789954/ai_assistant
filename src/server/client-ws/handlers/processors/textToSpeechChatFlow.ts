@@ -336,6 +336,7 @@ export const processTextToSpeechChatFlow = async ({
           if (typeof candidate === "number") {
             damageDelta = candidate;
             socket.data.roastBattleRound.score += candidate;
+            socket.data.roastBattleRound!.roastCount += 1;
           }
           headJsonParsed = true;
           headJsonBuffer = "";
@@ -362,7 +363,7 @@ export const processTextToSpeechChatFlow = async ({
             await prisma.roastBattleRound.update({
               where: { id: socket.data.roastBattleRound!.id },
               data: {
-                score: Math.min(100, socket.data.roastBattleRound.score),
+                score: 100,
                 isWin: true,
                 wonAt: socket.data.roastBattleRound!.wonAt,
                 startedAt: socket.data.roastBattleRound!.startedAt,
@@ -380,17 +381,6 @@ export const processTextToSpeechChatFlow = async ({
             });
             socket.emit("message", victoryPayload);
             return true;
-          }else {
-            console.log("Updating roast battle round score:", socket.data.roastBattleRound.score);
-            await prisma.roastBattleRound.update({
-              where: { id: socket.data.roastBattleRound!.id },
-              data: {
-                score: Math.min(99, socket.data.roastBattleRound.score),
-                isWin: false,
-                startedAt: socket.data.roastBattleRound!.startedAt,
-                roastCount: socket.data.roastBattleRound!.roastCount + 1,
-              },
-            });
           }
         } catch (error) {
           console.error("textToSpeechChatFlow: 更新对战回合失败", error);
