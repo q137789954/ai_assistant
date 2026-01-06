@@ -5,20 +5,26 @@ import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
 import AnimationPlayer from "./page/components/AnimationPlayer";
 import ModeSwitch from "./page/components/ModeSwitch";
-import { useVoiceInputListener, useTtsAudioPlayer, } from "./hooks";
+import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
 import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
-import BreakMeter, { type BreakMeterHandle } from "./page/components/BreakMeter";
+import BreakMeter, {
+  type BreakMeterHandle,
+} from "./page/components/BreakMeter";
 import DefeatOverlay from "./page/components/DefeatOverlay";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
 
-const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimationById } =
-    useAnimationPlayer();
+  const {
+    allAnimationsLoaded,
+    preloadProgress,
+    resetToFirstFrame,
+    switchToAnimationById,
+  } = useAnimationPlayer();
   const { stopTtsPlayback } = useTtsAudioPlayer();
   const [showAnimationLoader, setShowAnimationLoader] = useState(true);
   const { emitEvent, subscribe } = useWebSocketContext();
@@ -29,18 +35,22 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
   // 击败弹窗显隐状态，用于在破防条满值时展示全屏提示
   const [defeatOpen, setDefeatOpen] = useState(false);
 
-
   const ensureSpeechSession = useCallback(() => {
-  if (!requestId.current) {
-    requestId.current = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    speechStartTimestamp.current = Date.now();
-    dispatch?.({ type: "SET_TIMESTAMP_WATERMARK", payload: speechStartTimestamp.current });
-    // 发送新指令前重置语音播放与动画帧
-    stopTtsPlayback();
-    // resetToFirstFrame();
-    switchToAnimationById('listen')
-  }
-}, [dispatch, stopTtsPlayback, switchToAnimationById]);
+    if (!requestId.current) {
+      requestId.current = `${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`;
+      speechStartTimestamp.current = Date.now();
+      dispatch?.({
+        type: "SET_TIMESTAMP_WATERMARK",
+        payload: speechStartTimestamp.current,
+      });
+      // 发送新指令前重置语音播放与动画帧
+      stopTtsPlayback();
+      // resetToFirstFrame();
+      switchToAnimationById("listen");
+    }
+  }, [dispatch, stopTtsPlayback, switchToAnimationById]);
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
@@ -80,21 +90,39 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
         return;
       }
 
-      if (parsed && parsed.event === "chat-response-meta") {
-        // damage_delta 可能来自字符串或数字，统一转成数字后再更新破防条
-      const payload = parsed.data ?? {};
-      console.log(payload, 'payload')
-      const damageDeltaRaw = payload.damage_delta;
-      const damageDelta =
-        typeof damageDeltaRaw === "number"
-          ? damageDeltaRaw
-          : Number(damageDeltaRaw);
-      if (!Number.isFinite(damageDelta)) {
+      if (!parsed) {
         return;
       }
 
-      breakMeterRef.current?.addRage(damageDelta);
-        return;
+      const eventType = parsed.event;
+
+      switch (eventType) {
+        case "chat-response-meta": {
+          // 处理见下方专门逻辑
+          // damage_delta 可能来自字符串或数字，统一转成数字后再更新破防条
+          const payload = parsed.data ?? {};
+          console.log(payload, "payload");
+          const damageDeltaRaw = payload.damage_delta;
+          const damageDelta =
+            typeof damageDeltaRaw === "number"
+              ? damageDeltaRaw
+              : Number(damageDeltaRaw);
+          if (!Number.isFinite(damageDelta)) {
+            return;
+          }
+
+          breakMeterRef.current?.addRage(damageDelta);
+          break;
+        }
+        case "roast-battle-victory": {
+          // 收到胜利事件,进度条直接满
+          breakMeterRef.current?.set(100);
+          // 弹出击败提示，同时可以在这里补充其他收尾逻辑
+          setDefeatOpen(true);
+          break;
+        }
+        default:
+          break;
       }
     });
 
@@ -157,15 +185,6 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
     }
   }, [chatbotVisible, dispatch]);
 
-  const onOverload = useCallback(() => {
-    // 破防值满时弹出击败提示，同时可以在这里补充其他收尾逻辑
-    setDefeatOpen(true);
-    // 破防值满时自动关闭 Chatbot 抽屉
-    if (dispatch) {
-      dispatch({ type: "SET_CHATBOT_VISIBILITY", payload: false });
-    }
-  }, [dispatch]);
-
   // 所有动画资源加载完之前展示一个加载中组件（最多10秒）
 
   return (
@@ -183,7 +202,11 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
         <Tabbar />
       </div>
       <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-132px)] relative">
-        <BreakMeter ref={breakMeterRef} autoReset={false} onOverload={onOverload} initialValue={0} />
+        <BreakMeter
+          ref={breakMeterRef}
+          autoReset={false}
+          initialValue={0}
+        />
         {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
         <AnimationPlayer />
       </div>
@@ -210,10 +233,7 @@ const { allAnimationsLoaded, preloadProgress, resetToFirstFrame, switchToAnimati
       <div className="absolute w-full bottom-16">
         <ModeSwitch />
       </div>
-      <DefeatOverlay
-        open={defeatOpen}
-        onClose={() => setDefeatOpen(false)}
-      />
+      <DefeatOverlay open={defeatOpen} onClose={() => setDefeatOpen(false)} />
     </main>
   );
 }

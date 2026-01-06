@@ -146,10 +146,6 @@ export const processTextToSpeechChatFlow = async ({
     });
   }
 
-  if(socket.data.roastBattleRound.roastBattleEnabled!==true){
-    return true;
-  }
-
   // 组装“前情提要”：合并最近 7 天与历史高分 threads 的 text 内容
   const recentThreads = Array.isArray(socket.data.userDailyThreadsRecent)
     ? socket.data.userDailyThreadsRecent
@@ -459,11 +455,6 @@ export const processTextToSpeechChatFlow = async ({
           // 头部 JSON 已解析到 damage_delta 时补回，保持下游结构兼容
           parsed.damage_delta = damageDelta;
         }
-        console.log("textToSpeechChatFlow: 解析 LLM 结构化输出成功", {
-          requestId,
-          ...parsed,
-        });
-        console.log(parsed.damage_delta, "parsed.damage_delta");
         socket.emit(
           "message",
           serializePayload({
