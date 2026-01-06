@@ -83,6 +83,7 @@ export const loadRoastBattleRoundOnConnect = async (socket: Socket) => {
     socket.data.roastBattleRound = newRound;
     socket.data.roastBattleEnabled = true;
   } catch (error) {
+    console.log(error, '进入了这里')
     // 并发连接可能触发唯一约束冲突，命中时回退为再次查询
     const isUniqueConflict =
       error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";

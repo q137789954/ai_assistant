@@ -22,12 +22,11 @@ export default function Home() {
   const {
     allAnimationsLoaded,
     preloadProgress,
-    resetToFirstFrame,
     switchToAnimationById,
   } = useAnimationPlayer();
   const { stopTtsPlayback } = useTtsAudioPlayer();
   const [showAnimationLoader, setShowAnimationLoader] = useState(true);
-  const { emitEvent, subscribe, status } = useWebSocketContext();
+  const { emitEvent, subscribe } = useWebSocketContext();
 
   const requestId = useRef<string>(null);
   const speechStartTimestamp = useRef<number>(null);
@@ -143,15 +142,6 @@ export default function Home() {
       unsubscribe();
     };
   }, [subscribe]);
-
-  useEffect(() => {
-    // WebSocket 连接就绪后主动拉取当前吐槽对战回合数据
-    if (status !== "open") {
-      return;
-    }
-    console.log("WebSocket 连接已就绪，正在加载吐槽对战回合数据");
-    emitEvent("roast-battle-rounds:load");
-  }, [status, emitEvent]);
 
   // 所有动画资源加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
   useEffect(() => {

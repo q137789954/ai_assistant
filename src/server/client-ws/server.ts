@@ -153,10 +153,17 @@ io.on("connection", async (socket) => {
   socket.data.userProfileUpdateDays = [];
   // 默认关闭吐槽对战功能，等待加载回合数据后根据情况开启
   socket.data.roastBattleEnabled = false;
+  // 提前注册吐槽对战事件，避免客户端在加载上下文前发送导致事件丢失
+  socket.on("roast-battle-rounds:load", () => {
+    console.log("接收到了 roast-battle-rounds:load 事件");
+    emitRoastBattleRoundSnapshot(socket);
+  });
   // 建立连接后加载用户画像与 userDailyThreads，供本次 WebSocket 流程复用
   await loadUserContextOnConnect(socket);
   // 建立连接后准备吐槽对战回合数据，保证本次连接始终有可用回合上下文
   await loadRoastBattleRoundOnConnect(socket);
+  // 主动下发一次回合快照，避免客户端漏发/丢事件导致未同步
+  emitRoastBattleRoundSnapshot(socket);
 
   const llmClient = new OpenAI({
     apiKey: process.env.GROKKINGAI_API_KEY?.trim(),
@@ -178,12 +185,6 @@ io.on("connection", async (socket) => {
     handleChatInput(clientId, conversationId, userId, socket, payload);
   });
 
-  // 客户端请求当前吐槽对战回合时，返回最新快照
-  socket.on("roast-battle-rounds:load", () => {
-    console.log("接收到了 roast-battle-rounds:load 事件");
-    emitRoastBattleRoundSnapshot(socket);
-  });
-  
   socket.on("disconnect", async (reason) => {
     await updateUserProfileOnDisconnect(socket);
     // 断开时若对话上下文足够，尝试压缩并更新 userDailyThread
