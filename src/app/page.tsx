@@ -282,10 +282,11 @@ export default function Home() {
           </div>
         </div>
       )}
-      <div className="py-4 px-6 shrink-0">
+      {/* 移动端让 Tabbar 悬浮在页面右侧，桌面端保持原有布局 */}
+      <div className="fixed right-3 top-30 z-30 md:static md:py-4 md:px-6 md:shrink-0">
         <Tabbar />
       </div>
-      <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-132px)] relative">
+      <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-68px)] md:max-h-[calc(100%-132px)] relative">
         <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-11/12 max-w-md z-10">
           <BreakMeter
           ref={breakMeterRef}

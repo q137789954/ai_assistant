@@ -89,9 +89,9 @@ export function LeaderboardDialog({
         </div>
 
         {/* Body + Sticky footer wrapper */}
-        <div className="relative max-h-[80vh]">
+        <div className="relative h-[80vh]">
           {/* Scroll area（预留底部固定条空间，避免遮住列表） */}
-          <div className="max-h-[80vh] overflow-y-auto px-5 py-4 pb-[92px] [-webkit-overflow-scrolling:touch]">
+          <div className="h-[80vh] overflow-y-auto px-5 py-4 pb-23 [-webkit-overflow-scrolling:touch]">
             <div className="flex flex-col">
               {showLoading ? (
                 <div className="py-10 text-center text-sm text-[#666]">
