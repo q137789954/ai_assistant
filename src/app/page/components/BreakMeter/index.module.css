@@ -1,12 +1,5 @@
 .rageContainer {
-  position: absolute;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 85%;
-  max-width: 400px;
-  z-index: 15;
-
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 5px;

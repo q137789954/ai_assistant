@@ -34,6 +34,14 @@ export type GlobalsState = {
    * 早于该时间戳的语音、动作，直接废弃不在播放
    */
   timestampWatermark: number | null;
+  /**
+   * 吐槽对战胜利总次数（用于战绩展示）
+   */
+  roastBattleWinCount: number;
+  /**
+   * 胜利回合中最小的 roast_count（没有胜利时为 null）
+   */
+  roastBattleMinRoastCount: number | null;
 };
 
 export type GlobalsAction =
@@ -47,7 +55,11 @@ export type GlobalsAction =
   | { type: "SET_PERSONAL_CENTER_VISIBILITY"; payload: boolean }
   | { type: "SET_SESSION_ID"; payload: string }
   | { type: "SET_CONVERSATION_ID"; payload: string }
-  | { type: "SET_TIMESTAMP_WATERMARK"; payload: number | null };
+  | { type: "SET_TIMESTAMP_WATERMARK"; payload: number | null }
+  | {
+      type: "SET_ROAST_BATTLE_STATS";
+      payload: { winCount: number; minRoastCount: number | null };
+    };
 
 export interface GlobalsContextValue extends GlobalsState {
   dispatch: Dispatch<GlobalsAction>;

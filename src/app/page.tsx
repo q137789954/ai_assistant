@@ -14,6 +14,7 @@ import BreakMeter, {
   type BreakMeterHandle,
 } from "./page/components/BreakMeter";
 import DefeatOverlay from "./page/components/DefeatOverlay";
+import RoastBattleTotal from "./page/components/RoastBattleTotal";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -44,6 +45,49 @@ export default function Home() {
     }
     breakMeterRef.current?.set(score);
   }, []);
+
+  /**
+   * 拉取吐槽对战统计并写入 GlobalsContext
+   * - 初始化页面和胜利事件后都需要刷新
+   * - 接口返回失败时仅记录日志，避免影响主流程
+   */
+  const refreshRoastBattleStats = useCallback(async () => {
+    if (!dispatch) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/roast-battle/stats");
+      if (!response.ok) {
+        console.warn("吐槽对战统计接口返回非 2xx:", response.status);
+        return;
+      }
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            success?: boolean;
+            data?: { winCount?: number; minRoastCount?: number | null };
+          }
+        | null;
+
+      if (!payload?.success || !payload.data) {
+        console.warn("吐槽对战统计接口返回异常数据:", payload);
+        return;
+      }
+
+      dispatch({
+        type: "SET_ROAST_BATTLE_STATS",
+        payload: {
+          winCount: payload.data.winCount ?? 0,
+          minRoastCount:
+            typeof payload.data.minRoastCount === "number"
+              ? payload.data.minRoastCount
+              : null,
+        },
+      });
+    } catch (error) {
+      console.warn("拉取吐槽对战统计失败:", error);
+    }
+  }, [dispatch]);
 
   const ensureSpeechSession = useCallback(() => {
     if (!requestId.current) {
@@ -147,6 +191,8 @@ export default function Home() {
           breakMeterRef.current?.set(100);
           // 弹出击败提示，同时可以在这里补充其他收尾逻辑
           setDefeatOpen(true);
+          // 胜利后刷新统计，确保胜场数及时同步
+          void refreshRoastBattleStats();
           break;
         }
         default:
@@ -157,7 +203,12 @@ export default function Home() {
     return () => {
       unsubscribe();
     };
-  }, [subscribe, syncBreakMeterFromRound]);
+  }, [refreshRoastBattleStats, subscribe, syncBreakMeterFromRound]);
+
+  // 页面初始化时拉取吐槽对战统计，提供给全局展示组件
+  useEffect(() => {
+    void refreshRoastBattleStats();
+  }, [refreshRoastBattleStats]);
 
   // 所有动画资源加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
   useEffect(() => {
@@ -238,11 +289,16 @@ export default function Home() {
         <Tabbar />
       </div>
       <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-132px)] relative">
-        <BreakMeter
+        <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-11/12 max-w-md z-10">
+          <BreakMeter
           ref={breakMeterRef}
           autoReset={false}
           initialValue={0}
         />
+          <div className="mt-2">
+            <RoastBattleTotal />
+          </div>
+        </div>
         {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
         <AnimationPlayer />
       </div>

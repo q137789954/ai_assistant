@@ -28,7 +28,9 @@ const initialState: GlobalsState = {
   pendingUserSpeech: null,
   chatbotVisible: false,
   personalCenterVisible: false,
-  timestampWatermark: null
+  timestampWatermark: null,
+  roastBattleWinCount: 0,
+  roastBattleMinRoastCount: null,
 }
 
 const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
@@ -80,8 +82,15 @@ const reducer = (state: GlobalsState, action: GlobalsAction): GlobalsState => {
         ? state
         : { ...state, personalCenterVisible: action.payload }
     case 'SET_TIMESTAMP_WATERMARK':
-        // 用户最后开口/发送聊天时间
-        return { ...state, timestampWatermark: action.payload || null }
+      // 用户最后开口/发送聊天时间
+      return { ...state, timestampWatermark: action.payload || null }
+    case 'SET_ROAST_BATTLE_STATS':
+      // 更新吐槽对战统计，供各组件统一展示
+      return {
+        ...state,
+        roastBattleWinCount: action.payload.winCount,
+        roastBattleMinRoastCount: action.payload.minRoastCount,
+      }
     default:
       return state
   }
@@ -115,6 +124,8 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     chatbotVisible,
     personalCenterVisible,
     timestampWatermark,
+    roastBattleWinCount,
+    roastBattleMinRoastCount,
   } = state
 
   /**
@@ -179,6 +190,8 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
       chatbotVisible,
       personalCenterVisible,
       timestampWatermark,
+      roastBattleWinCount,
+      roastBattleMinRoastCount,
       dispatch: guardedDispatch,
       permissionDialogOpen,
       setPermissionDialogOpen,
@@ -192,6 +205,8 @@ export default function GlobalsProviders({ children }: { children: React.ReactNo
     chatbotVisible,
     personalCenterVisible,
     timestampWatermark,
+    roastBattleWinCount,
+    roastBattleMinRoastCount,
     guardedDispatch,
     permissionDialogOpen,
     setPermissionDialogOpen,
