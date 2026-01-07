@@ -325,7 +325,6 @@ export const processTextToSpeechChatFlow = async ({
       }
 
       chunkIndex += 1;
-      console.log(headJsonParsed, 'headJsonParsed')
       if (!headJsonParsed) {
         // 先解析头部 JSON（仅包含 damage_delta），解析成功后才进入 reply 阶段
         headJsonBuffer += deltaContent;
@@ -341,7 +340,6 @@ export const processTextToSpeechChatFlow = async ({
             socket.data.roastBattleRound.score += candidate;
             socket.data.roastBattleRound!.roastCount += 1;
           }
-          console.log(socket.data.roastBattleRound);
           if(socket.data.roastBattleRound.startedAt===null){
             socket.data.roastBattleRound.startedAt = new Date();
           }
@@ -358,7 +356,6 @@ export const processTextToSpeechChatFlow = async ({
           // 解析失败时保留缓冲区，继续等待后续数据补齐
           continue;
         }
-        console.log("Current roast battle score:", socket.data.roastBattleRound.score);
         try {
           if (socket.data.roastBattleRound!.score >= 100) {
             // 分数达到 100 则关闭对战功能，等待下一回合加载

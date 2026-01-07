@@ -19,7 +19,6 @@ export function VoiceInputToggle({ className = '' }: VoiceInputToggleProps) {
   const { voiceInputEnabled, dispatch } = globals
 
   const toggle = useCallback(() => {
-    console.log(!voiceInputEnabled)
     dispatch({ type: 'SET_VOICE_INPUT_ENABLED', payload: !voiceInputEnabled })
   }, [dispatch, voiceInputEnabled])
 

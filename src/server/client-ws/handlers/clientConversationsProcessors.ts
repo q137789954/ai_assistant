@@ -223,7 +223,6 @@ export const compressClientConversations = async ({
             .threads
         : [];
 
-      console.log(threads, 'threads');
       // 过滤空文本与非法评分，统一裁剪到数据库字段允许范围
       const normalizedThreads = threads
         .map((thread) => {
@@ -256,8 +255,6 @@ export const compressClientConversations = async ({
       if (normalizedThreads.length === 0) {
         continue;
       }
-
-      console.log("normalizedThreads", normalizedThreads);
 
       try {
         // 先清理当天已有线程，确保本次生成结果覆盖旧数据

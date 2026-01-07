@@ -476,7 +476,6 @@ export const useTtsAudioPlayer = () => {
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
           if(!isRepeatRequest&&actionId && allAnimationsLoaded) {
             const animationExists = animations.some((animation) => animation.id === actionId);
-            console.log(animationExists,actionId, 'animationExists')
             if (animationExists) {
               // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
               switchToAnimationById(actionId);
@@ -596,7 +595,6 @@ export const useTtsAudioPlayer = () => {
           ? talkCandidates[Math.floor(Math.random() * talkCandidates.length)]
           : null;
 
-      console.log('chosenTalk', chosenTalk);
       if (chosenTalk) {
         switchToAnimationById(chosenTalk);
         play();

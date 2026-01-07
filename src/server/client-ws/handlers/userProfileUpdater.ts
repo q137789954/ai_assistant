@@ -183,8 +183,6 @@ export const updateUserProfileOnDisconnect = async (socket: Socket) => {
       updated = true;
     }
 
-    console.log('最终画像', currentProfile);
-
     // 有效更新才写入数据库，避免无意义覆盖
     if (updated) {
       await prisma.userProfile.upsert({

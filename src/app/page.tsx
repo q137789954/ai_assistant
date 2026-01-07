@@ -152,7 +152,6 @@ export default function Home() {
       switch (eventType) {
         case "roast-battle-rounds": {
           // 初始化时同步当前吐槽对战回合分数，确保破防条从真实进度开始
-          console.log("Initializing roast battle score:", parsed.data);
           const payload = (parsed.data ?? {}) as Record<string, unknown>;
           syncBreakMeterFromRound(payload);
           break;
@@ -168,7 +167,6 @@ export default function Home() {
           // 处理见下方专门逻辑
           // damage_delta 可能来自字符串或数字，统一转成数字后再更新破防条
           const payload = parsed.data ?? {};
-          console.log(payload, "payload");
           const damageDeltaRaw = payload.damage_delta;
           const damageDelta =
             typeof damageDeltaRaw === "number"

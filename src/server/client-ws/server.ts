@@ -167,12 +167,10 @@ io.on("connection", async (socket) => {
   socket.data.roastBattleEnabled = false;
   // 提前注册吐槽对战事件，避免客户端在加载上下文前发送导致事件丢失
   socket.on("roast-battle-rounds:load", () => {
-    console.log("接收到了 roast-battle-rounds:load 事件");
     emitRoastBattleRoundSnapshot(socket);
   });
   // 继续对战：重新加载回合数据并告知客户端准备完毕
   socket.on("roast-battle-rounds:continue", async () => {
-    console.log("接收到了 roast-battle-rounds:continue 事件");
     // 重新拉取最新未胜利回合，确保进入新的对战轮次
     await loadRoastBattleRoundOnConnect(socket);
     // 确保客户端可继续触发吐槽对战相关流程

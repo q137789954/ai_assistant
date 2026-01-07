@@ -63,7 +63,6 @@ const buildRoastBattleRoundSnapshot = (round?: RoastBattleRound | null) => {
 
 // 将当前连接对应的吐槽对战回合快照发送给客户端
 export const emitRoastBattleRoundSnapshot = (socket: Socket) => {
-  console.log("Emitting roast battle round snapshot to client.");
   const snapshot = buildRoastBattleRoundSnapshot(
     socket.data.roastBattleRound as RoastBattleRound | null | undefined,
   );
@@ -150,7 +149,6 @@ export const loadRoastBattleRoundOnConnect = async (socket: Socket) => {
       },
     });
 
-    console.log(existingRound, 'existingRound')
     if (existingRound) {
       // 命中未完成回合时直接复用，确保本次连接可继续该回合
       socket.data.roastBattleRound = existingRound;
@@ -167,8 +165,6 @@ export const loadRoastBattleRoundOnConnect = async (socket: Socket) => {
         startedAt: null,
       },
     });
-
-    console.log(newRound, 'newRound')
 
     socket.data.roastBattleRound = newRound;
     socket.data.roastBattleEnabled = true;
