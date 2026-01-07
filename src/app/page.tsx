@@ -16,6 +16,7 @@ import DefeatOverlay from "./page/components/DefeatOverlay";
 import RoastBattleTotal from "./page/components/RoastBattleTotal";
 import CounterRoastCards from "./page/components/CounterRoastCards";
 import type { PenguinCounterCard } from "./page/components/CounterRoastCards";
+import ResourceLoadingOverlay from "./page/components/ResourceLoadingOverlay";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -239,10 +240,7 @@ export default function Home() {
     if (!showAnimationLoader) {
       return undefined;
     }
-    const timeout = setTimeout(() => {
-      setShowAnimationLoader(false);
-    }, 10000);
-    return () => clearTimeout(timeout);
+    return undefined;
   }, [showAnimationLoader]);
   useTtsAudioPlayer();
 
@@ -288,17 +286,19 @@ export default function Home() {
 
   // 所有动画资源加载完之前展示一个加载中组件（最多10秒）
 
+  if( showAnimationLoader) {
+    {/* 资源加载遮罩层：在动画资源未就绪时保持页面反馈 */}
+      return (
+        <ResourceLoadingOverlay
+          visible={true}
+          loaded={preloadProgress.loaded}
+          total={preloadProgress.total}
+        />
+      )
+  }
+
   return (
     <main className="h-full w-full relative flex flex-col bg-[url('/home/lamplight.jpeg')] bg-cover bg-center bg-no-repeat">
-      {showAnimationLoader && (
-        <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-slate-950/90 text-center text-white">
-          <div className="text-xl font-semibold">资源加载中……</div>
-          <div className="text-sm text-slate-300">
-            已加载 {preloadProgress.loaded}/{preloadProgress.total}，最多等待 10
-            秒
-          </div>
-        </div>
-      )}
       {/* 移动端让 Tabbar 悬浮在页面右侧，桌面端保持原有布局 */}
       <div className="fixed right-3 top-30 z-30 md:static md:py-4 md:px-6 md:shrink-0">
         <Tabbar />
@@ -317,7 +317,7 @@ export default function Home() {
         {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
         <AnimationPlayer />
       </div>
-      <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-20">
+      <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-20 overflow-hidden">
         <CounterRoastCards items={retorts} groupId={retortsGroupId} />
       </div>
       <div className="py-4 px-6 shrink-0">
