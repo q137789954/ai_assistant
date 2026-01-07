@@ -14,6 +14,8 @@ import BreakMeter, {
 } from "./page/components/BreakMeter";
 import DefeatOverlay from "./page/components/DefeatOverlay";
 import RoastBattleTotal from "./page/components/RoastBattleTotal";
+import CounterRoastCards from "./page/components/CounterRoastCards";
+import type { PenguinCounterCard } from "./page/components/CounterRoastCards";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -27,6 +29,8 @@ export default function Home() {
   const { stopTtsPlayback } = useTtsAudioPlayer();
   const [showAnimationLoader, setShowAnimationLoader] = useState(true);
   const { emitEvent, subscribe } = useWebSocketContext();
+  const [retorts, setRetorts] = useState<PenguinCounterCard[]>([]);
+  const [retortsGroupId, setRetortsGroupId] = useState<string>(() => crypto.randomUUID());
 
   const requestId = useRef<string>(null);
   const speechStartTimestamp = useRef<number>(null);
@@ -44,6 +48,17 @@ export default function Home() {
     }
     breakMeterRef.current?.set(score);
   }, []);
+
+// 用于更新吐槽对战，反击提示卡片
+  const updatePenguinCounter = (items:string[]) => {
+    const cards: PenguinCounterCard[] = items.slice(0, 2).map((text) => ({
+      id: crypto.randomUUID(),
+      title: text,
+    }));
+
+    setRetorts(cards);
+    setRetortsGroupId(crypto.randomUUID()); // ✅ 每次更新一组都换 groupId，确保触发整组出入场
+  };
 
   /**
    * 拉取吐槽对战统计并写入 GlobalsContext
@@ -167,16 +182,17 @@ export default function Home() {
           // 处理见下方专门逻辑
           // damage_delta 可能来自字符串或数字，统一转成数字后再更新破防条
           const payload = parsed.data ?? {};
+          console.log("chat-response-meta payload:", payload);
           const damageDeltaRaw = payload.damage_delta;
           const damageDelta =
             typeof damageDeltaRaw === "number"
               ? damageDeltaRaw
               : Number(damageDeltaRaw);
-          if (!Number.isFinite(damageDelta)) {
-            return;
+          if (Number.isFinite(damageDelta)) {
+            breakMeterRef.current?.addRage(damageDelta);
           }
-
-          breakMeterRef.current?.addRage(damageDelta);
+          const retort_options = payload.retort_options as string[] || [];
+          updatePenguinCounter(retort_options)
           break;
         }
         case "roast-battle-victory": {
@@ -299,6 +315,9 @@ export default function Home() {
         </div>
         {/* 动画组件区域：占位在页面中央，展示 Spine 动画渲染区域 */}
         <AnimationPlayer />
+      </div>
+      <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-20">
+        <CounterRoastCards items={retorts} groupId={retortsGroupId} />
       </div>
       <div className="py-4 px-6 shrink-0">
         <div className="w-full flex gap-2 items-center">
