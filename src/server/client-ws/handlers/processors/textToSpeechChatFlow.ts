@@ -126,6 +126,15 @@ export const processTextToSpeechChatFlow = async ({
     });
     return false;
   }
+  // 语音识别可能出现空白或纯空格结果，避免写库与下游调用触发约束错误
+  const normalizedContent = content.trim();
+  if (!normalizedContent) {
+    console.warn("textChatFlow: 收到空白文本内容，已忽略本次请求", {
+      clientId,
+      conversationId,
+    });
+    return false;
+  }
   // 验证成功后立即将用户输入写入数据库，便于会话记录与问题追踪
   // 读取 Grok 流式响应，累计文本并在每次收到 chunk 后尝试分句。
   try {
@@ -135,7 +144,7 @@ export const processTextToSpeechChatFlow = async ({
         id: randomUUID(),
         conversationId,
         role: ConversationMessageRole.USER,
-        content,
+        content: normalizedContent,
         isVoice: false,
         userId,
         createdAt: new Date(timestamp),
@@ -191,7 +200,7 @@ export const processTextToSpeechChatFlow = async ({
       },
       {
         role: "user",
-        content,
+        content: normalizedContent,
       },
     ],
   });
@@ -523,7 +532,7 @@ export const processTextToSpeechChatFlow = async ({
 
     // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
     socket.data.clientConversations.push(
-      { role: "user", content, timestamp },
+      { role: "user", content: normalizedContent, timestamp },
       {
         role: "assistant",
         content: assistantContent,

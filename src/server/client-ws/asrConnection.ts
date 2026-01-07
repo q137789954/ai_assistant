@@ -37,8 +37,8 @@ export const initializeAsrConnection = (socket: Socket) => {
 
     const { type, is_final, text, requestId, echoTimestamp } = parsedPayload || {};
     if( type === "result") {
-       console.log(text, 'asr 结果')
       if(is_final === true) {
+        console.log(text, 'asr 结果');
         processTextToSpeechChatFlow({
           clientId: socket.id,
           conversationId: socket.data.conversationId,
