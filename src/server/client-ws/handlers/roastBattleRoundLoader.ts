@@ -93,8 +93,8 @@ export const emitRoastBattleRoundReady = (socket: Socket) => {
 };
 
 /**
- * 在断开连接时将内存中的回合数据回写到数据库，
- * 确保 score / roastCount / isWin 等状态不会因断线而丢失。
+ * 
+ * 更新RoastBattleRound记录，并在首次达成胜利时更新用户统计数据。
  */
 export const updateRoastBattleRound = async (round: RoastBattleRound | null | undefined) => {
   if (!round) {
@@ -103,17 +103,50 @@ export const updateRoastBattleRound = async (round: RoastBattleRound | null | un
 
   await enqueueRoundWrite(round.userId, async () => {
     try {
-      await prisma.roastBattleRound.update({
-        where: {
-          id: round.id,
-        },
-        data: {
-          score: Math.min(100, round.score),
-          isWin: round.isWin,
-          roastCount: round.roastCount,
-          startedAt: round.startedAt,
-          wonAt: round.wonAt,
-        },
+      const normalizedScore = Math.min(100, round.score);
+      const shouldCheckWin = normalizedScore >= 100;
+
+      await prisma.$transaction(async (tx) => {
+        // 读取旧状态用于判断是否是首次达成胜利，避免重复累计胜场
+        const previousRound = await tx.roastBattleRound.findUnique({
+          where: {
+            id: round.id,
+          },
+          select: {
+            isWin: true,
+          },
+        });
+
+        await tx.roastBattleRound.update({
+          where: {
+            id: round.id,
+          },
+          data: {
+            score: normalizedScore,
+            isWin: round.isWin,
+            roastCount: round.roastCount,
+            startedAt: round.startedAt,
+            wonAt: round.wonAt,
+          },
+        });
+
+        if (shouldCheckWin && !previousRound?.isWin) {
+          // 首次达成胜利时增量更新统计表，用于实时排行榜
+          await tx.userRoastBattleStat.upsert({
+            where: {
+              userId: round.userId,
+            },
+            create: {
+              userId: round.userId,
+              winCount: 1,
+            },
+            update: {
+              winCount: {
+                increment: 1,
+              },
+            },
+          });
+        }
       });
     } catch (error) {
       console.error("updateRoastBattleRound: 回写对战回合失败", {

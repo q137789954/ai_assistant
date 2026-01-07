@@ -31,6 +31,8 @@ model User {
   profile       UserProfile?
   /// 吐槽对战回合记录
   roastBattleRounds RoastBattleRound[]
+  /// 用户吐槽对战统计（用于排行榜等场景）
+  roastBattleStat   UserRoastBattleStat?
 
   @@map("user")
 }
@@ -184,6 +186,23 @@ model RoastBattleRound {
   @@index([userId, startedAt(sort: Desc)], map: "idx_roast_battle_rounds_user_time")
   @@index([userId, isWin], map: "idx_roast_battle_rounds_user_win")
   @@map("roast_battle_rounds")
+}
+
+/// 用户吐槽对战统计，用于实时排行榜等场景
+model UserRoastBattleStat {
+  /// 归属用户 ID（对应 user.id），同时作为主键
+  userId    String   @id @map("user_id")
+  /// 累计胜利次数
+  winCount  Int      @default(0) @map("win_count")
+  /// 统计记录创建时间
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// 统计记录更新时间（自动更新）
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// 关联用户
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([winCount(sort: Desc)], map: "idx_user_roast_battle_stats_win_count")
+  @@map("user_roast_battle_stats")
 }
 
 /// 会话消息角色枚举，用于区分系统/用户/助手/工具来源
