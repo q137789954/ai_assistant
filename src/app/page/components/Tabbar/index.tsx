@@ -92,7 +92,7 @@ const Tabbar = () => {
         >
           <div className="drawer-content flex flex-col gap-5">
             <div className="user-header flex flex-col gap-3 border-b border-slate-100 pb-4">
-              <div className="big-avatar-wrapper relative mx-auto flex h-20 w-20 items-center justify-center">
+              <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
                 <span className="flex items-center justify-center border-4 w-20 h-20 rounded-full border-[rgb(204,255,0)] text-3xl font-bold text-[rgb(204,255,0)]!">
                   {initial}
                 </span>

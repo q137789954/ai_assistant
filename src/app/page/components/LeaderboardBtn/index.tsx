@@ -2,8 +2,9 @@
 
 import * as React from 'react'
 import { LeaderboardDialog, type LeaderboardEntry } from '../LeaderboardDialog'
+import { useSession } from "next-auth/react";
 
-const mock: LeaderboardEntry[] = Array.from({ length: 20 }).map((_, i) => ({
+const mock: LeaderboardEntry[] = Array.from({ length: 100 }).map((_, i) => ({
   rank: i + 1,
   name: `Player_${i + 1}`,
   wins: 500 - (i + 1) * 12,
@@ -11,6 +12,9 @@ const mock: LeaderboardEntry[] = Array.from({ length: 20 }).map((_, i) => ({
 
 export default function LeaderboardBtn() {
   const [open, setOpen] = React.useState(false)
+  const { data: session } = useSession();
+  
+    const sessionName = session?.user?.name ?? "";
 
   return (
     <>
@@ -23,9 +27,8 @@ export default function LeaderboardBtn() {
         entries={mock}
         myRank={{
           rankText: '100+',
-          name: 'You (Player)',
+          name: sessionName || 'You (Player)',
           winsText: '12 Wins',
-          avatarUrl: 'https://placehold.co/100x100/333/CCFF00?text=ME',
           emoji: '🔥',
         }}
       />
