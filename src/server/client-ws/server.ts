@@ -21,11 +21,33 @@ import {
  * 支持环境变量覆盖端口与 CORS，确保在不同部署中一致。
  */
 const PORT = Number(process.env.SOCKET_SERVER_PORT) || 4000;
-const CORS_ORIGIN = process.env.SOCKET_SERVER_CORS_ORIGIN || "*";
 /**
- * 只有在指定了明确的跨域源时才允许凭证，避免使用 `*` 时违反浏览器策略。
+ * 解析 CORS 跨域白名单，支持单个源或逗号分隔的多个源。
+ * 示例：`http://localhost:3000,http://192.168.3.127:3000`
+ * - 未配置或配置为 `*` 时，直接允许所有来源，并关闭凭证。
+ * - 配置为具体来源列表时，保持顺序并去除空白，允许凭证。
  */
-const ALLOW_CREDENTIALS = CORS_ORIGIN !== "*";
+const parseCorsOrigin = (
+  rawOrigin?: string,
+): { origin: string | string[]; allowCredentials: boolean } => {
+  if (!rawOrigin || rawOrigin.trim() === "*") {
+    return { origin: "*", allowCredentials: false };
+  }
+
+  const originList = rawOrigin
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  if (originList.length === 0) {
+    return { origin: "*", allowCredentials: false };
+  }
+
+  return { origin: originList, allowCredentials: true };
+};
+
+const { origin: CORS_ORIGIN, allowCredentials: ALLOW_CREDENTIALS } =
+  parseCorsOrigin(process.env.SOCKET_SERVER_CORS_ORIGIN);
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || "";
 
 /**
