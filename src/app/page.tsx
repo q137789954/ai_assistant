@@ -196,6 +196,7 @@ export default function Home() {
           break;
         }
         case "roast-battle-victory": {
+          updatePenguinCounter([]);
           // 重置语音播放与动画帧
           stopTtsPlayback();
           // resetToFirstFrame();
