@@ -12,9 +12,9 @@ const RoastBattleTotal = () => {
   const minRoastCountLabel = minRoastCount === null ? "-" : `${minRoastCount}`;
 
   return (
-    <div className="flex gap-3 text-xs text-white/70 font-black italic">
-      <div>Wins: {winCount}</div>
-      <div>Fastest win: {minRoastCountLabel} rounds</div>
+    <div className="flex gap-3 text-white/70 justify-between">
+      <div className="px-2.5 py-0.5 bg-surface-2 rounded-full font-bold text-xs flex items-center gap-1">WINS: <span className="text-primary text-[14px] font-black">{winCount}</span></div>
+      <div className="px-2.5 py-0.5 bg-surface-2 rounded-full font-bold text-xs flex items-center gap-1">Round: <span className="text-primary text-[14px] font-black">{minRoastCountLabel}</span></div>
     </div>
   );
 }

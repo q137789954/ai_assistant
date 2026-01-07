@@ -9,6 +9,7 @@ import { Copy, Check, Settings } from "lucide-react";
 
 import ChangePasswordDialog from "./ChangePasswordDialog";
 import UserNameEditor from "./UserNameEditor";
+import LeaderboardBtn from "@/app/page/components/LeaderboardBtn";
 
 const { Paragraph } = Typography;
 
@@ -69,10 +70,11 @@ const Tabbar = () => {
   // 这些菜单项仅负责展示，后续可根据具体需求绑定 Webview 或导航
 
   return (
-    <>
+    <div className="flex items-center justify-between gap-4">
       <div className="cursor-pointer text-white hover:text-[#cf0]" onClick={handleOpenPersonalCenter}>
         <Settings size={24} />
       </div>
+      <LeaderboardBtn />
 
       {/* 个人中心抽屉：承载用户信息、菜单与退出操作 */}
       <Drawer
@@ -157,7 +159,7 @@ const Tabbar = () => {
         open={passwordModalOpen}
         onOpenChange={setPasswordModalOpen}
       />
-    </>
+    </div>
   );
 };
 

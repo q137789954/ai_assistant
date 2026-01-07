@@ -1,0 +1,187 @@
+'use client'
+
+import * as React from 'react'
+import clsx from 'clsx'
+// ✅ 把这里替换成你项目里 Dialog 的真实路径
+import { Dialog } from '@/app/components/ui' // e.g. '@/components/dialog'
+import Image from 'next/image'
+
+export type LeaderboardEntry = {
+  rank: number
+  name: string
+  wins: number
+  avatarUrl?: string
+}
+
+export type MyRank = {
+  rankText: string // e.g. "100+"
+  name: string     // e.g. "You (Player)"
+  winsText: string // e.g. "12 Wins"
+  avatarUrl?: string
+  emoji?: string   // e.g. "🔥"
+}
+
+export type LeaderboardDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+
+  title?: string // e.g. "Global Top 100"
+  entries?: LeaderboardEntry[]
+  loading?: boolean
+
+  myRank?: MyRank
+  width?: number
+}
+
+const DEFAULT_ME: MyRank = {
+  rankText: '100+',
+  name: 'You (Player)',
+  winsText: '12 Wins',
+  avatarUrl: 'https://placehold.co/100x100/333/CCFF00?text=ME',
+  emoji: '🔥',
+}
+
+function rankNumClass(rank: number) {
+  // 对齐原型：前三名金/银/铜高亮
+  if (rank === 1) return 'text-[#FFD700] drop-shadow-[0_0_6px_rgba(255,215,0,0.35)] text-[1.1rem]'
+  if (rank === 2) return 'text-[#C0C0C0]'
+  if (rank === 3) return 'text-[#CD7F32]'
+  return 'text-[#666]'
+}
+
+export function LeaderboardDialog({
+  open,
+  onOpenChange,
+  title = 'Global Top 100',
+  entries,
+  loading = false,
+  myRank = DEFAULT_ME,
+  width = 420,
+}: LeaderboardDialogProps) {
+  const showLoading = loading || !entries
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      width={width}
+      closable={false}
+      maskClosable
+      centered
+      // antd v5: styles；部分项目还在用 v4，可同时保留 bodyStyle 兜底
+      styles={{ body: { padding: 0 } }}
+      bodyStyle={{ padding: 0 } as any}
+      className="!p-0"
+    >
+      {/* 外壳（对齐原型：panel、圆角、描边、溢出裁切） */}
+      <div className="relative overflow-hidden rounded-[20px] border border-[#333] bg-[#1a1a1a] text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div className="text-[1.05rem] font-black italic uppercase tracking-wide">
+            {title}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close"
+            className="text-[22px] leading-none text-[#666] transition hover:text-white active:scale-95"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body + Sticky footer wrapper */}
+        <div className="relative max-h-[80vh]">
+          {/* Scroll area（预留底部固定条空间，避免遮住列表） */}
+          <div className="max-h-[80vh] overflow-y-auto px-5 py-4 pb-[92px] [-webkit-overflow-scrolling:touch]">
+            <div className="flex flex-col">
+              {showLoading ? (
+                <div className="py-10 text-center text-sm text-[#666]">
+                  Loading Ranks...
+                </div>
+              ) : entries.length === 0 ? (
+                <div className="py-10 text-center text-sm text-[#666]">
+                  No ranks yet.
+                </div>
+              ) : (
+                entries.map((it) => {
+                  const isTop3 = it.rank <= 3
+                  return (
+                    <div
+                      key={it.rank}
+                      className="flex items-center border-b border-white/5 py-3"
+                    >
+                      <div
+                        className={clsx(
+                          'w-8 shrink-0 text-center font-black italic',
+                          rankNumClass(it.rank)
+                        )}
+                      >
+                        {it.rank}
+                      </div>
+
+                      <img
+                        className="mx-3 h-9 w-9 rounded-full bg-[#333] object-cover"
+                        src={
+                          it.avatarUrl ??
+                          `https://placehold.co/100x100/333/CCFF00?text=${encodeURIComponent(
+                            (it.name?.[0] ?? 'U').toUpperCase()
+                          )}`
+                        }
+                        alt={it.name}
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[0.92rem] font-semibold text-white">
+                          {it.name}
+                        </div>
+                        <div className="text-[0.78rem] font-bold text-[#CCFF00]">
+                          {it.wins} Wins
+                        </div>
+                      </div>
+
+                      {isTop3 ? <div className="text-base">👑</div> : null}
+                    </div>
+                  )
+                })
+              )}
+
+              {!showLoading && entries && entries.length > 0 ? (
+                <div className="py-5 text-center text-xs text-[#666]">
+                  Scroll for more...
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Sticky footer：我的排名（对齐原型 sticky-user-rank） */}
+          <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center gap-3 border-t border-[#CCFF00] bg-[#222] px-5 py-4 shadow-[0_-10px_30px_rgba(0,0,0,0.65)]">
+            <div className="w-10 shrink-0 text-center font-black italic text-[#666]">
+              {myRank.rankText}
+            </div>
+
+            <Image
+              className="rounded-full bg-[#333] object-cover"
+              src={myRank.avatarUrl || ''}
+              alt={myRank.name}
+              width={36}
+              height={36}
+            />
+
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[0.92rem] font-semibold text-[#CCFF00]">
+                {myRank.name}
+              </div>
+              <div className="text-[0.78rem] font-bold text-[#CCFF00]">
+                {myRank.winsText}
+              </div>
+            </div>
+
+            <div className="text-[1.35rem]">{myRank.emoji ?? '🔥'}</div>
+          </div>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
