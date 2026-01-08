@@ -7,12 +7,18 @@ type ResourceLoadingOverlayProps = {
   loaded: number;
   /** 需要加载的资源总量 */
   total: number;
+  /** 资源加载失败的错误列表 */
+  errors?: string[];
+  /** 触发重试的回调 */
+  onRetry?: () => void;
 };
 
 const ResourceLoadingOverlay = ({
   visible,
   loaded,
   total,
+  errors = [],
+  onRetry,
 }: ResourceLoadingOverlayProps) => {
   // 资源加载完成后直接返回 null，避免渲染空容器占位
   if (!visible) {
@@ -25,8 +31,10 @@ const ResourceLoadingOverlay = ({
   // 进度条宽度百分比，配合内联样式实现精确展示
   const progressWidth = `${percent}%`;
 
+  const hasError = errors.length > 0;
+
   return (
-    <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-[#0b0c11]/95 text-white">
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#0b0c11]/95 text-white">
       {/* 主体容器：在移动端更窄、在桌面端更宽 */}
       <div className="flex w-[78vw] max-w-[520px] flex-col items-center gap-4 text-center sm:w-[360px] sm:max-w-[560px] md:w-[460px]">
         {/* 标题：仿照示例做字距与轻微发光效果 */}
@@ -41,10 +49,24 @@ const ResourceLoadingOverlay = ({
             style={{ width: progressWidth }}
           />
         </div>
-        {/* 文案：展示加载进度 */}
+        {/* 文案：展示加载进度或错误提示 */}
         <div className="text-[12px] uppercase tracking-[0.22em] text-[rgba(204,255,0,0.6)] sm:text-[12px] md:text-[13px]">
-          LOADING ENVIRONMENT {percent}%
+          {hasError ? "LOADING FAILED" : `LOADING ENVIRONMENT ${percent}%`}
         </div>
+        {hasError && (
+          <div className="flex flex-col items-center gap-3 text-xs text-red-200">
+            {/* 展示错误数量，避免直接刷屏 */}
+            <div>资源加载失败（{errors.length} 个）。</div>
+            {onRetry && (
+              <button
+                className="rounded-full border border-[rgba(204,255,0,0.6)] px-4 py-1 text-[12px] uppercase tracking-[0.22em] text-[rgba(204,255,0,0.8)] transition hover:border-[rgba(204,255,0,0.9)] hover:text-[rgba(204,255,0,0.95)]"
+                onClick={onRetry}
+              >
+                RETRY
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -7,7 +7,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -20,8 +19,6 @@ const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4'] as const
 export default function AnimationPlayer() {
   const {
     currentAnimation,
-    allAnimationsLoaded,
-    preloadProgress,
     registerSpineInstance,
     play,
     pause,
@@ -347,13 +344,6 @@ export default function AnimationPlayer() {
     return undefined
   }, [chatbotVisible, modulesReady, pause, play])
 
-  const statusHint = useMemo(() => {
-    if (allAnimationsLoaded) {
-      return '动画资源已就绪'
-    }
-    return `正在预加载 ( ${preloadProgress.loaded}/${preloadProgress.total} )`
-  }, [allAnimationsLoaded, preloadProgress])
-
   return (
     <section className="flex flex-col items-center gap-4 w-full h-full">
       <div
@@ -363,11 +353,6 @@ export default function AnimationPlayer() {
         {errorMessage && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-red-900/80 text-sm font-semibold text-white">
             {errorMessage}
-          </div>
-        )}
-        {!allAnimationsLoaded && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/80 text-sm font-medium text-white">
-            {statusHint}
           </div>
         )}
       </div>

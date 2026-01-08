@@ -7,6 +7,8 @@ import { MicrophonePermissionDialog } from "@/app/components/features";
 import AuthProviders from "@/app/providers/AuthProviders";
 import AnimationProvider from "./providers/AnimationProvider";
 import RoastBattleProviders from "./providers/RoastBattleProviders";
+import ResourceLoadingProvider from "./providers/ResourceLoadingProvider";
+import ResourceLoadingGate from "./providers/ResourceLoadingProvider/ResourceLoadingGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,14 +41,16 @@ export default function RootLayout({
       >
         <AuthProviders>
           <GlobalsProviders>
-            <AnimationProvider>
-              <WebSocketProviders url={websocketUrl}>
-                <RoastBattleProviders>
-                {children}
-                </RoastBattleProviders>
-                <MicrophonePermissionDialog />
-              </WebSocketProviders>
-            </AnimationProvider>
+            <ResourceLoadingProvider>
+              <AnimationProvider>
+                <WebSocketProviders url={websocketUrl}>
+                  <RoastBattleProviders>
+                    <ResourceLoadingGate>{children}</ResourceLoadingGate>
+                  </RoastBattleProviders>
+                  <MicrophonePermissionDialog />
+                </WebSocketProviders>
+              </AnimationProvider>
+            </ResourceLoadingProvider>
           </GlobalsProviders>
         </AuthProviders>
       </body>

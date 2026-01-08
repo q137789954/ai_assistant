@@ -11,94 +11,19 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useSession } from 'next-auth/react'
+import { DEFAULT_ANIMATION_LIST, type AnimationMeta } from './animationCatalog'
 
-export interface AnimationMeta {
-  id: string
-  description?: string
-  json: string
-  atlas?: string
-  image?: string
-  animationName?: string
-}
-
-export interface PreloadProgress {
-  loaded: number
-  total: number
-}
-
-// 默认的 Spine 动画列表，确保在未提供参数时也有可播放的骨骼资源
-const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
-  {
-    id: 'idle1',
-    description: '待机动画1',
-    animationName: 'idle1',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-  },
-  {
-    id: 'idle2',
-    description: '待机动画2',
-    animationName: 'idle2',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-  },
-  {
-    id: 'idle3',
-    description: '待机动画3',
-    animationName: 'idle3',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-  },
-  {
-    id: 'idle4',
-    description: '待机动画4',
-    animationName: 'idle4',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-  },
-  {
-    id: 'listen',
-    description: '听动作',
-    animationName: 'listen',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-  },
-  {
-    id: 'talk1',
-    description: '说动作',
-    animationName: 'talk1',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-  },
-  {
-    id: 'talk2',
-    description: '说动作',
-    animationName: 'talk2',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-  },
-]
+export type { AnimationMeta } from './animationCatalog'
 
 interface SpineRegistration {
   spine: SpineInstance | null
   defaultAnimationName?: string | null
 }
 
-// Context 暴露出的功能项，供下游消费控制动画播放、切换与加载状态
+// Context 暴露出的功能项，供下游消费控制动画播放与切换
 interface AnimationProviderContext {
   animations: AnimationMeta[]
   currentAnimation: AnimationMeta | null
-  isPreloading: boolean
-  allAnimationsLoaded: boolean
-  preloadProgress: PreloadProgress
   registerSpineInstance: (registration: SpineRegistration) => void
   switchToAnimationById: (id: string) => void
   play: () => void
@@ -131,35 +56,13 @@ export default function AnimationProvider({
     () => (rawAnimations && rawAnimations.length > 0 ? rawAnimations : DEFAULT_ANIMATION_LIST),
     [rawAnimations]
   )
-  const { status } = useSession()
 
   const [currentAnimationId, setCurrentAnimationId] = useState<string | null>(
     animations[0]?.id ?? null
   )
-  // 预加载状态相关字段，用于消费层显示进度或提示
-  const [isPreloading, setIsPreloading] = useState(false)
-  const [allAnimationsLoaded, setAllAnimationsLoaded] = useState(animations.length === 0)
-  const [preloadProgress, setPreloadProgress] = useState<PreloadProgress>({
-    loaded: 0,
-    total: animations.length,
-  })
 
   const spineInstanceRef = useRef<SpineInstance | null>(null)
   const primaryAnimationNameRef = useRef<string | null>(null)
-  const preloadAbortRef = useRef<() => void>(() => {})
-
-  // 动画列表变更时需要重置预加载状态及计数器
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setPreloadProgress({ loaded: 0, total: animations.length })
-      setAllAnimationsLoaded(animations.length === 0)
-      setIsPreloading(false)
-      preloadAbortRef.current()
-    }, 0)
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [animations])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -233,73 +136,10 @@ export default function AnimationProvider({
     [animations]
   )
 
-  // 认证用户才会执行预加载，依赖状态控制取消与进度反馈
-  useEffect(() => {
-    if (status !== 'authenticated' || animations.length === 0 || allAnimationsLoaded) {
-      return
-    }
-
-    const initHandle = window.setTimeout(() => {
-      setIsPreloading(true)
-      setPreloadProgress({ loaded: 0, total: animations.length })
-    }, 0)
-    let aborted = false
-    const cleanupFns: Array<() => void> = []
-
-    const markLoaded = () => {
-      setPreloadProgress((prev) => {
-        const nextLoaded = prev.loaded + 1
-        if (nextLoaded >= prev.total) {
-          setAllAnimationsLoaded(true)
-          setIsPreloading(false)
-        }
-        return { ...prev, loaded: Math.min(nextLoaded, prev.total) }
-      })
-    }
-
-    animations.forEach((animation) => {
-      const resources = [animation.json, animation.atlas, animation.image].filter(Boolean) as string[]
-      if (resources.length === 0) {
-        markLoaded()
-        return
-      }
-      const controller = new AbortController()
-      cleanupFns.push(() => controller.abort())
-
-      void Promise.allSettled(
-        resources.map((url) =>
-          fetch(url, { signal: controller.signal }).catch(() => {
-            /* 忽略单个资源的加载失败，整体仍然会计数 */
-          })
-        )
-      ).then(() => {
-        if (aborted) {
-          return
-        }
-        markLoaded()
-      })
-    })
-
-    preloadAbortRef.current = () => {
-      aborted = true
-      cleanupFns.forEach((fn) => fn())
-      setIsPreloading(false)
-    }
-
-    return () => {
-      window.clearTimeout(initHandle)
-      preloadAbortRef.current()
-      setIsPreloading(false)
-    }
-  }, [status, animations, allAnimationsLoaded])
-
   const value = useMemo(
     () => ({
       animations,
       currentAnimation,
-      isPreloading,
-      allAnimationsLoaded,
-      preloadProgress,
       registerSpineInstance,
       switchToAnimationById,
       play,
@@ -309,9 +149,6 @@ export default function AnimationProvider({
     [
       animations,
       currentAnimation,
-      isPreloading,
-      allAnimationsLoaded,
-      preloadProgress,
       registerSpineInstance,
       switchToAnimationById,
       play,

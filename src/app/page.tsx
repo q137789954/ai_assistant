@@ -17,23 +17,14 @@ import DefeatOverlay from "./page/components/DefeatOverlay";
 import RoastBattleTotal from "./page/components/RoastBattleTotal";
 import CounterRoastCards from "./page/components/CounterRoastCards";
 import type { PenguinCounterCard } from "./page/components/CounterRoastCards";
-import ResourceLoadingOverlay from "./page/components/ResourceLoadingOverlay";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
   const { dispatch: roastBattleDispatch } = useContext(RoastBattleContext) || {};
 
-  console.log(11111)
-
-
-  const {
-    allAnimationsLoaded,
-    preloadProgress,
-    switchToAnimationById,
-  } = useAnimationPlayer();
+  const { switchToAnimationById } = useAnimationPlayer();
   const { stopTtsPlayback } = useTtsAudioPlayer();
-  const [showAnimationLoader, setShowAnimationLoader] = useState(true);
   const { emitEvent, subscribe } = useWebSocketContext();
   const [retorts, setRetorts] = useState<PenguinCounterCard[]>([]);
   const [retortsGroupId, setRetortsGroupId] = useState<string>(() => crypto.randomUUID());
@@ -235,23 +226,6 @@ export default function Home() {
     void refreshRoastBattleStats();
   }, [refreshRoastBattleStats]);
 
-  // 所有动画资源加载完成后或等待时限到达后才隐藏加载中提示，避免因资源慢加载导致界面无反馈
-  useEffect(() => {
-    if (!allAnimationsLoaded) {
-      return undefined;
-    }
-    const frame = window.setTimeout(() => {
-      setShowAnimationLoader(false);
-    }, 0);
-    return () => clearTimeout(frame);
-  }, [allAnimationsLoaded]);
-
-  useEffect(() => {
-    if (!showAnimationLoader) {
-      return undefined;
-    }
-    return undefined;
-  }, [showAnimationLoader]);
   useTtsAudioPlayer();
 
   const onSpeechEnd = useCallback(() => {
@@ -295,17 +269,6 @@ export default function Home() {
   }, [chatbotVisible, dispatch]);
 
   // 所有动画资源加载完之前展示一个加载中组件（最多10秒）
-
-  if( showAnimationLoader) {
-    {/* 资源加载遮罩层：在动画资源未就绪时保持页面反馈 */}
-      return (
-        <ResourceLoadingOverlay
-          visible={true}
-          loaded={preloadProgress.loaded}
-          total={preloadProgress.total}
-        />
-      )
-  }
 
   return (
     <main className="h-full w-full relative flex flex-col bg-[url('/home/lamplight.jpeg')] bg-cover bg-center bg-no-repeat">

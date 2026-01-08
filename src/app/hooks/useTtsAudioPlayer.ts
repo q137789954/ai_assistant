@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef } from "react";
 import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
+import { useResourceLoading } from "@/app/providers/ResourceLoadingProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
@@ -129,7 +130,8 @@ const normalizeToFloat32 = (
 
 export const useTtsAudioPlayer = () => {
   const { subscribe } = useWebSocketContext();
-  const { allAnimationsLoaded, animations, switchToAnimationById, play } = useAnimationPlayer();
+  const { animations, switchToAnimationById, play } = useAnimationPlayer();
+  const { allLoaded } = useResourceLoading();
   // 读取全局的 timestampWatermark，确保旧指令的 TTS 语音在新指令发出后不会继续执行
   const globalsContext = useContext(GlobalsContext);
   const timestampWatermark = globalsContext?.timestampWatermark ?? null;
@@ -474,7 +476,7 @@ export const useTtsAudioPlayer = () => {
           const requestId = safeString(payload.requestId);
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
-          if(!isRepeatRequest&&actionId && allAnimationsLoaded) {
+          if(!isRepeatRequest&&actionId && allLoaded) {
             const animationExists = animations.some((animation) => animation.id === actionId);
             if (animationExists) {
               // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
@@ -552,7 +554,7 @@ export const useTtsAudioPlayer = () => {
     };
   }, [
     subscribe,
-    allAnimationsLoaded,
+    allLoaded,
     animations,
     switchToAnimationById,
     play,
@@ -586,7 +588,7 @@ export const useTtsAudioPlayer = () => {
     };
     sentencesRef.current.set(sentenceId, entry);
     // 本地播放也要切换到说话动画，随机选择 talk1/talk2（若都不存在则不切换）
-    if (allAnimationsLoaded) {
+    if (allLoaded) {
       const talkCandidates = ["talk1", "talk2"].filter((id) =>
         animations.some((animation) => animation.id === id),
       );
