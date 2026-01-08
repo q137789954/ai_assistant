@@ -28,6 +28,8 @@ export type ResourceLoadingState = {
   errors: string[];
   /** 是否全部资源加载成功 */
   allLoaded: boolean;
+  /** 获取预加载的音频 ArrayBuffer（未命中返回 null） */
+  getPreloadedAudioBuffer: (url: string) => ArrayBuffer | null;
   /** 触发重新加载的入口 */
   retry: () => void;
 };
@@ -67,6 +69,8 @@ export default function ResourceLoadingProvider({
   const [total, setTotal] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
   const [retryCount, setRetryCount] = useState(0);
+  // 缓存已预加载的音频文件内容，供后续解码复用
+  const audioBufferCacheRef = useRef<Map<string, ArrayBuffer>>(new Map());
 
   // 记录当前一次加载的终止逻辑，便于重试或卸载时取消请求
   const abortControllersRef = useRef<AbortController[]>([]);
@@ -78,9 +82,17 @@ export default function ResourceLoadingProvider({
     const animationResources = DEFAULT_ANIMATION_LIST.flatMap((animation) =>
       [animation.json, animation.atlas, animation.image].filter(Boolean),
     ) as string[];
+    // 入场音频默认预加载
+    const entryAudioResources = ["/voice/start1.mp3", "/voice/start2.mp3"];
     const extraResources = (resources ?? []).filter(Boolean);
-    return Array.from(new Set([...animationResources, ...extraResources]));
+    return Array.from(
+      new Set([...animationResources, ...entryAudioResources, ...extraResources]),
+    );
   }, [resources]);
+
+  const getPreloadedAudioBuffer = useCallback((url: string) => {
+    return audioBufferCacheRef.current.get(url) ?? null;
+  }, []);
 
   const resetCounters = useCallback(() => {
     completedRef.current = 0;
@@ -128,32 +140,29 @@ export default function ResourceLoadingProvider({
     resourceList.forEach((url) => {
       const controller = new AbortController();
       abortControllersRef.current.push(controller);
-      fetch(url, { signal: controller.signal })
-        .then((response) => {
+      const loadResource = async () => {
+        try {
+          const response = await fetch(url, { signal: controller.signal });
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
           }
           // 读取响应体确保资源真正被下载完成，避免只完成了头部握手
-          return response.arrayBuffer();
-        })
-        .catch((error: unknown) => {
+          const buffer = await response.arrayBuffer();
+          // 仅缓存音频资源，避免图片/动画等占用过多内存
+          if (/\.mp3($|\\?)/i.test(url)) {
+            audioBufferCacheRef.current.set(url, buffer);
+          }
+          handleComplete();
+        } catch (error: unknown) {
           if (aborted || controller.signal.aborted) {
             return;
           }
           const message =
             error instanceof Error ? error.message : String(error ?? "未知错误");
           handleComplete(`资源加载失败：${url}（${message}）`);
-          return;
-        })
-        .finally(() => {
-          if (aborted || controller.signal.aborted) {
-            return;
-          }
-          // 失败与成功都要计入已完成进度
-          if (!errorsRef.current.some((item) => item.includes(url))) {
-            handleComplete();
-          }
-        });
+        }
+      };
+      void loadResource();
     });
 
     return () => {
@@ -180,9 +189,10 @@ export default function ResourceLoadingProvider({
       total,
       errors,
       allLoaded,
+      getPreloadedAudioBuffer,
       retry,
     }),
-    [isLoading, progress, loaded, total, errors, allLoaded, retry],
+    [isLoading, progress, loaded, total, errors, allLoaded, getPreloadedAudioBuffer, retry],
   );
 
   return (

@@ -25,6 +25,7 @@ export default function AnimationPlayer() {
     play,
     pause,
     switchToAnimationById,
+    switchToRandomAnimationByType,
   } = useAnimationPlayer()
 
   const safeDestroySpine = (instance: SpineInstance | null) => {
@@ -142,6 +143,19 @@ export default function AnimationPlayer() {
     [currentAnimation?.id, pickNextIdle, switchToAnimationById]
   )
 
+  // 处理动画播放完成事件：入场动画播放完毕后切回待机，否则走原有待机轮播逻辑
+  const handleAnimationComplete = useCallback(
+    (animationName?: string) => {
+      if (currentAnimation?.type === 'start') {
+        // 入场动画播放完成后随机切换到待机动画
+        switchToRandomAnimationByType('idle')
+        return
+      }
+      ensureIdleChain(animationName)
+    },
+    [currentAnimation?.type, ensureIdleChain, switchToRandomAnimationByType]
+  )
+
   const applyAnimationToSpine = useCallback(
     (spine: SpineInstance, animationMeta: AnimationMeta) => {
       const animationList = (spine.spineData?.animations || []) as Array<{ name: string }>
@@ -163,7 +177,7 @@ export default function AnimationPlayer() {
       const listener: AnimationStateListener = {
         complete: (entry: TrackEntry) => {
           const animationName = entry.animation?.name ?? undefined
-          ensureIdleChain(animationName)
+          handleAnimationComplete(animationName)
         },
       }
       spine.state.addListener(listener)
