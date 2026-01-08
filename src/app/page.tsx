@@ -6,6 +6,7 @@ import AvatarCommandInput from "./page/AvatarCommandInput";
 import AnimationPlayer from "./page/components/AnimationPlayer";
 import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
+import { RoastBattleContext } from "@/app/providers/RoastBattleProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
 import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
@@ -21,6 +22,10 @@ import ResourceLoadingOverlay from "./page/components/ResourceLoadingOverlay";
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
+  const { dispatch: roastBattleDispatch } = useContext(RoastBattleContext) || {};
+
+  console.log(11111)
+
 
   const {
     allAnimationsLoaded,
@@ -67,9 +72,11 @@ export default function Home() {
    * - 接口返回失败时仅记录日志，避免影响主流程
    */
   const refreshRoastBattleStats = useCallback(async () => {
-    if (!dispatch) {
+    console.log("刷新吐槽对战统计数据...");
+    if (!roastBattleDispatch) {
       return;
     }
+    console.log("开始请求吐槽对战统计接口...");
 
     try {
       const response = await fetch("/api/roast-battle/stats");
@@ -89,7 +96,9 @@ export default function Home() {
         return;
       }
 
-      dispatch({
+      console.log(payload.data.winCount, payload.data.minRoastCount);
+
+      roastBattleDispatch({
         type: "SET_ROAST_BATTLE_STATS",
         payload: {
           winCount: payload.data.winCount ?? 0,
@@ -102,7 +111,7 @@ export default function Home() {
     } catch (error) {
       console.warn("拉取吐槽对战统计失败:", error);
     }
-  }, [dispatch]);
+  }, [roastBattleDispatch]);
 
   const ensureSpeechSession = useCallback(() => {
     if (!requestId.current) {

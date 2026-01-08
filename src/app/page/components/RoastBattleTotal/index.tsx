@@ -1,12 +1,12 @@
 import { useContext } from "react";
 
-import { GlobalsContext } from "@/app/providers/GlobalsProviders";
+import { RoastBattleContext } from "@/app/providers/RoastBattleProviders";
 
 const RoastBattleTotal = () => {
   // 从全局上下文中读取吐槽对战统计数据，避免重复请求
-  const globals = useContext(GlobalsContext);
-  const winCount = globals?.roastBattleWinCount ?? 0;
-  const minRoastCount = globals?.roastBattleMinRoastCount ?? null;
+  const roastBattleData = useContext(RoastBattleContext);
+  const winCount = roastBattleData?.winCount ?? 0;
+  const minRoastCount = roastBattleData?.minRoastCount ?? null;
 
   // 胜利场次的最小 roast_count 为空时，统一展示为 "-"
   const minRoastCountLabel = minRoastCount === null ? "-" : `${minRoastCount}`;
