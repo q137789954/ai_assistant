@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import ResourceLoadingOverlay from "@/app/page/components/ResourceLoadingOverlay";
 import { useResourceLoading } from "@/app/providers/ResourceLoadingProvider";
 
@@ -16,20 +16,26 @@ type ResourceLoadingGateProps = {
  */
 export default function ResourceLoadingGate({ children }: ResourceLoadingGateProps) {
   const { isLoading, loaded, total, errors, allLoaded, retry } = useResourceLoading();
+  // 控制用户是否已点击“进入”，未进入前始终保持遮罩
+  const [hasEntered, setHasEntered] = useState(false);
 
-  if (!allLoaded) {
+  if (hasEntered) {
+    return <>{children}</>;
+  }
+
+  // 未点击进入前保持遮罩层展示，加载完成后展示“进入”按钮
+  if (!hasEntered) {
     return (
       <div className="relative min-h-screen">
         <ResourceLoadingOverlay
-          visible={isLoading || errors.length > 0}
+          visible
           loaded={loaded}
           total={total}
           errors={errors}
           onRetry={retry}
+          onEnter={allLoaded ? () => setHasEntered(true) : undefined}
         />
       </div>
     );
   }
-
-  return <>{children}</>;
 }

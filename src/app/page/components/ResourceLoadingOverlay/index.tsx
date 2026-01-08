@@ -11,6 +11,8 @@ type ResourceLoadingOverlayProps = {
   errors?: string[];
   /** 触发重试的回调 */
   onRetry?: () => void;
+  /** 资源加载完成后进入站点的回调 */
+  onEnter?: () => void;
 };
 
 const ResourceLoadingOverlay = ({
@@ -19,6 +21,7 @@ const ResourceLoadingOverlay = ({
   total,
   errors = [],
   onRetry,
+  onEnter,
 }: ResourceLoadingOverlayProps) => {
   // 资源加载完成后直接返回 null，避免渲染空容器占位
   if (!visible) {
@@ -32,6 +35,8 @@ const ResourceLoadingOverlay = ({
   const progressWidth = `${percent}%`;
 
   const hasError = errors.length > 0;
+  // 资源加载完成且无错误时允许进入站点
+  const canEnter = !hasError && loaded >= total;
 
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#0b0c11]/95 text-white">
@@ -51,7 +56,11 @@ const ResourceLoadingOverlay = ({
         </div>
         {/* 文案：展示加载进度或错误提示 */}
         <div className="text-[12px] uppercase tracking-[0.22em] text-[rgba(204,255,0,0.6)] sm:text-[12px] md:text-[13px]">
-          {hasError ? "LOADING FAILED" : `LOADING ENVIRONMENT ${percent}%`}
+          {hasError
+            ? "LOADING FAILED"
+            : canEnter
+              ? "READY TO ENTER"
+              : `LOADING ENVIRONMENT ${percent}%`}
         </div>
         {hasError && (
           <div className="flex flex-col items-center gap-3 text-xs text-red-200">
@@ -66,6 +75,14 @@ const ResourceLoadingOverlay = ({
               </button>
             )}
           </div>
+        )}
+        {canEnter && onEnter && (
+          <button
+            className="rounded-full border border-[rgba(204,255,0,0.7)] px-5 py-1.5 text-[12px] uppercase tracking-[0.28em] text-[rgba(204,255,0,0.9)] transition hover:border-[rgba(204,255,0,1)] hover:text-[rgba(204,255,0,1)]"
+            onClick={onEnter}
+          >
+            ENTER
+          </button>
         )}
       </div>
     </div>
