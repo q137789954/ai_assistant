@@ -9,7 +9,7 @@ import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { RoastBattleContext } from "@/app/providers/RoastBattleProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
-import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
+import { useAnimationPlayerActions } from "@/app/providers/AnimationProvider";
 import BreakMeter, {
   type BreakMeterHandle,
 } from "./page/components/BreakMeter";
@@ -22,8 +22,9 @@ export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
   const { dispatch: roastBattleDispatch } = useContext(RoastBattleContext) || {};
-
-  const { switchToAnimationById } = useAnimationPlayer();
+  console.log(11111);
+  // 只订阅动画动作，避免动画状态更新触发页面整体重渲染
+  const { switchToAnimationById } = useAnimationPlayerActions();
   const { stopTtsPlayback } = useTtsAudioPlayer();
   const { emitEvent, subscribe } = useWebSocketContext();
   const [retorts, setRetorts] = useState<PenguinCounterCard[]>([]);

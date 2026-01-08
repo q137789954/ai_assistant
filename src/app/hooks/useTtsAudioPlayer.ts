@@ -1,5 +1,8 @@
 import { useCallback, useContext, useEffect, useRef } from "react";
-import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
+import {
+  useAnimationCatalog,
+  useAnimationPlayerActions,
+} from "@/app/providers/AnimationProvider";
 import { useResourceLoading } from "@/app/providers/ResourceLoadingProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
@@ -130,7 +133,9 @@ const normalizeToFloat32 = (
 
 export const useTtsAudioPlayer = () => {
   const { subscribe } = useWebSocketContext();
-  const { animations, switchToAnimationById, play } = useAnimationPlayer();
+  // 仅订阅动画列表与动作，避免 currentAnimation 更新导致播放器逻辑反复重建
+  const { animations } = useAnimationCatalog();
+  const { switchToAnimationById, play } = useAnimationPlayerActions();
   const { allLoaded } = useResourceLoading();
   // 读取全局的 timestampWatermark，确保旧指令的 TTS 语音在新指令发出后不会继续执行
   const globalsContext = useContext(GlobalsContext);

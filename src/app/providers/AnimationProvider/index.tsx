@@ -21,9 +21,15 @@ interface SpineRegistration {
 }
 
 // Context 暴露出的功能项，供下游消费控制动画播放与切换
-interface AnimationProviderContext {
+interface AnimationProviderCatalog {
   animations: AnimationMeta[]
+}
+
+interface AnimationProviderState {
   currentAnimation: AnimationMeta | null
+}
+
+interface AnimationProviderActions {
   registerSpineInstance: (registration: SpineRegistration) => void
   switchToAnimationById: (id: string) => void
   play: () => void
@@ -31,15 +37,37 @@ interface AnimationProviderContext {
   resetToFirstFrame: () => void
 }
 
-const AnimationProviderContext = createContext<AnimationProviderContext | null>(null)
+const AnimationCatalogContext = createContext<AnimationProviderCatalog | null>(null)
+const AnimationStateContext = createContext<AnimationProviderState | null>(null)
+const AnimationActionsContext = createContext<AnimationProviderActions | null>(null)
 
-// 方便组件直接获取动画上下文，确保必须在 Provider 内使用
+// 方便组件直接获取动画状态与动作，确保必须在 Provider 内使用
 export function useAnimationPlayer() {
-  const context = useContext(AnimationProviderContext)
-  if (!context) {
+  const catalog = useContext(AnimationCatalogContext)
+  const state = useContext(AnimationStateContext)
+  const actions = useContext(AnimationActionsContext)
+  if (!catalog || !state || !actions) {
     throw new Error('useAnimationPlayer 必须在 AnimationProvider 内部调用')
   }
-  return context
+  return { ...catalog, ...state, ...actions }
+}
+
+// 仅订阅动画列表，避免 currentAnimation 变化导致无关逻辑重复执行
+export function useAnimationCatalog() {
+  const catalog = useContext(AnimationCatalogContext)
+  if (!catalog) {
+    throw new Error('useAnimationCatalog 必须在 AnimationProvider 内部调用')
+  }
+  return catalog
+}
+
+// 仅订阅动作，避免动画状态变化导致无关组件频繁重渲染
+export function useAnimationPlayerActions() {
+  const actions = useContext(AnimationActionsContext)
+  if (!actions) {
+    throw new Error('useAnimationPlayerActions 必须在 AnimationProvider 内部调用')
+  }
+  return actions
 }
 
 export interface AnimationProviderProps {
@@ -136,30 +164,39 @@ export default function AnimationProvider({
     [animations]
   )
 
-  const value = useMemo(
+  // 状态和值分开存入 Context，避免仅用到动作的组件被动画状态刷新牵连
+  const catalogValue = useMemo(
     () => ({
       animations,
+    }),
+    [animations]
+  )
+
+  const stateValue = useMemo(
+    () => ({
       currentAnimation,
+    }),
+    [currentAnimation]
+  )
+
+  const actionsValue = useMemo(
+    () => ({
       registerSpineInstance,
       switchToAnimationById,
       play,
       pause,
       resetToFirstFrame,
     }),
-    [
-      animations,
-      currentAnimation,
-      registerSpineInstance,
-      switchToAnimationById,
-      play,
-      pause,
-      resetToFirstFrame,
-    ]
+    [registerSpineInstance, switchToAnimationById, play, pause, resetToFirstFrame]
   )
 
   return (
-    <AnimationProviderContext.Provider value={value}>
-      {children}
-    </AnimationProviderContext.Provider>
+    <AnimationCatalogContext.Provider value={catalogValue}>
+      <AnimationStateContext.Provider value={stateValue}>
+        <AnimationActionsContext.Provider value={actionsValue}>
+          {children}
+        </AnimationActionsContext.Provider>
+      </AnimationStateContext.Provider>
+    </AnimationCatalogContext.Provider>
   )
 }
