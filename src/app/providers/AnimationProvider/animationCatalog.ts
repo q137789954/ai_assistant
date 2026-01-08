@@ -10,6 +10,8 @@ export interface AnimationMeta {
   atlas?: string
   image?: string
   animationName?: string
+  type: 'idle' | 'listen' | 'talk' | 'start' | 'quit'
+  timeScale?: number
 }
 
 // 默认的 Spine 动画列表，保证在未提供参数时也有可播放的骨骼资源
@@ -21,6 +23,8 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
+    type: 'idle',
+    timeScale: 0.5,
   },
   {
     id: 'idle2',
@@ -29,6 +33,8 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
+    type: 'idle',
+    timeScale: 0.5,
   },
   {
     id: 'idle3',
@@ -37,6 +43,7 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
+    type: 'idle',
   },
   {
     id: 'idle4',
@@ -45,14 +52,28 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
+    type: 'idle',
+    timeScale: 0.5,
   },
   {
-    id: 'listen',
+    id: 'listen1',
     description: '听动作',
-    animationName: 'listen',
+    animationName: 'listen1',
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
+    type: 'listen',
+    timeScale: 1,
+  },
+  {
+    id: 'listen2',
+    description: '听动作',
+    animationName: 'listen2',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+    type: 'listen',
+    timeScale: 1,
   },
   {
     id: 'talk1',
@@ -61,6 +82,8 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
+    type: 'talk',
+    timeScale: 1,
   },
   {
     id: 'talk2',
@@ -69,5 +92,47 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
+    type: 'talk',
+    timeScale: 1,
+  },
+  {
+    id: 'talk3',
+    description: '说动作',
+    animationName: 'talk3',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+    type: 'talk',
+    timeScale: 1,
+  },
+  {
+    id: 'start1',
+    description: '开始动作',
+    animationName: 'start1',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+    type: 'start',
+    timeScale: 1,
+  },
+  {
+    id: 'start2',
+    description: '开始动作',
+    animationName: 'start2',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+    type: 'start',
+    timeScale: 1,
+  },
+  {
+    id: 'quit',
+    description: '退出动作',
+    animationName: 'quit',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+    type: 'quit',
+    timeScale: 1,
   },
 ]

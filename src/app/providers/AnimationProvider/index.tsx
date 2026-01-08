@@ -32,6 +32,7 @@ interface AnimationProviderState {
 interface AnimationProviderActions {
   registerSpineInstance: (registration: SpineRegistration) => void
   switchToAnimationById: (id: string) => void
+  switchToRandomAnimationByType: (type: string) => void
   play: () => void
   pause: () => void
   resetToFirstFrame: () => void
@@ -164,6 +165,30 @@ export default function AnimationProvider({
     [animations]
   )
 
+  // 根据动画类型随机切换，尽量避免连续选中同一个
+  const switchToRandomAnimationByType = useCallback(
+    (type: string) => {
+      const normalizedType = type.trim()
+      if (!normalizedType) {
+        return
+      }
+      const candidates = animations.filter((item) => item.type === normalizedType)
+      if (!candidates.length) {
+        return
+      }
+      setCurrentAnimationId((prevId) => {
+        if (!prevId || candidates.length === 1) {
+          return candidates[0]!.id
+        }
+        const filtered = candidates.filter((item) => item.id !== prevId)
+        const pool = filtered.length ? filtered : candidates
+        const next = pool[Math.floor(Math.random() * pool.length)]?.id
+        return next ?? prevId
+      })
+    },
+    [animations]
+  )
+
   // 状态和值分开存入 Context，避免仅用到动作的组件被动画状态刷新牵连
   const catalogValue = useMemo(
     () => ({
@@ -183,11 +208,19 @@ export default function AnimationProvider({
     () => ({
       registerSpineInstance,
       switchToAnimationById,
+      switchToRandomAnimationByType,
       play,
       pause,
       resetToFirstFrame,
     }),
-    [registerSpineInstance, switchToAnimationById, play, pause, resetToFirstFrame]
+    [
+      registerSpineInstance,
+      switchToAnimationById,
+      switchToRandomAnimationByType,
+      play,
+      pause,
+      resetToFirstFrame,
+    ]
   )
 
   return (

@@ -2,6 +2,8 @@
 
 type PixiApplication = import('pixi.js').Application
 type SpineInstance = import('@pixi-spine/all-4.1').Spine
+type AnimationStateListener = import('@pixi-spine/runtime-4.1').AnimationStateListener
+type TrackEntry = import('@pixi-spine/runtime-4.1').TrackEntry
 
 import {
   useCallback,
@@ -13,8 +15,8 @@ import {
 import { useAnimationPlayer, type AnimationMeta } from '@/app/providers/AnimationProvider'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 
-const DEFAULT_TIME_SCALE = 1
-const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4'] as const
+const DEFAULT_TIME_SCALE = 1.0
+const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4', 'idle5', 'idle6'] as const
 
 export default function AnimationPlayer() {
   const {
@@ -83,7 +85,8 @@ export default function AnimationPlayer() {
   const spineRef = useRef<SpineInstance | null>(null)
   const pixiRef = useRef<typeof import('pixi.js') | null>(null)
   const spineModuleRef = useRef<typeof import('@pixi-spine/all-4.1') | null>(null)
-  const stateListenerRef = useRef<any>(null)
+  // 保存 Spine 事件监听器，便于重复注册前先移除
+  const stateListenerRef = useRef<AnimationStateListener | null>(null)
   const [modulesReady, setModulesReady] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const globals = useContext(GlobalsContext)
@@ -149,16 +152,18 @@ export default function AnimationPlayer() {
         return null
       }
       spine.state.setAnimation(0, animationName, true)
-      spine.state.timeScale = DEFAULT_TIME_SCALE
+      // 优先使用动画配置的播放速度，未配置时回落到默认值
+      spine.state.timeScale = animationMeta.timeScale ?? DEFAULT_TIME_SCALE
       fitStage()
       registerSpineInstance({ spine, defaultAnimationName: animationName })
       if (stateListenerRef.current) {
         spine.state.removeListener(stateListenerRef.current)
         stateListenerRef.current = null
       }
-      const listener = {
-        complete: (entry: { animation?: { name?: string } }) => {
-          ensureIdleChain(entry.animation?.name)
+      const listener: AnimationStateListener = {
+        complete: (entry: TrackEntry) => {
+          const animationName = entry.animation?.name ?? undefined
+          ensureIdleChain(animationName)
         },
       }
       spine.state.addListener(listener)
@@ -191,10 +196,12 @@ export default function AnimationPlayer() {
           antialias: true,
           autoDensity: true,
         })
-        app.view.style.backgroundColor = 'transparent'
+        // Pixi 的 view 类型不包含 DOM style，需显式断言为 Canvas 元素
+        ;(app.view as HTMLCanvasElement).style.backgroundColor = 'transparent'
         app.ticker.maxFPS = 30
         appRef.current = app
-        hostElement.appendChild(app.view)
+        // Pixi 的 view 类型不包含 DOM Node 定义，需断言为 Canvas 节点
+        hostElement.appendChild(app.view as unknown as Node)
         window.addEventListener('resize', fitStage)
         setModulesReady(true)
       } catch (error) {

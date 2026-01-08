@@ -118,7 +118,7 @@ export default function Home() {
       // 发送新指令前重置语音播放与动画帧
       stopTtsPlayback();
       // resetToFirstFrame();
-      switchToAnimationById("listen");
+      switchToAnimationById("listen1");
     }
   }, [dispatch, stopTtsPlayback, switchToAnimationById]);
 
