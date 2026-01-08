@@ -73,6 +73,7 @@ export const emitRoastBattleRoundSnapshot = (socket: Socket) => {
       enabled: socket.data.roastBattleEnabled === true,
     },
   });
+  console.log('emitRoastBattleRoundSnapshot被调用了');
   socket.emit("message", payload);
 };
 

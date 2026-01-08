@@ -224,7 +224,13 @@ export default function Home() {
     return () => {
       unsubscribe();
     };
-  }, [refreshRoastBattleStats, subscribe, syncBreakMeterFromRound]);
+  }, [
+    refreshRoastBattleStats,
+    stopTtsPlayback,
+    subscribe,
+    switchToAnimationById,
+    syncBreakMeterFromRound,
+  ]);
 
   // 页面初始化时拉取吐槽对战统计，提供给全局展示组件
   useEffect(() => {
@@ -249,7 +255,7 @@ export default function Home() {
     });
     requestId.current = null;
     speechStartTimestamp.current = null;
-  }, [emitEvent, dispatch]);
+  }, [emitEvent]);
 
   // 继续对战按钮点击后通知服务端准备新一轮回合
   const handleDefeatContinue = useCallback(() => {
