@@ -207,13 +207,15 @@ export default function Home() {
           // 重置语音播放与动画帧
           stopTtsPlayback();
           // resetToFirstFrame();
-          switchToAnimationById("idle1");
+          switchToAnimationById("quit");
           // 收到胜利事件,进度条直接满
           breakMeterRef.current?.set(100);
           // 弹出击败提示，同时可以在这里补充其他收尾逻辑
-          setDefeatOpen(true);
-          // 胜利后刷新统计，确保胜场数及时同步
-          void refreshRoastBattleStats();
+          setTimeout(() => {
+            setDefeatOpen(true);
+            // 胜利后刷新统计，确保胜场数及时同步
+            void refreshRoastBattleStats();
+          }, 2000);
           break;
         }
         default:
