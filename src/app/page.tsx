@@ -10,7 +10,6 @@ import { RoastBattleContext } from "@/app/providers/RoastBattleProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
 import {
-  useAnimationCatalog,
   useAnimationPlayerActions,
 } from "@/app/providers/AnimationProvider";
 import BreakMeter, {
@@ -20,18 +19,15 @@ import DefeatOverlay from "./page/components/DefeatOverlay";
 import RoastBattleTotal from "./page/components/RoastBattleTotal";
 import CounterRoastCards from "./page/components/CounterRoastCards";
 import type { PenguinCounterCard } from "./page/components/CounterRoastCards";
-import { useResourceLoading } from "@/app/providers/ResourceLoadingProvider";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
   const { dispatch: roastBattleDispatch } = useContext(RoastBattleContext) || {};
   console.log(11111);
-  // 只订阅动画列表与动作，避免动画状态更新触发页面整体重渲染
-  const { animations } = useAnimationCatalog();
+  // 只订阅动作，避免动画状态更新触发页面整体重渲染
   const { switchToAnimationById } = useAnimationPlayerActions();
-  const { stopTtsPlayback, playSpeechBuffer } = useTtsAudioPlayer();
-  const { allLoaded, getPreloadedAudioBuffer } = useResourceLoading();
+  const { stopTtsPlayback } = useTtsAudioPlayer();
   const { emitEvent, subscribe } = useWebSocketContext();
   const [retorts, setRetorts] = useState<PenguinCounterCard[]>([]);
   const [retortsGroupId, setRetortsGroupId] = useState<string>(() => crypto.randomUUID());
@@ -39,8 +35,6 @@ export default function Home() {
   const requestId = useRef<string>(null);
   const speechStartTimestamp = useRef<number>(null);
   const breakMeterRef = useRef<BreakMeterHandle | null>(null);
-  // 入场动画与语音只需要执行一次
-  const entryPlayedRef = useRef(false);
   // 复用解码用的 AudioContext，避免重复创建带来的开销
   const entryDecodeContextRef = useRef<AudioContext | null>(null);
   // 击败弹窗显隐状态，用于在破防条满值时展示全屏提示
@@ -236,65 +230,6 @@ export default function Home() {
   useEffect(() => {
     void refreshRoastBattleStats();
   }, [refreshRoastBattleStats]);
-
-  const decodeAudioBufferToFloat32 = useCallback(async (buffer: ArrayBuffer) => {
-    // 使用复用的 AudioContext 解码音频到 PCM，后续交给 Worklet 播放
-    const context =
-      entryDecodeContextRef.current ?? new AudioContext({ sampleRate: 16000 });
-    entryDecodeContextRef.current = context;
-    const audioBuffer = await context.decodeAudioData(buffer.slice(0));
-    const channelData = audioBuffer.getChannelData(0);
-    return new Float32Array(channelData);
-  }, []);
-
-  useEffect(() => {
-    if (entryPlayedRef.current) {
-      return;
-    }
-    if (!animations.length || !allLoaded) {
-      return;
-    }
-    // 初始化入场动画与语音，随机从 start1/start2 中选择
-    entryPlayedRef.current = true;
-    const entryCandidates = ["start1", "start2"].filter((id) =>
-      animations.some((animation) => animation.id === id),
-    );
-    if (!entryCandidates.length) {
-      return;
-    }
-    const chosenEntry =
-      entryCandidates[Math.floor(Math.random() * entryCandidates.length)];
-    switchToAnimationById(chosenEntry);
-    let canceled = false;
-    const playEntryAudio = async () => {
-      try {
-        const audioBuffer = getPreloadedAudioBuffer(`/voice/${chosenEntry}.mp3`);
-        if (!audioBuffer) {
-          console.warn("入场语音未命中预加载资源，已跳过播放");
-          return;
-        }
-        const pcmData = await decodeAudioBufferToFloat32(audioBuffer);
-        if (!pcmData || canceled) {
-          return;
-        }
-        // 走 Worklet 播放链路，不触发完成后的自动动画切换
-        playSpeechBuffer(pcmData, { format: "mp3", requestId: "" });
-      } catch (error) {
-        console.warn("入场语音播放失败：", error);
-      }
-    };
-    void playEntryAudio();
-    return () => {
-      canceled = true;
-    };
-  }, [
-    animations,
-    allLoaded,
-    switchToAnimationById,
-    playSpeechBuffer,
-    decodeAudioBufferToFloat32,
-    getPreloadedAudioBuffer,
-  ]);
 
   useEffect(() => {
     return () => {

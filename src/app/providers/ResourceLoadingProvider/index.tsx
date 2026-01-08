@@ -80,13 +80,13 @@ export default function ResourceLoadingProvider({
   // 将动画资源 + 外部资源合并，去重后作为最终加载列表
   const resourceList = useMemo(() => {
     const animationResources = DEFAULT_ANIMATION_LIST.flatMap((animation) =>
-      [animation.json, animation.atlas, animation.image].filter(Boolean),
+      // 将动画资源 + 动画绑定音频统一纳入预加载，确保后续播放命中缓存
+      [animation.json, animation.atlas, animation.image, animation.audio].filter(Boolean),
     ) as string[];
-    // 入场音频默认预加载
-    const entryAudioResources = ["/voice/start1.mp3", "/voice/start2.mp3"];
     const extraResources = (resources ?? []).filter(Boolean);
     return Array.from(
-      new Set([...animationResources, ...entryAudioResources, ...extraResources]),
+      // 通过 Set 去重，避免重复请求占用网络与内存
+      new Set([...animationResources, ...extraResources]),
     );
   }, [resources]);
 

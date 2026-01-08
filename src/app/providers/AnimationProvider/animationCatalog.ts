@@ -12,6 +12,8 @@ export interface AnimationMeta {
   animationName?: string
   type: 'idle' | 'listen' | 'talk' | 'start' | 'quit'
   timeScale?: number
+  audio?: string
+  audioStartFrame?: number
 }
 
 // 默认的 Spine 动画列表，保证在未提供参数时也有可播放的骨骼资源
@@ -113,7 +115,9 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
     type: 'start',
-    timeScale: 1,
+    timeScale: 0.8,
+    audio:'/voice/start1.mp3',
+    audioStartFrame:2
   },
   {
     id: 'start2',
@@ -123,7 +127,9 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
     type: 'start',
-    timeScale: 1,
+    timeScale: 0.8,
+    audio:'/voice/start2.mp3',
+    audioStartFrame:2
   },
   {
     id: 'quit',

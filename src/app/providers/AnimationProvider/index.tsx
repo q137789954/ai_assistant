@@ -76,6 +76,16 @@ export interface AnimationProviderProps {
   children: React.ReactNode
 }
 
+// 初始化动画优先从 start 类型里随机挑选，缺失时回退到列表第一项
+const pickInitialAnimationId = (animations: AnimationMeta[]) => {
+  const startCandidates = animations.filter((item) => item.type === 'start')
+  if (startCandidates.length > 0) {
+    const picked = startCandidates[Math.floor(Math.random() * startCandidates.length)]
+    return picked?.id ?? null
+  }
+  return animations[0]?.id ?? null
+}
+
 export default function AnimationProvider({
   animations: rawAnimations,
   children,
@@ -87,7 +97,8 @@ export default function AnimationProvider({
   )
 
   const [currentAnimationId, setCurrentAnimationId] = useState<string | null>(
-    animations[0]?.id ?? null
+    // 初始化时优先从 start 类型动画中随机选择
+    pickInitialAnimationId(animations)
   )
 
   const spineInstanceRef = useRef<SpineInstance | null>(null)
@@ -102,7 +113,8 @@ export default function AnimationProvider({
       if (currentAnimationId && animations.some((item) => item.id === currentAnimationId)) {
         return
       }
-      setCurrentAnimationId(animations[0].id)
+      // 动画列表更新或当前动画失效时，重新挑选初始化动画
+      setCurrentAnimationId(pickInitialAnimationId(animations))
     }, 0)
     return () => {
       window.clearTimeout(timer)

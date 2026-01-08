@@ -14,6 +14,8 @@ import {
 } from 'react'
 import { useAnimationPlayer, type AnimationMeta } from '@/app/providers/AnimationProvider'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
+import { useResourceLoading } from '@/app/providers/ResourceLoadingProvider'
+import { getOrCreateAudioContext } from '@/app/utils/audioContextManager'
 
 const DEFAULT_TIME_SCALE = 1.0
 const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4', 'idle5', 'idle6'] as const
@@ -92,11 +94,98 @@ export default function AnimationPlayer() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const globals = useContext(GlobalsContext)
   const chatbotVisible = globals?.chatbotVisible ?? false
+  const { allLoaded, getPreloadedAudioBuffer } = useResourceLoading()
   const transitionHandleRef = useRef<number | null>(null)
   // 记录当前正在淡出的 Spine，便于在快速切换时提前清理残存实例
   const fadingFromRef = useRef<SpineInstance | null>(null)
   // 记录当前已加载的 Skeleton JSON 路径，用于判断是否需重新加载
   const loadedSkeletonPathRef = useRef<string | null>(null)
+  // 记录已触发过入场音频的动画 id，避免重复播放
+  const startAudioPlayedIdRef = useRef<string | null>(null)
+  // 追踪最近一次入场音频的播放请求，用于在动画切换时丢弃过期解码结果
+  const startAudioTokenRef = useRef(0)
+  // 保存入场音频的播放节点，便于在新音频触发时停止旧音频
+  const startAudioSourceRef = useRef<AudioBufferSourceNode | null>(null)
+  // 入场音频延迟播放的定时器，用于在动画切换时取消
+  const startAudioTimeoutRef = useRef<number | null>(null)
+
+  const stopStartAudio = useCallback(() => {
+    const source = startAudioSourceRef.current
+    if (!source) {
+      return
+    }
+    try {
+      source.stop()
+    } catch {
+      // 某些浏览器重复 stop 会抛错，这里忽略以避免打断流程
+    }
+    startAudioSourceRef.current = null
+  }, [])
+
+  const playStartAudioIfNeeded = useCallback(
+    async (animationMeta: AnimationMeta) => {
+      if (startAudioTimeoutRef.current !== null) {
+        window.clearTimeout(startAudioTimeoutRef.current)
+        startAudioTimeoutRef.current = null
+      }
+      if (animationMeta.type !== 'start') {
+        startAudioPlayedIdRef.current = null
+        return
+      }
+      const audioUrl = animationMeta.audio?.trim()
+      if (!audioUrl || !allLoaded) {
+        return
+      }
+      if (startAudioPlayedIdRef.current === animationMeta.id) {
+        return
+      }
+      const preloadedBuffer = getPreloadedAudioBuffer(audioUrl)
+      if (!preloadedBuffer) {
+        console.warn('入场音频未命中预加载缓存，已跳过播放：', audioUrl)
+        return
+      }
+      startAudioPlayedIdRef.current = animationMeta.id
+      const token = (startAudioTokenRef.current += 1)
+      const context = getOrCreateAudioContext()
+      if (!context) {
+        return
+      }
+      stopStartAudio()
+      try {
+        // 使用 slice 避免解码时修改原始 ArrayBuffer
+        const audioBuffer = await context.decodeAudioData(preloadedBuffer.slice(0))
+        if (token !== startAudioTokenRef.current) {
+          return
+        }
+        const play = () => {
+          const source = context.createBufferSource()
+          source.buffer = audioBuffer
+          source.connect(context.destination)
+          startAudioSourceRef.current = source
+          source.start(0)
+        }
+        const startFrame = animationMeta.audioStartFrame ?? 0
+        if (startFrame > 0) {
+          const app = appRef.current
+          const baseFps = app?.ticker?.maxFPS ?? 30
+          const timeScale = animationMeta.timeScale ?? DEFAULT_TIME_SCALE
+          const effectiveFps = Math.max(1, baseFps * timeScale)
+          const delayMs = Math.max(0, (startFrame / effectiveFps) * 1000)
+          startAudioTimeoutRef.current = window.setTimeout(() => {
+            if (token !== startAudioTokenRef.current) {
+              return
+            }
+            play()
+          }, delayMs)
+          return
+        }
+        play()
+      } catch (error) {
+        console.warn('入场音频解码或播放失败：', error)
+      }
+    },
+    [allLoaded, getPreloadedAudioBuffer, stopStartAudio]
+  )
 
   // 负责在画布尺寸变化时重新适配 Spine 的位置和缩放
   const fitStage = useCallback(() => {
@@ -168,6 +257,12 @@ export default function AnimationPlayer() {
       spine.state.setAnimation(0, animationName, true)
       // 优先使用动画配置的播放速度，未配置时回落到默认值
       spine.state.timeScale = animationMeta.timeScale ?? DEFAULT_TIME_SCALE
+      // 入场动画需要在首帧同步触发音频，先刷新到第 0 帧再播放音频
+      if (animationMeta.type === 'start') {
+        spine.update(0)
+      }
+      // 无论是否为入场动画都走一次校验，便于清理上次的入场音频标记
+      void playStartAudioIfNeeded(animationMeta)
       fitStage()
       registerSpineInstance({ spine, defaultAnimationName: animationName })
       if (stateListenerRef.current) {
@@ -184,7 +279,7 @@ export default function AnimationPlayer() {
       stateListenerRef.current = listener
       return animationName
     },
-    [fitStage, registerSpineInstance, ensureIdleChain]
+    [fitStage, registerSpineInstance, ensureIdleChain, playStartAudioIfNeeded]
   )
 
   // 初始化 Pixi 与 Spine 运行时，并在组件卸载时做清理
@@ -251,8 +346,15 @@ export default function AnimationPlayer() {
         cancelAnimationFrame(transitionHandleRef.current)
         transitionHandleRef.current = null
       }
+      // 组件卸载时终止入场音频播放，避免残留音频持续输出
+      startAudioTokenRef.current += 1
+      if (startAudioTimeoutRef.current !== null) {
+        window.clearTimeout(startAudioTimeoutRef.current)
+        startAudioTimeoutRef.current = null
+      }
+      stopStartAudio()
     }
-  }, [fitStage, registerSpineInstance])
+  }, [fitStage, registerSpineInstance, stopStartAudio])
 
   useEffect(() => {
     if (!appRef.current || !modulesReady) {
