@@ -26,7 +26,7 @@ export default function Home() {
   const { dispatch: roastBattleDispatch } = useContext(RoastBattleContext) || {};
   console.log(11111);
   // 只订阅动作，避免动画状态更新触发页面整体重渲染
-  const { switchToAnimationById } = useAnimationPlayerActions();
+  const { switchToAnimationById, switchToRandomAnimationByType } = useAnimationPlayerActions();
   const { stopTtsPlayback } = useTtsAudioPlayer();
   const { emitEvent, subscribe } = useWebSocketContext();
   const [retorts, setRetorts] = useState<PenguinCounterCard[]>([]);
@@ -122,9 +122,9 @@ export default function Home() {
       // 发送新指令前重置语音播放与动画帧
       stopTtsPlayback();
       // resetToFirstFrame();
-      switchToAnimationById("listen1");
+      switchToRandomAnimationByType("listen");
     }
-  }, [dispatch, stopTtsPlayback, switchToAnimationById]);
+  }, [dispatch, stopTtsPlayback, switchToRandomAnimationByType]);
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
@@ -215,7 +215,7 @@ export default function Home() {
             setDefeatOpen(true);
             // 胜利后刷新统计，确保胜场数及时同步
             void refreshRoastBattleStats();
-          }, 2000);
+          }, 1000);
           break;
         }
         default:
@@ -269,11 +269,12 @@ export default function Home() {
 
   // 继续对战按钮点击后通知服务端准备新一轮回合
   const handleDefeatContinue = useCallback(() => {
+    switchToRandomAnimationByType("idle");
     const sent = emitEvent("roast-battle-rounds:continue");
     if (!sent) {
       console.warn("继续对战事件发送失败，请检查 WebSocket 连接状态");
     }
-  }, [emitEvent]);
+  }, [emitEvent, switchToRandomAnimationByType]);
 
   useVoiceInputListener({
     onSpeechSegment: handleVoiceChunk,

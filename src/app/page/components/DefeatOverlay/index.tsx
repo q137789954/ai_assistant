@@ -39,9 +39,18 @@ const DefeatOverlay = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center"
       role="presentation"
     >
+      {/* <video
+        className="absolute inset-0 h-full w-full object-cover z-[1000] pointer-events-none"
+        autoPlay
+        loop
+        muted
+        playsInline
+      >
+        <source src="/video/firework.mp4" type="video/mp4" />
+      </video> */}
       <div
         className="w-[min(90vw,420px)] rounded-3xl bg-white/80 px-6 py-5 text-center shadow-2xl backdrop-blur-lg"
         onClick={(event) => event.stopPropagation()}
