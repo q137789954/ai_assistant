@@ -100,6 +100,15 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
       closable={false}
       maskClosable
       className="chatbot-drawer"
+      // 让抽屉主体也跟随视口高度，配合内部 flex 布局撑满
+      styles={
+        drawerPlacement === 'bottom'
+          ? {
+              wrapper: { height: '100dvh' },
+              body: { height: '100dvh' },
+            }
+          : undefined
+      }
       classNames={{
         section: 'bg-[rgba(30,30,30,.6)]!',
         mask: 'backdrop-blur-lg!',
@@ -107,7 +116,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
     >
       {
         open && (
-          <div className="flex h-full flex-col rounded-t-[32px]">
+          <div className="flex h-full min-h-0 flex-col rounded-t-[32px] pb-[env(safe-area-inset-bottom)]">
         <DrawerHeader>
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -125,7 +134,7 @@ export default function Chatbot({ open, onOpenChange }: ChatbotProps) {
           </div>
         </DrawerHeader>
 
-        <div className="flex flex-1 flex-col gap-4 px-6 pb-2">
+        <div className="flex flex-1 min-h-0 flex-col gap-4 px-6 pb-2">
           <ChatHistory
             open={open}
             pendingUserMessage={pendingUserMessage}

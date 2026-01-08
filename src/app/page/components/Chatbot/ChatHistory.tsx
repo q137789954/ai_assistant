@@ -306,7 +306,8 @@ export default function ChatHistory({
   const showTopBar = open && (isLoadingMore || loadMoreError)
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 py-4 px-2 text-sm text-slate-900 shadow-inner my-6">
+    <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 py-4 px-2 text-sm text-slate-900 shadow-inner">
+      {/* 移除垂直外边距，避免在固定高度容器内造成溢出 */}
       {/* 顶部固定小状态条：加载更多 / 点击重试 */}
       {showTopBar && (
         <div className="absolute left-0 right-0 top-2 z-10 flex justify-center pointer-events-none">
@@ -360,8 +361,9 @@ export default function ChatHistory({
 
               <div
                 className={clsx(
-                  'max-w-[20rem] rounded-[22px] px-4 py-3 leading-relaxed shadow-sm mb-4 whitespace-pre-line text-sm',
-                  isAssistant ? 'bg-slate-100 text-slate-900' : 'bg-sky-100 text-sky-900',
+                  // 移动端限制气泡最大宽度，避免铺满整行；助手侧额外扣除头像宽度
+                  'max-w-[85%] lg:max-w-[20rem] rounded-[22px] px-4 py-3 leading-relaxed shadow-sm mb-4 whitespace-pre-line text-sm',
+                  isAssistant ? 'bg-slate-100 text-slate-900 max-w-[calc(85%-40px)] lg:max-w-[20rem]' : 'bg-sky-100 text-sky-900',
                 )}
               >
                 {message.content}

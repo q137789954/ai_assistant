@@ -169,6 +169,7 @@ export default function Home() {
         case "roast-battle-rounds": {
           // 初始化时同步当前吐槽对战回合分数，确保破防条从真实进度开始
           const payload = (parsed.data ?? {}) as Record<string, unknown>;
+          console.log("roast-battle-rounds payload:", payload);
           syncBreakMeterFromRound(payload);
           break;
         }
