@@ -46,6 +46,7 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
     type: 'idle',
+    timeScale: 0.5,
   },
   {
     id: 'idle4',

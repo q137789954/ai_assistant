@@ -18,7 +18,7 @@ import { useResourceLoading } from '@/app/providers/ResourceLoadingProvider'
 import { getOrCreateAudioContext } from '@/app/utils/audioContextManager'
 
 const DEFAULT_TIME_SCALE = 1.0
-const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4', 'idle5', 'idle6'] as const
+const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4'] as const
 
 export default function AnimationPlayer() {
   const {
