@@ -205,7 +205,7 @@ io.on("connection", async (socket) => {
   // 建立连接后准备吐槽对战回合数据，保证本次连接始终有可用回合上下文
   await loadRoastBattleRoundOnConnect(socket);
   // 主动下发一次回合快照，避免客户端漏发/丢事件导致未同步
-  emitRoastBattleRoundSnapshot(socket);
+  // emitRoastBattleRoundSnapshot(socket);
 
   const llmClient = new OpenAI({
     apiKey: process.env.GROKKINGAI_API_KEY?.trim(),

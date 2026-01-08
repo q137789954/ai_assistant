@@ -232,6 +232,14 @@ export default function Home() {
     syncBreakMeterFromRound,
   ]);
 
+  useEffect(() => {
+    // 页面初始化时主动请求当前吐槽对战回合数据，确保首次渲染能拿到最新状态
+    const sent = emitEvent("roast-battle-rounds:load");
+    if (!sent) {
+      console.warn("吐槽对战回合加载事件发送失败，请检查 WebSocket 连接状态");
+    }
+  }, [emitEvent]);
+
   // 页面初始化时拉取吐槽对战统计，提供给全局展示组件
   useEffect(() => {
     void refreshRoastBattleStats();
