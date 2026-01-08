@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import ResourceLoadingOverlay from "@/app/page/components/ResourceLoadingOverlay";
 import { useResourceLoading } from "@/app/providers/ResourceLoadingProvider";
+import { resumeAudioContext } from "@/app/utils/audioContextManager";
 
 type ResourceLoadingGateProps = {
   children: ReactNode;
@@ -18,6 +19,11 @@ export default function ResourceLoadingGate({ children }: ResourceLoadingGatePro
   const { isLoading, loaded, total, errors, allLoaded, retry } = useResourceLoading();
   // 控制用户是否已点击“进入”，未进入前始终保持遮罩
   const [hasEntered, setHasEntered] = useState(false);
+  // 用户点击进入时解锁音频，同时放行页面内容
+  const handleEnter = useCallback(async () => {
+    await resumeAudioContext();
+    setHasEntered(true);
+  }, []);
 
   if (hasEntered) {
     return <>{children}</>;
@@ -33,7 +39,7 @@ export default function ResourceLoadingGate({ children }: ResourceLoadingGatePro
           total={total}
           errors={errors}
           onRetry={retry}
-          onEnter={allLoaded ? () => setHasEntered(true) : undefined}
+          onEnter={allLoaded ? handleEnter : undefined}
         />
       </div>
     );

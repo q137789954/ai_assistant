@@ -6,6 +6,10 @@ import {
 import { useResourceLoading } from "@/app/providers/ResourceLoadingProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
+import {
+  ensureWorkletModule,
+  getOrCreateAudioContext,
+} from "@/app/utils/audioContextManager";
 
 /**
  * 用于跟踪每个 TTS 句子的状态，包含格式、Worklet 缓存与播放标识。
@@ -414,12 +418,16 @@ export const useTtsAudioPlayer = () => {
       return undefined;
     }
     let canceled = false;
-    const context = new AudioContext({ sampleRate: 16000 });
+    // 复用全局 AudioContext，确保与“进入”按钮解锁逻辑一致
+    const context = getOrCreateAudioContext();
+    if (!context) {
+      return undefined;
+    }
     audioContextRef.current = context;
     // 异步加载自定义的 Worklet 处理器，回调中再连接到音频图。
     const initWorklet = async () => {
       try {
-        await context.audioWorklet.addModule("/audio-worklets/tts-ring-processor.js");
+        await ensureWorkletModule("/audio-worklets/tts-ring-processor.js");
         if (canceled) {
           return;
         }
@@ -444,8 +452,8 @@ export const useTtsAudioPlayer = () => {
       workletNodeRef.current?.disconnect();
       workletNodeRef.current = null;
       workletPortRef.current = null;
+      // AudioContext 由全局管理器复用，不在这里关闭，避免丢失解锁状态
       audioContextRef.current = null;
-      context.close();
     };
   }, []);
 
