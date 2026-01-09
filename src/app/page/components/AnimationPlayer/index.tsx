@@ -19,6 +19,7 @@ import { getOrCreateAudioContext } from '@/app/utils/audioContextManager'
 
 const DEFAULT_TIME_SCALE = 1.0
 const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4'] as const
+const IDLE_SWITCH_DELAY_MS = 3000
 
 export default function AnimationPlayer() {
   const {
@@ -108,6 +109,10 @@ export default function AnimationPlayer() {
   const startAudioSourceRef = useRef<AudioBufferSourceNode | null>(null)
   // 入场音频延迟播放的定时器，用于在动画切换时取消
   const startAudioTimeoutRef = useRef<number | null>(null)
+  // 待机动画播放完后的延迟切换定时器
+  const idleSwitchTimeoutRef = useRef<number | null>(null)
+  // 待机动画切换令牌，避免切换请求过期后仍然生效
+  const idleSwitchTokenRef = useRef(0)
 
   const stopStartAudio = useCallback(() => {
     const source = startAudioSourceRef.current
@@ -187,6 +192,23 @@ export default function AnimationPlayer() {
     [allLoaded, getPreloadedAudioBuffer, stopStartAudio]
   )
 
+  const clearIdleSwitchTimer = useCallback(() => {
+    if (idleSwitchTimeoutRef.current !== null) {
+      window.clearTimeout(idleSwitchTimeoutRef.current)
+      idleSwitchTimeoutRef.current = null
+    }
+  }, [])
+
+  const freezeIdleAtLastFrame = useCallback(() => {
+    const spine = spineRef.current
+    if (!spine) {
+      return
+    }
+    // 将时间缩放置 0，确保待机动画停在完成帧
+    spine.state.timeScale = 0
+    spine.update(0)
+  }, [])
+
   // 负责在画布尺寸变化时重新适配 Spine 的位置和缩放
   const fitStage = useCallback(() => {
     const app = appRef.current
@@ -218,18 +240,33 @@ export default function AnimationPlayer() {
     []
   )
 
-  const ensureIdleChain = useCallback(
+  const scheduleNextIdle = useCallback(
     (animationName?: string) => {
       if (!animationName || !IDLE_ANIMATIONS.includes(animationName as any)) {
         return
       }
       const nextIdle = pickNextIdle(animationName)
-      if (!nextIdle || nextIdle === currentAnimation?.id) {
+      if (!nextIdle) {
         return
       }
-      switchToAnimationById(nextIdle)
+      // 重置上一次待机切换，确保只保留最新一次延迟
+      clearIdleSwitchTimer()
+      const token = (idleSwitchTokenRef.current += 1)
+      idleSwitchTimeoutRef.current = window.setTimeout(() => {
+        // 仅当仍处于同一轮待机周期时才触发切换，避免误切
+        if (token !== idleSwitchTokenRef.current) {
+          return
+        }
+        if (currentAnimation?.type !== 'idle') {
+          return
+        }
+        if (nextIdle === currentAnimation?.id) {
+          return
+        }
+        switchToAnimationById(nextIdle)
+      }, IDLE_SWITCH_DELAY_MS)
     },
-    [currentAnimation?.id, pickNextIdle, switchToAnimationById]
+    [clearIdleSwitchTimer, currentAnimation?.id, currentAnimation?.type, pickNextIdle, switchToAnimationById]
   )
 
   // 处理动画播放完成事件：入场动画播放完毕后切回待机，否则走原有待机轮播逻辑
@@ -240,9 +277,13 @@ export default function AnimationPlayer() {
         switchToRandomAnimationByType('idle')
         return
       }
-      ensureIdleChain(animationName)
+      if (currentAnimation?.type === 'idle') {
+        // 待机动画播放完毕后停留在最后一帧，延迟切换到下一个待机动画
+        freezeIdleAtLastFrame()
+        scheduleNextIdle(animationName)
+      }
     },
-    [currentAnimation?.type, ensureIdleChain, switchToRandomAnimationByType]
+    [currentAnimation?.type, freezeIdleAtLastFrame, scheduleNextIdle, switchToRandomAnimationByType]
   )
 
   const applyAnimationToSpine = useCallback(
@@ -254,7 +295,9 @@ export default function AnimationPlayer() {
       if (!animationName) {
         return null
       }
-      spine.state.setAnimation(0, animationName, true)
+      // 待机动画不循环播放，停留在最后一帧等待下一次切换
+      const shouldLoop = animationMeta.type !== 'idle'
+      spine.state.setAnimation(0, animationName, shouldLoop)
       // 优先使用动画配置的播放速度，未配置时回落到默认值
       spine.state.timeScale = animationMeta.timeScale ?? DEFAULT_TIME_SCALE
       // 入场动画需要在首帧同步触发音频，先刷新到第 0 帧再播放音频
@@ -263,6 +306,9 @@ export default function AnimationPlayer() {
       }
       // 无论是否为入场动画都走一次校验，便于清理上次的入场音频标记
       void playStartAudioIfNeeded(animationMeta)
+      // 每次切换动画时都取消待机延迟，避免旧定时器影响新动画
+      idleSwitchTokenRef.current += 1
+      clearIdleSwitchTimer()
       fitStage()
       registerSpineInstance({ spine, defaultAnimationName: animationName })
       if (stateListenerRef.current) {
@@ -279,7 +325,13 @@ export default function AnimationPlayer() {
       stateListenerRef.current = listener
       return animationName
     },
-    [fitStage, registerSpineInstance, ensureIdleChain, playStartAudioIfNeeded]
+    [
+      fitStage,
+      registerSpineInstance,
+      playStartAudioIfNeeded,
+      clearIdleSwitchTimer,
+      handleAnimationComplete,
+    ]
   )
 
   // 初始化 Pixi 与 Spine 运行时，并在组件卸载时做清理
@@ -352,9 +404,11 @@ export default function AnimationPlayer() {
         window.clearTimeout(startAudioTimeoutRef.current)
         startAudioTimeoutRef.current = null
       }
+      idleSwitchTokenRef.current += 1
+      clearIdleSwitchTimer()
       stopStartAudio()
     }
-  }, [fitStage, registerSpineInstance, stopStartAudio])
+  }, [fitStage, registerSpineInstance, stopStartAudio, clearIdleSwitchTimer])
 
   useEffect(() => {
     if (!appRef.current || !modulesReady) {
