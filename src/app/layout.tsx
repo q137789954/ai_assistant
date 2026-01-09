@@ -30,6 +30,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // 统一在入口处声明需要预加载的视频资源（public 下的文件直接用 /video/... 访问）
+  const preloadVideoResources = ["/video/firework.mov", "/video/firework.webm"];
   const websocketUrl =
     process.env.NEXT_PUBLIC_SOCKET_SERVER_URL ??
     process.env.NEXT_PUBLIC_WEBSOCKET_URL ??
@@ -41,7 +43,8 @@ export default function RootLayout({
       >
         <AuthProviders>
           <GlobalsProviders>
-            <ResourceLoadingProvider>
+            {/* 将视频资源加入预加载清单，确保加载遮罩阶段完成下载 */}
+            <ResourceLoadingProvider resources={preloadVideoResources}>
               <AnimationProvider>
                 <WebSocketProviders url={websocketUrl}>
                   <RoastBattleProviders>
