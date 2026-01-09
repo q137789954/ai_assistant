@@ -145,9 +145,9 @@ export default function Home() {
       // 发送新指令前重置语音播放与动画帧
       stopTtsPlayback();
       // resetToFirstFrame();
-      switchToRandomAnimationByType("listen");
+      // switchToRandomAnimationByType("listen");
     }
-  }, [dispatch, stopTtsPlayback, switchToRandomAnimationByType]);
+  }, [dispatch, stopTtsPlayback]);
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
