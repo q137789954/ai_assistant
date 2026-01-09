@@ -24,7 +24,6 @@ export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
   const { dispatch: roastBattleDispatch } = useContext(RoastBattleContext) || {};
-  console.log(11111);
   // 只订阅动作，避免动画状态更新触发页面整体重渲染
   const { switchToAnimationById, switchToRandomAnimationByType } = useAnimationPlayerActions();
   const { stopTtsPlayback } = useTtsAudioPlayer();
@@ -50,6 +49,30 @@ export default function Home() {
     }
     breakMeterRef.current?.set(score);
   }, []);
+
+  // 更新当前回合吐槽次数，供全局展示或其他组件复用
+  const updateRoundRoastCount = useCallback(
+    (roundRoastCount: number) => {
+      if (!roastBattleDispatch) {
+        return;
+      }
+      roastBattleDispatch({
+        type: "SET_ROAST_BATTLE_ROUND_ROAST_COUNT",
+        payload: { roundRoastCount },
+      });
+    },
+    [roastBattleDispatch]
+  );
+
+  // 收到新回复时自增回合吐槽次数，保持与服务端进度一致
+  const incrementRoundRoastCount = useCallback(() => {
+    if (!roastBattleDispatch) {
+      return;
+    }
+    roastBattleDispatch({
+      type: "INCREMENT_ROAST_BATTLE_ROUND_ROAST_COUNT",
+    });
+  }, [roastBattleDispatch]);
 
 // 用于更新吐槽对战，反击提示卡片
   const updatePenguinCounter = (items:string[]) => {
@@ -176,6 +199,9 @@ export default function Home() {
           const payload = (parsed.data ?? {}) as Record<string, unknown>;
           console.log("roast-battle-rounds payload:", payload);
           syncBreakMeterFromRound(payload);
+          // 从服务端回合快照同步吐槽次数，确保刷新页面后进度准确
+          const { roastCount } = (payload.round as { roastCount?: number } | null) || {};
+          updateRoundRoastCount(typeof roastCount === "number" ? roastCount : 0);
           break;
         }
         case "roast-battle-rounds:ready": {
@@ -183,6 +209,8 @@ export default function Home() {
           const payload = (parsed.data ?? {}) as Record<string, unknown>;
           syncBreakMeterFromRound(payload);
           setDefeatOpen(false);
+          // 新回合开始时重置吐槽次数
+          updateRoundRoastCount(0);
           break;
         }
         case "chat-response-meta": {
@@ -200,6 +228,7 @@ export default function Home() {
           }
           const retort_options = payload.retort_options as string[] || [];
           updatePenguinCounter(retort_options)
+          incrementRoundRoastCount();
           break;
         }
         case "roast-battle-victory": {
@@ -232,6 +261,8 @@ export default function Home() {
     subscribe,
     switchToAnimationById,
     syncBreakMeterFromRound,
+    updateRoundRoastCount,
+    incrementRoundRoastCount,
   ]);
 
   useEffect(() => {

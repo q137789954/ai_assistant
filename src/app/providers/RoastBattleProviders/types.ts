@@ -6,6 +6,8 @@ export type RoastBattleState = {
   winCount: number
   // 胜利回合中最小的 roast_count，没有胜利时为 null
   minRoastCount: number | null
+  // 当前回合已发生的吐槽次数，用于回合进度展示
+  roundRoastCount: number
 }
 
 // 吐槽对战状态的动作定义，集中管理可变更的入口
@@ -15,6 +17,13 @@ export type RoastBattleAction =
       type: 'SET_ROAST_BATTLE_STATS'
       payload: { winCount: number; minRoastCount: number | null }
     }
+  // 设置当前回合的吐槽次数（从服务端回合快照同步）
+  | {
+      type: 'SET_ROAST_BATTLE_ROUND_ROAST_COUNT'
+      payload: { roundRoastCount: number }
+    }
+  // 当前回合吐槽次数自增（收到一条新回复时调用）
+  | { type: 'INCREMENT_ROAST_BATTLE_ROUND_ROAST_COUNT' }
   // 重置吐槽对战统计为默认值
   | { type: 'RESET_ROAST_BATTLE_STATS' }
 
