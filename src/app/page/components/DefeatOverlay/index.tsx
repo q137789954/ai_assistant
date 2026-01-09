@@ -60,6 +60,8 @@ const DefeatOverlayContent = ({
   const totalSourceCount = 2;
   // 记录延迟展示的计时器，避免重复触发
   const showTimerRef = useRef<number | null>(null);
+  // 缓存音频元素，方便在定时回调中直接播放
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // 启动“1 秒后展示内容”的计时器
   const scheduleShowContent = () => {
@@ -70,6 +72,21 @@ const DefeatOverlayContent = ({
       setShowContent(true);
       showTimerRef.current = null;
     }, 800);
+  };
+
+  // 视频开始播放时同步播放音频
+  const playAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+    // 每次播放前回到起点，保证音频从头开始
+    audio.currentTime = 0;
+    const playResult = audio.play();
+    if (playResult && typeof playResult.catch === "function") {
+      // 浏览器可能阻止非用户手势播放，吞掉异常避免控制台噪音
+      playResult.catch(() => {});
+    }
   };
 
   // 如果视频全部加载失败，仍然按照 1 秒延迟展示内容
@@ -84,6 +101,11 @@ const DefeatOverlayContent = ({
     return () => {
       if (showTimerRef.current !== null) {
         window.clearTimeout(showTimerRef.current);
+      }
+      const audio = audioRef.current;
+      if (audio) {
+        // 组件卸载时停止音频，避免残留播放
+        audio.pause();
       }
     };
   }, []);
@@ -100,7 +122,10 @@ const DefeatOverlayContent = ({
           muted
           playsInline
           // 视频开始播放后计时 1 秒，再展示弹窗内容
-          onPlay={scheduleShowContent}
+          onPlay={() => {
+            scheduleShowContent();
+            playAudio();
+          }}
         >
           <source
             src="/video/firework.mov"
@@ -139,6 +164,8 @@ const DefeatOverlayContent = ({
           </div>
         </div>
       ) : null}
+      {/* 通过隐藏音频元素播放胜利语音 */}
+      <audio ref={audioRef} src="/voice/roast_battle_succeed.mp3" preload="auto" />
     </div>
   );
 };

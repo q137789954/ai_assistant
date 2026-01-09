@@ -373,6 +373,7 @@ export default function Home() {
         open={defeatOpen}
         onContinue={handleDefeatContinue}
       />
+      {/* <div className="bg-amber-500 absolute top-5 left-5 z-50" onClick={() => setDefeatOpen(true)}>点击</div> */}
     </main>
   );
 }
