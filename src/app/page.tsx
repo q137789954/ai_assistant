@@ -240,11 +240,9 @@ export default function Home() {
           // 收到胜利事件,进度条直接满
           breakMeterRef.current?.set(100);
           // 弹出击败提示，同时可以在这里补充其他收尾逻辑
-          setTimeout(() => {
-            setDefeatOpen(true);
+          setDefeatOpen(true);
             // 胜利后刷新统计，确保胜场数及时同步
             void refreshRoastBattleStats();
-          }, 1000);
           break;
         }
         default:
