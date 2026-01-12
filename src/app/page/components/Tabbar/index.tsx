@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { Drawer } from "@/app/components/ui";
 import { Typography } from "antd";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
-import { Copy, Check, Settings } from "lucide-react";
+import { Copy, Check, Settings, X } from "lucide-react";
 
 import ChangePasswordDialog from "./ChangePasswordDialog";
 import UserNameEditor from "./UserNameEditor";
@@ -91,6 +91,17 @@ const Tabbar = () => {
           onTouchCancel={handleDrawerTouchCancel}
         >
           <div className="drawer-content flex flex-col gap-5">
+            {/* 顶部操作区：提供一个显式的关闭按钮，方便用户一键收起抽屉 */}
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={handleClosePersonalCenter}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-600 text-slate-200 transition cursor-pointer hover:border-slate-400 hover:text-white"
+                aria-label="关闭个人中心"
+              >
+                <X size={16} />
+              </button>
+            </div>
             <div className="user-header flex flex-col gap-3 border-b border-slate-100 pb-4">
               <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
                 <span className="flex items-center justify-center border-4 w-20 h-20 rounded-full border-[rgb(204,255,0)] text-3xl font-bold text-[rgb(204,255,0)]!">
