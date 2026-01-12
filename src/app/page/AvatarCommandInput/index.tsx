@@ -5,7 +5,9 @@ import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
 import { VoiceInputToggle } from "@/app/components/features";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
-const AvatarCommandInput = () => {
+const AvatarCommandInput = ({updatePenguinCounter}:{
+  updatePenguinCounter:(items: string[]) => void
+}) => {
   const [input, setInput] = useState("");
   const { emitEvent, subscribe } = useWebSocketContext();
   const { stopTtsPlayback } = useTtsAudioPlayer();
@@ -76,6 +78,7 @@ const AvatarCommandInput = () => {
       console.warn("消息发送失败，请检查 WebSocket 连接状态");
     }
     setInput("");
+    updatePenguinCounter([])
   };
 
   const handleTextareaKeyDown = (

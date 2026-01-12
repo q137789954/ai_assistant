@@ -135,7 +135,12 @@ const normalizeToFloat32 = (
   return null;
 };
 
-export const useTtsAudioPlayer = () => {
+type UseTtsAudioPlayerOptions = {
+  // 当某个 requestId 的全部语音播放完毕时触发，用于业务侧同步时序
+  onRequestPlaybackComplete?: (requestId: string) => void;
+};
+
+export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
   const { subscribe } = useWebSocketContext();
   // 仅订阅动画列表与动作，避免 currentAnimation 更新导致播放器逻辑反复重建
   const { animations } = useAnimationCatalog();
@@ -164,6 +169,14 @@ export const useTtsAudioPlayer = () => {
   const requestSentenceMapRef = useRef(
     new Map<string, { pending: Set<string>; triggered: boolean }>(),
   );
+  // 缓存回调引用，避免在播放流程中捕获过期闭包
+  const onRequestPlaybackCompleteRef = useRef<
+    UseTtsAudioPlayerOptions["onRequestPlaybackComplete"]
+  >(options?.onRequestPlaybackComplete);
+
+  useEffect(() => {
+    onRequestPlaybackCompleteRef.current = options?.onRequestPlaybackComplete;
+  }, [options?.onRequestPlaybackComplete]);
 
   // 一个句子多个 chunk 到来时缓存提供到 Worklet 的通道数组
   // 将解码后的 PCM 数据暂存到句子的队列里，等待此句子被激活后再推送到 Worklet。
@@ -254,6 +267,8 @@ export const useTtsAudioPlayer = () => {
       return;
     }
     record.triggered = true;
+    // 语音播放完成后通知业务侧，确保可以同步到 requestId 级别的后续逻辑
+    onRequestPlaybackCompleteRef.current?.(requestId);
     switchToAnimationById("idle1");
     play();
   };
@@ -479,6 +494,7 @@ export const useTtsAudioPlayer = () => {
       }
 
       const sentenceId = safeString(payload.sentenceId);
+      console.log(parsed, 'parsed')
       switch (parsed.event) {
         case "tts-audio-start": {
           if (!sentenceId) {

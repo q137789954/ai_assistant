@@ -9,9 +9,7 @@ import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { RoastBattleContext } from "@/app/providers/RoastBattleProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import Tabbar from "./page/components/Tabbar";
-import {
-  useAnimationPlayerActions,
-} from "@/app/providers/AnimationProvider";
+import { useAnimationPlayerActions } from "@/app/providers/AnimationProvider";
 import BreakMeter, {
   type BreakMeterHandle,
 } from "./page/components/BreakMeter";
@@ -23,13 +21,20 @@ import type { PenguinCounterCard } from "./page/components/CounterRoastCards";
 export default function Home() {
   const globals = useContext(GlobalsContext);
   const { chatbotVisible, dispatch } = globals ?? {};
-  const { dispatch: roastBattleDispatch } = useContext(RoastBattleContext) || {};
+  const { dispatch: roastBattleDispatch } =
+    useContext(RoastBattleContext) || {};
   // 只订阅动作，避免动画状态更新触发页面整体重渲染
-  const { switchToAnimationById, switchToRandomAnimationByType } = useAnimationPlayerActions();
-  const { stopTtsPlayback } = useTtsAudioPlayer();
+  const { switchToAnimationById, switchToRandomAnimationByType } =
+    useAnimationPlayerActions();
   const { emitEvent, subscribe } = useWebSocketContext();
   const [retorts, setRetorts] = useState<PenguinCounterCard[]>([]);
-  const [retortsGroupId, setRetortsGroupId] = useState<string>(() => crypto.randomUUID());
+  const [retortsGroupId, setRetortsGroupId] = useState<string>(() =>
+    crypto.randomUUID()
+  );
+  // 暂存 chat-response-meta 与“语音播放完成”的对应关系，确保两者都到齐后再更新卡片
+  const pendingPenguinCounterRef = useRef(
+    new Map<string, { retortOptions?: string[]; playbackComplete: boolean }>()
+  );
 
   const requestId = useRef<string>(null);
   const speechStartTimestamp = useRef<number>(null);
@@ -39,16 +44,20 @@ export default function Home() {
   // 击败弹窗显隐状态，用于在破防条满值时展示全屏提示
   const [defeatOpen, setDefeatOpen] = useState(false);
   // 统一根据回合快照刷新破防条进度，避免事件处理逻辑分散
-  const syncBreakMeterFromRound = useCallback((payload?: Record<string, unknown>) => {
-    // 兼容后端返回的 round 为空/字符串的情况，保证前端解析安全
-    const round = (payload?.round as { score?: number | string } | null) ?? null;
-    const scoreRaw = round?.score;
-    const score = typeof scoreRaw === "number" ? scoreRaw : Number(scoreRaw);
-    if (!Number.isFinite(score)) {
-      return;
-    }
-    breakMeterRef.current?.set(score);
-  }, []);
+  const syncBreakMeterFromRound = useCallback(
+    (payload?: Record<string, unknown>) => {
+      // 兼容后端返回的 round 为空/字符串的情况，保证前端解析安全
+      const round =
+        (payload?.round as { score?: number | string } | null) ?? null;
+      const scoreRaw = round?.score;
+      const score = typeof scoreRaw === "number" ? scoreRaw : Number(scoreRaw);
+      if (!Number.isFinite(score)) {
+        return;
+      }
+      breakMeterRef.current?.set(score);
+    },
+    []
+  );
 
   // 更新当前回合吐槽次数，供全局展示或其他组件复用
   const updateRoundRoastCount = useCallback(
@@ -74,16 +83,49 @@ export default function Home() {
     });
   }, [roastBattleDispatch]);
 
-// 用于更新吐槽对战，反击提示卡片
-  const updatePenguinCounter = (items:string[]) => {
+  // 用于更新吐槽对战反击提示卡片，最多展示两条
+  const updatePenguinCounter = useCallback((items: string[]) => {
     const cards: PenguinCounterCard[] = items.slice(0, 2).map((text) => ({
       id: crypto.randomUUID(),
       title: text,
     }));
 
     setRetorts(cards);
-    setRetortsGroupId(crypto.randomUUID()); // ✅ 每次更新一组都换 groupId，确保触发整组出入场
-  };
+    // 每次更新一组都换 groupId，确保触发整组出入场
+    setRetortsGroupId(crypto.randomUUID());
+  }, []);
+
+  // 同步检查某个 requestId 是否已满足“语音播放完成 + 元信息到达”的条件
+  const tryTriggerPenguinCounter = useCallback(
+    (requestId: string) => {
+      const record = pendingPenguinCounterRef.current.get(requestId);
+      if (!record) {
+        return;
+      }
+      // retortOptions 允许为空数组，因此需要显式判断是否已写入
+      if (!record.playbackComplete || record.retortOptions === undefined) {
+        return;
+      }
+      updatePenguinCounter(record.retortOptions);
+      // 已触发后清理，避免重复更新
+      pendingPenguinCounterRef.current.delete(requestId);
+    },
+    [updatePenguinCounter]
+  );
+
+  const { stopTtsPlayback } = useTtsAudioPlayer({
+    onRequestPlaybackComplete: (completedRequestId) => {
+      // 使用播放完成信号替代 tts-audio-complete，避免音频未播完就触发卡片更新
+      const record = pendingPenguinCounterRef.current.get(
+        completedRequestId
+      ) ?? {
+        playbackComplete: false,
+      };
+      record.playbackComplete = true;
+      pendingPenguinCounterRef.current.set(completedRequestId, record);
+      tryTriggerPenguinCounter(completedRequestId);
+    },
+  });
 
   /**
    * 拉取吐槽对战统计并写入 GlobalsContext
@@ -103,12 +145,10 @@ export default function Home() {
         console.warn("吐槽对战统计接口返回非 2xx:", response.status);
         return;
       }
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            success?: boolean;
-            data?: { winCount?: number; minRoastCount?: number | null };
-          }
-        | null;
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        data?: { winCount?: number; minRoastCount?: number | null };
+      } | null;
 
       if (!payload?.success || !payload.data) {
         console.warn("吐槽对战统计接口返回异常数据:", payload);
@@ -200,8 +240,11 @@ export default function Home() {
           console.log("roast-battle-rounds payload:", payload);
           syncBreakMeterFromRound(payload);
           // 从服务端回合快照同步吐槽次数，确保刷新页面后进度准确
-          const { roastCount } = (payload.round as { roastCount?: number } | null) || {};
-          updateRoundRoastCount(typeof roastCount === "number" ? roastCount : 0);
+          const { roastCount } =
+            (payload.round as { roastCount?: number } | null) || {};
+          updateRoundRoastCount(
+            typeof roastCount === "number" ? roastCount : 0
+          );
           break;
         }
         case "roast-battle-rounds:ready": {
@@ -226,8 +269,26 @@ export default function Home() {
           if (Number.isFinite(damageDelta)) {
             breakMeterRef.current?.addRage(damageDelta);
           }
-          const retort_options = payload.retort_options as string[] || [];
-          updatePenguinCounter(retort_options)
+          const retortOptions = Array.isArray(payload.retort_options)
+            ? (payload.retort_options as string[])
+            : [];
+          const metaRequestId =
+            typeof payload.requestId === "string" ? payload.requestId : "";
+          if (!metaRequestId) {
+            console.warn(
+              "chat-response-meta 缺少 requestId，已跳过反击卡片更新"
+            );
+            break;
+          }
+          // 先缓存元信息，再等待对应 requestId 的“播放完成”信号到达
+          const record = pendingPenguinCounterRef.current.get(
+            metaRequestId
+          ) ?? {
+            playbackComplete: false,
+          };
+          record.retortOptions = retortOptions;
+          pendingPenguinCounterRef.current.set(metaRequestId, record);
+          tryTriggerPenguinCounter(metaRequestId);
           incrementRoundRoastCount();
           break;
         }
@@ -241,8 +302,8 @@ export default function Home() {
           breakMeterRef.current?.set(100);
           // 弹出击败提示，同时可以在这里补充其他收尾逻辑
           setDefeatOpen(true);
-            // 胜利后刷新统计，确保胜场数及时同步
-            void refreshRoastBattleStats();
+          // 胜利后刷新统计，确保胜场数及时同步
+          void refreshRoastBattleStats();
           break;
         }
         default:
@@ -259,6 +320,7 @@ export default function Home() {
     subscribe,
     switchToAnimationById,
     syncBreakMeterFromRound,
+    tryTriggerPenguinCounter,
     updateRoundRoastCount,
     incrementRoundRoastCount,
   ]);
@@ -294,6 +356,7 @@ export default function Home() {
     });
     requestId.current = null;
     speechStartTimestamp.current = null;
+    updatePenguinCounter([]);
   }, [emitEvent]);
 
   // 继续对战按钮点击后通知服务端准备新一轮回合
@@ -334,11 +397,7 @@ export default function Home() {
       </div>
       <div className="flex flex-1 justify-center items-center grow shrink max-h-[calc(100%-68px)] md:max-h-[calc(100%-132px)] relative">
         <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-11/12 max-w-md z-10">
-          <BreakMeter
-          ref={breakMeterRef}
-          autoReset={false}
-          initialValue={0}
-        />
+          <BreakMeter ref={breakMeterRef} autoReset={false} initialValue={0} />
           <div className="mt-2">
             <RoastBattleTotal />
           </div>
@@ -347,7 +406,7 @@ export default function Home() {
         <AnimationPlayer />
       </div>
       <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-20 overflow-hidden">
-        <CounterRoastCards items={retorts} groupId={retortsGroupId} />
+        <CounterRoastCards items={retorts} groupId={retortsGroupId} updatePenguinCounter={updatePenguinCounter} />
       </div>
       <div className="py-4 px-6 shrink-0">
         <div className="w-full flex gap-2 items-center">
@@ -357,7 +416,7 @@ export default function Home() {
           >
             💬
           </div>
-          <AvatarCommandInput />
+          <AvatarCommandInput updatePenguinCounter={updatePenguinCounter} />
         </div>
       </div>
       {/* Chatbot 通过抽屉形式展示，交由 open 状态控制动画 */}
@@ -369,10 +428,7 @@ export default function Home() {
           }
         }}
       />
-      <DefeatOverlay
-        open={defeatOpen}
-        onContinue={handleDefeatContinue}
-      />
+      <DefeatOverlay open={defeatOpen} onContinue={handleDefeatContinue} />
       {/* <div className="bg-amber-500 absolute top-5 left-5 z-50" onClick={() => setDefeatOpen(true)}>点击</div> */}
     </main>
   );

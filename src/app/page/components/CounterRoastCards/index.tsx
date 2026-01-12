@@ -1,8 +1,11 @@
 "use client";
 
-import * as React from "react";
+import  React, {useCallback, useContext} from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { Variants } from "motion/react";
+import { GlobalsContext } from "@/app/providers/GlobalsProviders";
+import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
+import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 
 export type PenguinCounterCard = {
   id: string;
@@ -12,6 +15,7 @@ export type PenguinCounterCard = {
 type Props = {
   items: PenguinCounterCard[];
   groupId?: string;
+  updatePenguinCounter: (items: string[]) => void
 };
 
 // 单卡动画时长（进入）
@@ -29,7 +33,12 @@ function makeGroupKey(items: PenguinCounterCard[], groupId?: string) {
   return items.map((x) => x.id).join("|");
 }
 
-function CounterRoastCards({ items = [], groupId }: Props) {
+function CounterRoastCards({ items = [], groupId, updatePenguinCounter }: Props) {
+
+  const {dispatch} = useContext(GlobalsContext) || {};
+  const { stopTtsPlayback } = useTtsAudioPlayer();
+  const { emitEvent } = useWebSocketContext();
+
   const safeItems = React.useMemo(() => items.slice(0, 3), [items]);
   const groupKey = React.useMemo(
     () => makeGroupKey(safeItems, groupId),
@@ -70,6 +79,34 @@ function CounterRoastCards({ items = [], groupId }: Props) {
     },
   };
 
+  const handleCard = useCallback((text:string) => {
+
+    const timestampWatermark = Date.now();
+    if (dispatch) {
+      dispatch({
+        type: "SET_TIMESTAMP_WATERMARK",
+        payload: timestampWatermark,
+      });
+    }
+    // 发送新指令前重置语音播放与视频帧
+    stopTtsPlayback();
+    // 构建消息元数据，包含唯一 ID 及格式要求
+    const messageMeta = {
+      requestId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sampleRate: 16000,
+      content: text,
+      timestamp: timestampWatermark,
+      outputFormat: "speech",
+      inputFormat: "text",
+    };
+    const sent = emitEvent("chat:input", messageMeta);
+    if (!sent) {
+      console.warn("消息发送失败，请检查 WebSocket 连接状态");
+    }
+    updatePenguinCounter([])
+
+  }, [updatePenguinCounter, emitEvent, stopTtsPlayback, dispatch])
+
   return (
     <div className="relative w-full">
       <AnimatePresence mode="wait" initial={false}>
@@ -86,6 +123,7 @@ function CounterRoastCards({ items = [], groupId }: Props) {
               key={item.id}
               variants={cardVariants}
               className="rounded-xl border border-white/10 bg-white/5 p-2 text-white"
+              onClick={() => handleCard(item.title)}
             >
               <div className="text-[12px] font-semibold">{item.title}</div>
             </motion.div>
