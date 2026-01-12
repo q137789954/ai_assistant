@@ -267,6 +267,21 @@ export const processTextToSpeechChatFlow = async ({
     tailJsonBuffer += textChunk;
   };
 
+  const isIgnorableStreamError = (error: unknown) => {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+    const normalizedMessage = error.message.toLowerCase();
+    // 某些流式连接会以 terminated/aborted 结束，视为正常中止，避免前端误报
+    return (
+      normalizedMessage === "terminated" ||
+      normalizedMessage.includes("terminated") ||
+      normalizedMessage.includes("aborted") ||
+      normalizedMessage.includes("abort")
+    );
+  };
+
+  let streamError: unknown = null;
   try {
     const responseStream = await createChatStreamWithRetry();
     // 遍历的流式响应，逐步构建助手回复并推送 chunk
@@ -326,100 +341,15 @@ export const processTextToSpeechChatFlow = async ({
 
       handleReplyStream(deltaContent);
     }
-
-    if (!headJsonParsed && headJsonBuffer.trim()) {
-      // 流式结束仍未解析到头部 JSON，尝试最后再提取一次
-      const { jsonText, rest } = extractFirstJson(headJsonBuffer);
-      if (jsonText) {
-        try {
-          const parsed = JSON.parse(jsonText) as Record<string, unknown>;
-          const candidate = parsed.damage_delta;
-          if (typeof candidate === "number") {
-            damageDelta = candidate;
-          }
-          headJsonParsed = true;
-          if (rest) {
-            handleReplyStream(rest);
-          }
-        } catch (error) {
-          console.error("textToSpeechChatFlow: 解析头部 JSON 失败", {
-            clientId,
-            conversationId,
-            error,
-            jsonText,
-            rawBuffer: headJsonBuffer,
-          });
-        }
-      }
-    }
-
-    if (!replyEnded && replyBuffer) {
-      // 流式结束仍未遇到分隔符时，把剩余内容当作 reply 处理
-      handleReplyChunk(replyBuffer);
-      replyBuffer = "";
-    }
-
-    if (pendingSentence.trim()) {
-      // 循环结束后如果还有残留片段，也需要转换为语音
-      enqueueSentence(pendingSentence);
-      pendingSentence = "";
-    }
-
-    if (tailJsonBuffer.trim()) {
-      // JSON 必须完整后再解析并下发给客户端
-      const jsonTextRaw = tailJsonBuffer.trim();
-      let jsonText = jsonTextRaw;
-      const strayDelimiterIndex = jsonText.indexOf(STREAM_REPLY_DELIMITER);
-      if (strayDelimiterIndex !== -1) {
-        // 兜底处理：如果 JSON 后又混入分隔符，截断后再解析
-        jsonText = jsonText.slice(0, strayDelimiterIndex).trim();
-      }
-      if (!jsonText) {
-        return true;
-      }
-      // 尝试只解析首个完整 JSON，避免尾部夹杂多余 JSON 导致解析失败
-      const { jsonText: extractedJson } = extractFirstJson(jsonText);
-      if (!extractedJson) {
-        return true;
-      }
-      jsonText = extractedJson.trim();
-      if (!jsonText) {
-        return true;
-      }
-      try {
-        const parsed = JSON.parse(jsonText) as Record<string, unknown>;
-        if (damageDelta !== null && typeof parsed.damage_delta !== "number") {
-          // 头部 JSON 已解析到 damage_delta 时补回，保持下游结构兼容
-          parsed.damage_delta = damageDelta;
-        }
-        socket.emit(
-          "message",
-          serializePayload({
-            event: "chat-response-meta",
-            data: {
-              requestId,
-              ...parsed,
-            },
-          })
-        );
-      } catch (error) {
-        console.error("textToSpeechChatFlow: 解析 LLM 结构化输出失败", {
-          clientId,
-          conversationId,
-          error,
-          jsonText,
-          jsonTextRaw,
-        });
-      }
-    }
-
-    // 等待所有排队的 TTS 请求完成后再继续后续流程
-    await ttsPipeline;
   } catch (error) {
+    streamError = error;
+  }
+
+  if (streamError && !isIgnorableStreamError(streamError)) {
     console.error("textChatFlow: Grok 流式响应处理失败", {
       clientId,
       conversationId,
-      error,
+      error: streamError,
     });
     const errorPayload = serializePayload({
       event: "chat-response-error",
@@ -427,12 +357,111 @@ export const processTextToSpeechChatFlow = async ({
         clientId,
         conversationId,
         message:
-          error instanceof Error ? error.message : "未知的 Grok 流式响应异常",
+          streamError instanceof Error
+            ? streamError.message
+            : "未知的 Grok 流式响应异常",
       },
     });
     socket.emit("message", errorPayload);
     return false;
   }
+
+  if (streamError) {
+    console.warn("textChatFlow: Grok 流式连接提前终止，尝试收尾处理", {
+      clientId,
+      conversationId,
+      error: streamError,
+    });
+  }
+
+  if (!headJsonParsed && headJsonBuffer.trim()) {
+    // 流式结束仍未解析到头部 JSON，尝试最后再提取一次
+    const { jsonText, rest } = extractFirstJson(headJsonBuffer);
+    if (jsonText) {
+      try {
+        const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+        const candidate = parsed.damage_delta;
+        if (typeof candidate === "number") {
+          damageDelta = candidate;
+        }
+        headJsonParsed = true;
+        if (rest) {
+          handleReplyStream(rest);
+        }
+      } catch (error) {
+        console.error("textToSpeechChatFlow: 解析头部 JSON 失败", {
+          clientId,
+          conversationId,
+          error,
+          jsonText,
+          rawBuffer: headJsonBuffer,
+        });
+      }
+    }
+  }
+
+  if (!replyEnded && replyBuffer) {
+    // 流式结束仍未遇到分隔符时，把剩余内容当作 reply 处理
+    handleReplyChunk(replyBuffer);
+    replyBuffer = "";
+  }
+
+  if (pendingSentence.trim()) {
+    // 循环结束后如果还有残留片段，也需要转换为语音
+    enqueueSentence(pendingSentence);
+    pendingSentence = "";
+  }
+
+  if (tailJsonBuffer.trim()) {
+    // JSON 必须完整后再解析并下发给客户端
+    const jsonTextRaw = tailJsonBuffer.trim();
+    let jsonText = jsonTextRaw;
+    const strayDelimiterIndex = jsonText.indexOf(STREAM_REPLY_DELIMITER);
+    if (strayDelimiterIndex !== -1) {
+      // 兜底处理：如果 JSON 后又混入分隔符，截断后再解析
+      jsonText = jsonText.slice(0, strayDelimiterIndex).trim();
+    }
+    if (!jsonText) {
+      return true;
+    }
+    // 尝试只解析首个完整 JSON，避免尾部夹杂多余 JSON 导致解析失败
+    const { jsonText: extractedJson } = extractFirstJson(jsonText);
+    if (!extractedJson) {
+      return true;
+    }
+    jsonText = extractedJson.trim();
+    if (!jsonText) {
+      return true;
+    }
+    try {
+      const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+      if (damageDelta !== null && typeof parsed.damage_delta !== "number") {
+        // 头部 JSON 已解析到 damage_delta 时补回，保持下游结构兼容
+        parsed.damage_delta = damageDelta;
+      }
+      socket.emit(
+        "message",
+        serializePayload({
+          event: "chat-response-meta",
+          data: {
+            requestId,
+            ...parsed,
+          },
+        })
+      );
+    } catch (error) {
+      console.error("textToSpeechChatFlow: 解析 LLM 结构化输出失败", {
+        clientId,
+        conversationId,
+        error,
+        jsonText,
+        jsonTextRaw,
+      });
+    }
+  }
+
+  // 等待所有排队的 TTS 请求完成后再继续后续流程
+  await ttsPipeline;
 
   if (assistantContent) {
     const assistantTimestamp = Date.now();
