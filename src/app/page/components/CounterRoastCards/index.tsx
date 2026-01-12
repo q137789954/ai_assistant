@@ -122,7 +122,7 @@ function CounterRoastCards({ items = [], groupId, updatePenguinCounter }: Props)
             <motion.div
               key={item.id}
               variants={cardVariants}
-              className="rounded-xl border border-white/10 bg-white/5 p-2 text-white"
+              className="rounded-xl border border-white/10 bg-white/5 p-2 text-white cursor-pointer"
               onClick={() => handleCard(item.title)}
             >
               <div className="text-[12px] font-semibold">{item.title}</div>

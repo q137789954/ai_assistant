@@ -85,7 +85,7 @@ export default function Home() {
 
   // 用于更新吐槽对战反击提示卡片，最多展示两条
   const updatePenguinCounter = useCallback((items: string[]) => {
-    const cards: PenguinCounterCard[] = items.slice(0, 2).map((text) => ({
+    const cards: PenguinCounterCard[] = items.slice(0, 3).map((text) => ({
       id: crypto.randomUUID(),
       title: text,
     }));
