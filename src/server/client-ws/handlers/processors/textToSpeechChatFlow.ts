@@ -104,6 +104,7 @@ export const processTextToSpeechChatFlow = async ({
   try {
     const { isSubscribed, ttsUsageCount } =
       await resolveSubscriptionState(userId);
+      console.log(isSubscribed, ttsUsageCount)
     if (!isSubscribed) {
       if (ttsUsageCount >= FREE_TTS_USAGE_LIMIT) {
         socket.emit(
