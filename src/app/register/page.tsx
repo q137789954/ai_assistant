@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 /**
  * 注册页
@@ -214,23 +215,23 @@ export default function RegisterPage() {
             />
             <span>
               I agree to{" "}
-              <a
+              <Link
                 className="font-semibold text-secondary underline hover:text-primary"
                 href="/terms"
                 target="_blank"
                 rel="noreferrer"
               >
                 Terms
-              </a>{" "}
+              </Link>{" "}
               &{" "}
-              <a
+              <Link
                 className="font-semibold text-secondary underline hover:text-primary"
                 href="/privacy"
                 target="_blank"
                 rel="noreferrer"
               >
                 Privacy
-              </a>
+              </Link>
             </span>
           </label>
 
@@ -252,12 +253,12 @@ export default function RegisterPage() {
         </form>
 
         <div className="flex justify-center mt-5">
-          <a
+          <Link
             className="text-sm text-center font-medium text-secondary underline trans-base hover:text-primary"
             href="/login"
           >
             Already have an account? <span>Log in</span>
-          </a>
+          </Link>
         </div>
       </div>
     </main>

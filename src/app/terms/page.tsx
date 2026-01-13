@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 // 静态条款文案配置，便于后续统一维护与更新
 const sections = [
@@ -108,24 +109,24 @@ export default function TermsPage() {
 
         <footer className="flex flex-wrap items-center gap-4 text-sm text-secondary">
           <span>最近更新：2024-05-01</span>
-          <a
+          <Link
             href="/privacy"
             className="underline decoration-dotted underline-offset-4 hover:text-primary"
           >
             查看隐私政策
-          </a>
-          <a
+          </Link>
+          <Link
             href="/register"
             className="underline decoration-dotted underline-offset-4 hover:text-primary"
           >
             返回注册页
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             className="underline decoration-dotted underline-offset-4 hover:text-primary"
           >
             回到首页
-          </a>
+          </Link>
         </footer>
       </div>
     </main>

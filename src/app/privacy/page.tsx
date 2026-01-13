@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 // 隐私政策要点，未来如接入更多数据源可在此扩展
 const sections = [
@@ -109,24 +110,24 @@ export default function PrivacyPage() {
 
         <footer className="flex flex-wrap items-center gap-4 text-sm text-secondary">
           <span>最近更新：2024-05-01</span>
-          <a
+          <Link
             href="/terms"
             className="underline decoration-dotted underline-offset-4 hover:text-primary"
           >
             查看服务条款
-          </a>
-          <a
+          </Link>
+          <Link
             href="/register"
             className="underline decoration-dotted underline-offset-4 hover:text-primary"
           >
             返回注册页
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             className="underline decoration-dotted underline-offset-4 hover:text-primary"
           >
             回到首页
-          </a>
+          </Link>
         </footer>
       </div>
     </main>

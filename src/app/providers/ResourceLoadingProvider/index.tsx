@@ -28,6 +28,8 @@ export type ResourceLoadingState = {
   errors: string[];
   /** 是否全部资源加载成功 */
   allLoaded: boolean;
+  /** 是否命中资源缓存（用于跳过遮罩层展示） */
+  isResourceCached: boolean;
   /** 获取预加载的音频 ArrayBuffer（未命中返回 null） */
   getPreloadedAudioBuffer: (url: string) => ArrayBuffer | null;
   /** 触发重新加载的入口 */
@@ -53,6 +55,10 @@ type ResourceLoadingProviderProps = {
    * 可选的额外资源 URL（例如未来的音频/图片），会与动画资源一起加载。
    */
   resources?: string[];
+  /**
+   * 由服务端注入的资源签名，用于首屏判断是否命中过缓存。
+   */
+  initialResourceCacheSignature?: string;
 };
 
 /**
@@ -63,6 +69,7 @@ type ResourceLoadingProviderProps = {
 export default function ResourceLoadingProvider({
   children,
   resources,
+  initialResourceCacheSignature,
 }: ResourceLoadingProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [loaded, setLoaded] = useState(0);
@@ -89,6 +96,18 @@ export default function ResourceLoadingProvider({
       new Set([...animationResources, ...extraResources]),
     );
   }, [resources]);
+
+  // 根据资源列表生成稳定签名，用于判断是否已缓存过相同资源集
+  const resourceSignature = useMemo(() => resourceList.join("|"), [resourceList]);
+  // 记录是否命中资源缓存，用于决定是否需要展示加载遮罩
+  const [isResourceCached, setIsResourceCached] = useState(
+    initialResourceCacheSignature === resourceSignature,
+  );
+
+  useEffect(() => {
+    // 资源列表变化时更新缓存命中状态，避免签名变化后仍错误命中
+    setIsResourceCached(initialResourceCacheSignature === resourceSignature);
+  }, [initialResourceCacheSignature, resourceSignature]);
 
   const getPreloadedAudioBuffer = useCallback((url: string) => {
     return audioBufferCacheRef.current.get(url) ?? null;
@@ -181,6 +200,23 @@ export default function ResourceLoadingProvider({
   // 仅当加载流程结束且无错误时才视为全部资源就绪，避免初始状态误判
   const allLoaded = !isLoading && loaded >= total && errors.length === 0;
 
+  useEffect(() => {
+    if (!allLoaded) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      // 全部资源加载成功后持久化签名，便于下次直接跳过遮罩
+      const encodedSignature = encodeURIComponent(resourceSignature);
+      document.cookie = `roast-ai:resource-cache-signature=${encodedSignature}; path=/; max-age=2592000; samesite=lax`;
+      setIsResourceCached(true);
+    } catch {
+      // 忽略存储不可用的场景
+    }
+  }, [allLoaded, resourceSignature]);
+
   const value = useMemo(
     () => ({
       isLoading,
@@ -189,10 +225,21 @@ export default function ResourceLoadingProvider({
       total,
       errors,
       allLoaded,
+      isResourceCached,
       getPreloadedAudioBuffer,
       retry,
     }),
-    [isLoading, progress, loaded, total, errors, allLoaded, getPreloadedAudioBuffer, retry],
+    [
+      isLoading,
+      progress,
+      loaded,
+      total,
+      errors,
+      allLoaded,
+      isResourceCached,
+      getPreloadedAudioBuffer,
+      retry,
+    ],
   );
 
   return (

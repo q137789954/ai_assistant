@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 /**
  * 忘记密码页
@@ -221,12 +222,12 @@ export default function ForgotPasswordPage() {
         </form>
 
         <div className="flex justify-center mt-5">
-          <a
+          <Link
             className="text-sm text-center font-medium text-secondary underline trans-base hover:text-primary"
             href="/login"
           >
             Back to <span>Login</span>
-          </a>
+          </Link>
         </div>
       </div>
     </main>

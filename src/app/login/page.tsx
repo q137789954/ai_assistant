@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Chromium } from "lucide-react";
+import Link from "next/link";
 
 /**
  * 登录页
@@ -135,12 +136,12 @@ export default function LoginPage() {
             />
           </label>
           <div className="flex justify-end">
-            <a
+            <Link
               className="text-sm text-center font-medium text-secondary underline trans-base hover:text-primary"
               href="/forgot-password"
             >
               Forgot Password?
-            </a>
+            </Link>
           </div>
 
           {error && (
@@ -161,12 +162,12 @@ export default function LoginPage() {
         </form>
 
         <div className="flex justify-center mt-5">
-          <a
+          <Link
             className="text-sm text-center font-medium text-secondary underline trans-base hover:text-primary"
             href="/register"
           >
             No account? <span>Register</span>
-          </a>
+          </Link>
         </div>
       </div>
     </main>
