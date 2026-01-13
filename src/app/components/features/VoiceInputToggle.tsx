@@ -7,9 +7,10 @@ import clsx from 'clsx';
 
 type VoiceInputToggleProps = {
   className?: string
+  disabled?: boolean
 }
 
-export function VoiceInputToggle({ className = '' }: VoiceInputToggleProps) {
+export function VoiceInputToggle({ className = '', disabled = false }: VoiceInputToggleProps) {
   const globals = useContext(GlobalsContext)
 
   if (!globals) {
@@ -19,13 +20,23 @@ export function VoiceInputToggle({ className = '' }: VoiceInputToggleProps) {
   const { voiceInputEnabled, dispatch } = globals
 
   const toggle = useCallback(() => {
+    if (disabled) {
+      return
+    }
     dispatch({ type: 'SET_VOICE_INPUT_ENABLED', payload: !voiceInputEnabled })
-  }, [dispatch, voiceInputEnabled])
+  }, [dispatch, disabled, voiceInputEnabled])
 
   return (
     <div
       onClick={toggle}
-      className={clsx( `flex items-center justify-center h-10! w-10! rounded-full! p-0! shrink-0 cursor-pointer`, className, voiceInputEnabled?"bg-[rgb(82,196,26)] text-black/60" : "bg-[rgb(51,51,51)] text-white")}
+      className={clsx(
+        `flex items-center justify-center h-10! w-10! rounded-full! p-0! shrink-0 cursor-pointer`,
+        disabled && "cursor-not-allowed opacity-60",
+        className,
+        voiceInputEnabled
+          ? "bg-[rgb(82,196,26)] text-black/60"
+          : "bg-[rgb(51,51,51)] text-white"
+      )}
     >
       {
         voiceInputEnabled ? <Mic size={14} /> : <MicOff size={14} />

@@ -5,8 +5,12 @@ import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
 import { VoiceInputToggle } from "@/app/components/features";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
-const AvatarCommandInput = ({updatePenguinCounter}:{
-  updatePenguinCounter:(items: string[]) => void
+const AvatarCommandInput = ({
+  updatePenguinCounter,
+  disabled = false,
+}: {
+  updatePenguinCounter: (items: string[]) => void;
+  disabled?: boolean;
 }) => {
   const [input, setInput] = useState("");
   const { emitEvent, subscribe } = useWebSocketContext();
@@ -50,6 +54,9 @@ const AvatarCommandInput = ({updatePenguinCounter}:{
   }, [subscribe]);
 
   const handleSubmit = () => {
+    if (disabled) {
+      return;
+    }
     const trimmed = input.trim();
     if (!trimmed) {
       return;
@@ -99,11 +106,15 @@ const AvatarCommandInput = ({updatePenguinCounter}:{
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleTextareaKeyDown}
+        disabled={disabled}
       />
-      <VoiceInputToggle />
+      <VoiceInputToggle disabled={disabled} />
       <div
-        className="flex items-center justify-center h-10! w-10! rounded-full! p-0! shrink-0 bg-[rgb(204,255,0)] text-black text-sm cursor-pointer"
+        className={`flex items-center justify-center h-10! w-10! rounded-full! p-0! shrink-0 bg-[rgb(204,255,0)] text-black text-sm ${
+          disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+        }`}
         onClick={handleSubmit}
+        aria-disabled={disabled}
       >
         ➤
       </div>

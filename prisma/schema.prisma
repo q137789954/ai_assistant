@@ -21,6 +21,12 @@ model User {
   image         String?
   /// 密码哈希，可选，用于本地登录方案
   passwordHash  String?
+  /// 是否已订阅（以服务端状态为准）
+  isSubscribed  Boolean               @default(false)
+  /// 订阅到期时间（为空表示未知或未绑定订阅周期）
+  subscriptionExpiresAt DateTime?
+  /// 文字转语音聊天的免费使用次数
+  ttsUsageCount Int                   @default(0)
   /// 记录创建时间，默认当前时间
   createdAt     DateTime              @default(now())
   /// 更新时间，需要由业务自行更新

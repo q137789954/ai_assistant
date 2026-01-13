@@ -17,6 +17,7 @@ import DefeatOverlay from "./page/components/DefeatOverlay";
 import RoastBattleTotal from "./page/components/RoastBattleTotal";
 import CounterRoastCards from "./page/components/CounterRoastCards";
 import type { PenguinCounterCard } from "./page/components/CounterRoastCards";
+import SubscriptionRequiredDialog from "./page/components/SubscriptionRequiredDialog";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -43,6 +44,13 @@ export default function Home() {
   const entryDecodeContextRef = useRef<AudioContext | null>(null);
   // 击败弹窗显隐状态，用于在破防条满值时展示全屏提示
   const [defeatOpen, setDefeatOpen] = useState(false);
+  const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
+  const [subscriptionLimitInfo, setSubscriptionLimitInfo] = useState({
+    limit: 20,
+    used: 0,
+    remaining: 20,
+  });
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   // 统一根据回合快照刷新破防条进度，避免事件处理逻辑分散
   const syncBreakMeterFromRound = useCallback(
     (payload?: Record<string, unknown>) => {
@@ -194,6 +202,9 @@ export default function Home() {
    */
   const handleVoiceChunk = useCallback(
     (audio: Float32Array) => {
+      if (subscriptionBlocked) {
+        return;
+      }
       ensureSpeechSession();
       const chunkMeta = {
         requestId: requestId.current,
@@ -209,7 +220,7 @@ export default function Home() {
         console.warn("语音帧发送失败，请检查 WebSocket 连接状态");
       }
     },
-    [emitEvent, ensureSpeechSession]
+    [emitEvent, ensureSpeechSession, subscriptionBlocked]
   );
 
   useEffect(() => {
@@ -234,6 +245,21 @@ export default function Home() {
       const eventType = parsed.event;
 
       switch (eventType) {
+        case "subscription-required": {
+          const payload = parsed.data ?? {};
+          const limit = Number(payload.limit ?? 20);
+          const used = Number(payload.used ?? limit);
+          const remaining = Number(payload.remaining ?? 0);
+          setSubscriptionLimitInfo({
+            limit: Number.isFinite(limit) ? limit : 20,
+            used: Number.isFinite(used) ? used : limit,
+            remaining: Number.isFinite(remaining) ? remaining : 0,
+          });
+          setSubscriptionBlocked(true);
+          setSubscriptionDialogOpen(true);
+          stopTtsPlayback();
+          break;
+        }
         case "roast-battle-rounds": {
           // 初始化时同步当前吐槽对战回合分数，确保破防条从真实进度开始
           const payload = (parsed.data ?? {}) as Record<string, unknown>;
@@ -346,6 +372,12 @@ export default function Home() {
   }, []);
 
   const onSpeechEnd = useCallback(() => {
+    if (subscriptionBlocked) {
+      requestId.current = null;
+      speechStartTimestamp.current = null;
+      updatePenguinCounter([]);
+      return;
+    }
     emitEvent("chat:input", {
       content: [],
       outputFormat: "speech",
@@ -357,7 +389,7 @@ export default function Home() {
     requestId.current = null;
     speechStartTimestamp.current = null;
     updatePenguinCounter([]);
-  }, [emitEvent]);
+  }, [emitEvent, subscriptionBlocked, updatePenguinCounter]);
 
   // 继续对战按钮点击后通知服务端准备新一轮回合
   const handleDefeatContinue = useCallback(() => {
@@ -416,7 +448,10 @@ export default function Home() {
           >
             💬
           </div>
-          <AvatarCommandInput updatePenguinCounter={updatePenguinCounter} />
+          <AvatarCommandInput
+            updatePenguinCounter={updatePenguinCounter}
+            disabled={subscriptionBlocked}
+          />
         </div>
       </div>
       {/* Chatbot 通过抽屉形式展示，交由 open 状态控制动画 */}
@@ -426,6 +461,16 @@ export default function Home() {
           if (dispatch) {
             dispatch({ type: "SET_CHATBOT_VISIBILITY", payload: next });
           }
+        }}
+      />
+      <SubscriptionRequiredDialog
+        open={subscriptionDialogOpen}
+        limit={subscriptionLimitInfo.limit}
+        used={subscriptionLimitInfo.used}
+        remaining={subscriptionLimitInfo.remaining}
+        onSubscribed={() => {
+          setSubscriptionBlocked(false);
+          setSubscriptionDialogOpen(false);
         }}
       />
       <DefeatOverlay open={defeatOpen} onContinue={handleDefeatContinue} />

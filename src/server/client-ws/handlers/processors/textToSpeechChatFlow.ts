@@ -25,6 +25,48 @@ interface textToSpeechChatFlowParams {
 }
 
 const STREAM_REPLY_DELIMITER = "<<<END_REPLY>>>";
+const FREE_TTS_USAGE_LIMIT = 20;
+
+// 查询订阅状态与免费额度，包含到期兜底处理
+const resolveSubscriptionState = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      isSubscribed: true,
+      subscriptionExpiresAt: true,
+      ttsUsageCount: true,
+    },
+  });
+
+  if (!user) {
+    throw new Error("未找到用户订阅信息");
+  }
+
+  const now = new Date();
+  const isExpired =
+    user.subscriptionExpiresAt !== null && user.subscriptionExpiresAt <= now;
+  const isSubscribed = user.isSubscribed && !isExpired;
+
+  if (user.isSubscribed && isExpired) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isSubscribed: false },
+    });
+  }
+
+  return {
+    isSubscribed,
+    ttsUsageCount: user.ttsUsageCount,
+  };
+};
+
+// 免费额度消耗以服务端为准，避免前端绕过
+const consumeFreeTtsQuota = async (userId: string) => {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { ttsUsageCount: { increment: 1 } },
+  });
+};
 
 /**
  * 处理文本输入的全部流程：落库用户输入、调用 Grok 流式接口、持续推送 chunk、落库助手回复。
@@ -56,6 +98,48 @@ export const processTextToSpeechChatFlow = async ({
       clientId,
       conversationId,
     });
+    return false;
+  }
+  // 校验订阅与免费额度，超过限额时直接拦截本次请求
+  try {
+    const { isSubscribed, ttsUsageCount } =
+      await resolveSubscriptionState(userId);
+    if (!isSubscribed) {
+      if (ttsUsageCount >= FREE_TTS_USAGE_LIMIT) {
+        socket.emit(
+          "message",
+          serializePayload({
+            event: "subscription-required",
+            data: {
+              requestId,
+              limit: FREE_TTS_USAGE_LIMIT,
+              used: ttsUsageCount,
+              remaining: 0,
+              message: "免费额度已用完，请订阅后继续使用",
+            },
+          })
+        );
+        return false;
+      }
+      await consumeFreeTtsQuota(userId);
+    }
+  } catch (error) {
+    console.error("textToSpeechChatFlow: 订阅状态校验失败", {
+      clientId,
+      conversationId,
+      error,
+    });
+    socket.emit(
+      "message",
+      serializePayload({
+        event: "chat-response-error",
+        data: {
+          clientId,
+          conversationId,
+          message: "订阅状态校验失败，请稍后重试",
+        },
+      })
+    );
     return false;
   }
   // 验证成功后立即将用户输入写入数据库，便于会话记录与问题追踪
