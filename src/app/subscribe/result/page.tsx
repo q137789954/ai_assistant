@@ -70,19 +70,6 @@ export default function SubscribeResultPage() {
     }
   }, [fetchStatus, subscribeState]);
 
-  // 收集回调参数用于展示，但不做权限判定
-  const meta = useMemo(
-    () => ({
-      requestId: searchParams.get("request_id"),
-      checkoutId: searchParams.get("checkout_id"),
-      orderId: searchParams.get("order_id"),
-      customerId: searchParams.get("customer_id"),
-      subscriptionId: searchParams.get("subscription_id"),
-      productId: searchParams.get("product_id"),
-    }),
-    [searchParams]
-  );
-
   const statusTitle = useMemo(() => {
     if (subscribeState === "success") return "支付完成";
     if (subscribeState === "processing") return "正在同步";
@@ -119,12 +106,13 @@ export default function SubscribeResultPage() {
 
   return (
     <main
-      className="relative min-h-dvh w-full overflow-hidden px-6 py-10"
+      className="relative h-dvh w-full overflow-x-hidden overflow-y-auto px-6 py-10 [-webkit-overflow-scrolling:touch]"
       style={{
         fontFamily:
           '"Futura","Avenir Next","Gill Sans","Trebuchet MS",sans-serif',
       }}
     >
+      {/* 仅限制横向溢出，保留纵向滚动以避免长内容被裁切 */}
       {/* 背景：分层渐变 + 光斑，制造更强的订阅仪式感 */}
       <div className="absolute inset-0 -z-10">
         <div
@@ -235,21 +223,6 @@ export default function SubscribeResultPage() {
         </div>
 
         {/* 回调参数展示：仅作为信息提示 */}
-        <div className="rounded-3xl border border-white/10 bg-black/40 p-6">
-          <p className="text-xs uppercase tracking-[0.3em] text-white/50">
-            Callback Detail
-          </p>
-          <div className="mt-4 grid gap-3 text-xs text-white/70 sm:grid-cols-2">
-            {Object.entries(meta).map(([key, value]) => (
-              <div key={key} className="flex flex-col gap-1">
-                <span className="text-white/50">{key}</span>
-                <span className="break-all text-white">
-                  {value ?? "未提供"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* 行动按钮 */}
         <div className="flex flex-wrap gap-4">
