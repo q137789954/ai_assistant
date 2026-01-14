@@ -27,7 +27,7 @@ export default function Home() {
   // 只订阅动作，避免动画状态更新触发页面整体重渲染
   const { switchToAnimationById, switchToRandomAnimationByType } =
     useAnimationPlayerActions();
-  const { emitEvent, subscribe } = useWebSocketContext();
+  const { emitEvent, subscribe, status } = useWebSocketContext();
   const [retorts, setRetorts] = useState<PenguinCounterCard[]>([]);
   const [retortsGroupId, setRetortsGroupId] = useState<string>(() =>
     crypto.randomUUID()
@@ -264,10 +264,18 @@ export default function Home() {
           // 初始化时同步当前吐槽对战回合分数，确保破防条从真实进度开始
           const payload = (parsed.data ?? {}) as Record<string, unknown>;
           console.log("roast-battle-rounds payload:", payload);
+          const roundSnapshot =
+            (payload.round as { roastCount?: number } | null) ?? null;
+          if (!roundSnapshot) {
+            // 服务端返回空回合时重置 UI，避免沿用上一轮的破防值/吐槽次数
+            breakMeterRef.current?.reset();
+            updateRoundRoastCount(0);
+            setDefeatOpen(false);
+            break;
+          }
           syncBreakMeterFromRound(payload);
           // 从服务端回合快照同步吐槽次数，确保刷新页面后进度准确
-          const { roastCount } =
-            (payload.round as { roastCount?: number } | null) || {};
+          const { roastCount } = roundSnapshot;
           updateRoundRoastCount(
             typeof roastCount === "number" ? roastCount : 0
           );
@@ -352,12 +360,15 @@ export default function Home() {
   ]);
 
   useEffect(() => {
-    // 页面初始化时主动请求当前吐槽对战回合数据，确保首次渲染能拿到最新状态
+    // 等待 WebSocket 连接成功后再主动请求当前吐槽对战回合数据，避免连接未就绪导致发送失败
+    if (status !== "open") {
+      return;
+    }
     const sent = emitEvent("roast-battle-rounds:load");
     if (!sent) {
       console.warn("吐槽对战回合加载事件发送失败，请检查 WebSocket 连接状态");
     }
-  }, [emitEvent]);
+  }, [emitEvent, status]);
 
   // 页面初始化时拉取吐槽对战统计，提供给全局展示组件
   useEffect(() => {

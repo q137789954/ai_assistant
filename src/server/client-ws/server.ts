@@ -188,7 +188,9 @@ io.on("connection", async (socket) => {
   // 默认关闭吐槽对战功能，等待加载回合数据后根据情况开启
   socket.data.roastBattleEnabled = false;
   // 提前注册吐槽对战事件，避免客户端在加载上下文前发送导致事件丢失
-  socket.on("roast-battle-rounds:load", () => {
+  socket.on("roast-battle-rounds:load", async () => {
+    // 确保回合数据已加载完成再下发快照，避免竞态导致 round 为空
+    await loadRoastBattleRoundOnConnect(socket);
     emitRoastBattleRoundSnapshot(socket);
   });
   // 继续对战：重新加载回合数据并告知客户端准备完毕

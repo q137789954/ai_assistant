@@ -47,7 +47,7 @@ export async function POST() {
     const baseUrl = resolveCreemBaseUrl();
     const successUrl = `${
       process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-    }/?subscribe=success`;
+    }/subscribe/result?subscribe=success`;
     const payload = {
       request_id: `checkout_${randomUUID()}`,
       product_id: creemProductId,
