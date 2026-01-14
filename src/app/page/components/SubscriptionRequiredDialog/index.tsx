@@ -81,16 +81,16 @@ export default function SubscriptionRequiredDialog({
   };
 
   return (
-    <Dialog open={open} closable={false} maskClosable={false} footer={null}>
-      <DialogContent className="rounded-2xl bg-white/95 p-6 shadow-xl">
+    <Dialog open={open} closable={false} maskClosable={false} footer={null} className="bg-white/20! border-[rgba(0,0,0,.1)]! backdrop-blur-3xl!">
+      <DialogContent className="rounded-2xl p-6">
         <DialogHeader>
-          <DialogTitle>免费额度已用完</DialogTitle>
-          <DialogDescription className="text-sm text-slate-600">
+          <DialogTitle className="text-app">免费额度已用完</DialogTitle>
+          <DialogDescription className="text-sm text-app">
             当前已使用 {used}/{limit} 次免费语音对话额度。
             订阅后即可继续使用语音对话服务。
           </DialogDescription>
         </DialogHeader>
-        <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="mt-4 rounded-xl p-4 text-sm text-app">
           <div>剩余额度：{remaining}</div>
           <div>解锁权益：不限次数语音对话 + 优先处理</div>
         </div>
