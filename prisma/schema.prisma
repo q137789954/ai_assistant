@@ -39,6 +39,12 @@ model User {
   roastBattleRounds RoastBattleRound[]
   /// 用户吐槽对战统计（用于排行榜等场景）
   roastBattleStat   UserRoastBattleStat?
+  /// 订阅记录（包含订阅周期与状态）
+  subscriptions     Subscription[]
+  /// 订单记录（包含支付与退款信息）
+  orders            Order[]
+  /// 支付平台客户档案
+  customers         Customer[]
 
   @@map("user")
 }
@@ -209,6 +215,135 @@ model UserRoastBattleStat {
 
   @@index([winCount(sort: Desc)], map: "idx_user_roast_battle_stats_win_count")
   @@map("user_roast_battle_stats")
+}
+
+/// 订阅主表，记录用户的订阅状态与周期
+model Subscription {
+  /// 主键（业务内部使用）
+  id                   String    @id @default(cuid())
+  /// 归属用户 ID
+  userId               String
+  /// 支付服务商标识（目前固定为 creem）
+  provider             String    @default("creem")
+  /// Creem 侧订阅 ID（唯一）
+  subscriptionId       String    @unique
+  /// 订阅状态（active/paid/canceled/expired/paused 等）
+  status               String
+  /// Creem 产品 ID
+  productId            String?
+  /// 当前计费周期开始时间
+  currentPeriodStartAt DateTime?
+  /// 当前计费周期结束时间
+  currentPeriodEndAt   DateTime?
+  /// 计划取消时间
+  cancelAt             DateTime?
+  /// 实际取消时间
+  canceledAt           DateTime?
+  /// 原始订阅对象（保留用于审计或回放）
+  metadata             Json?
+  /// 创建时间
+  createdAt            DateTime  @default(now())
+  /// 更新时间（自动更新）
+  updatedAt            DateTime  @default(now()) @updatedAt
+  /// 关联用户
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 关联订单
+  orders               Order[]
+
+  @@index([userId], map: "subscription_user_id_idx")
+  @@map("subscription")
+}
+
+/// 订单表，记录每次支付/退款的具体信息
+model Order {
+  /// 主键（业务内部使用）
+  id             String       @id @default(cuid())
+  /// 归属用户 ID
+  userId         String
+  /// 支付服务商标识（目前固定为 creem）
+  provider       String       @default("creem")
+  /// Creem 订单 ID（唯一）
+  orderId        String       @unique
+  /// Creem Checkout ID
+  checkoutId     String?
+  /// Creem 订阅 ID（用于关联 Subscription.subscriptionId）
+  subscriptionId String?
+  /// 创建 checkout 时生成的 request_id
+  requestId      String?
+  /// Creem 产品 ID（冗余字段，便于检索）
+  productId      String?
+  /// 支付金额（建议使用最小货币单位）
+  amount         Int?
+  /// 币种
+  currency       String?
+  /// 订单状态（paid/failed/refunded/pending 等）
+  status         String?
+  /// 支付完成时间
+  paidAt         DateTime?
+  /// 退款完成时间
+  refundedAt     DateTime?
+  /// 原始 webhook payload，便于审计
+  rawPayload     Json?
+  /// 创建时间
+  createdAt      DateTime     @default(now())
+  /// 更新时间（自动更新）
+  updatedAt      DateTime     @default(now()) @updatedAt
+  /// 关联用户
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 关联订阅（使用 subscriptionId 关联 Subscription.subscriptionId）
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [subscriptionId])
+
+  @@index([userId], map: "order_user_id_idx")
+  @@index([subscriptionId], map: "order_subscription_id_idx")
+  @@map("order")
+}
+
+/// 支付平台客户档案，用于保存第三方客户 ID
+model Customer {
+  /// 主键（业务内部使用）
+  id         String   @id @default(cuid())
+  /// 归属用户 ID
+  userId     String
+  /// 支付服务商标识（目前固定为 creem）
+  provider   String   @default("creem")
+  /// Creem 客户 ID（唯一）
+  customerId String   @unique
+  /// 客户邮箱
+  email      String?
+  /// 原始客户对象（审计用）
+  rawPayload Json?
+  /// 创建时间
+  createdAt  DateTime @default(now())
+  /// 更新时间（自动更新）
+  updatedAt  DateTime @default(now()) @updatedAt
+  /// 关联用户
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "customer_user_id_idx")
+  @@map("customer")
+}
+
+/// Webhook 事件记录，用于审计与幂等追踪
+model WebhookEvent {
+  /// 主键（业务内部使用）
+  id         String   @id @default(cuid())
+  /// 支付服务商标识（目前固定为 creem）
+  provider   String   @default("creem")
+  /// 事件类型（如 subscription.paid）
+  eventType  String
+  /// 事件 ID（若 Creem 提供可用于幂等）
+  eventId    String?  @unique
+  /// Webhook 签名
+  signature  String?
+  /// 原始事件 payload
+  payload    Json
+  /// 处理完成时间
+  processedAt DateTime?
+  /// 创建时间
+  createdAt  DateTime @default(now())
+
+  @@index([eventType], map: "webhook_event_type_idx")
+  @@map("webhook_event")
 }
 
 /// 会话消息角色枚举，用于区分系统/用户/助手/工具来源
