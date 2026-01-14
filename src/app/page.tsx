@@ -18,6 +18,7 @@ import RoastBattleTotal from "./page/components/RoastBattleTotal";
 import CounterRoastCards from "./page/components/CounterRoastCards";
 import type { PenguinCounterCard } from "./page/components/CounterRoastCards";
 import SubscriptionRequiredDialog from "./page/components/SubscriptionRequiredDialog";
+import { createUUID } from "@/utils/uuid";
 
 export default function Home() {
   const globals = useContext(GlobalsContext);
@@ -30,7 +31,7 @@ export default function Home() {
   const { emitEvent, subscribe, status } = useWebSocketContext();
   const [retorts, setRetorts] = useState<PenguinCounterCard[]>([]);
   const [retortsGroupId, setRetortsGroupId] = useState<string>(() =>
-    crypto.randomUUID()
+    createUUID()
   );
   // 暂存 chat-response-meta 与“语音播放完成”的对应关系，确保两者都到齐后再更新卡片
   const pendingPenguinCounterRef = useRef(
@@ -94,13 +95,13 @@ export default function Home() {
   // 用于更新吐槽对战反击提示卡片，最多展示两条
   const updatePenguinCounter = useCallback((items: string[]) => {
     const cards: PenguinCounterCard[] = items.slice(0, 3).map((text) => ({
-      id: crypto.randomUUID(),
+      id: createUUID(),
       title: text,
     }));
 
     setRetorts(cards);
     // 每次更新一组都换 groupId，确保触发整组出入场
-    setRetortsGroupId(crypto.randomUUID());
+    setRetortsGroupId(createUUID());
   }, []);
 
   // 同步检查某个 requestId 是否已满足“语音播放完成 + 元信息到达”的条件
