@@ -87,6 +87,8 @@ export async function streamSentenceToTts(params: {
     echoTimestamp: timestamp,
   };
   const actionField = llmAction ?? action;
+  console.log(llmAction, 'llmAction')
+  console.log(action, 'action')
   if (actionField) {
     // 在 TTS 音频开始事件中同步传递 LLM 本次回复的动作字段，避免客户端异步等待
     startData.action = actionField;

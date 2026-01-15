@@ -144,7 +144,7 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
   const { subscribe } = useWebSocketContext();
   // 仅订阅动画列表与动作，避免 currentAnimation 更新导致播放器逻辑反复重建
   const { animations } = useAnimationCatalog();
-  const { switchToAnimationById, play } = useAnimationPlayerActions();
+  const { switchToAnimationById, play, switchToRandomAnimationByType } = useAnimationPlayerActions();
   const { allLoaded } = useResourceLoading();
   // 读取全局的 timestampWatermark，确保旧指令的 TTS 语音在新指令发出后不会继续执行
   const globalsContext = useContext(GlobalsContext);
@@ -494,22 +494,23 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
       }
 
       const sentenceId = safeString(payload.sentenceId);
-      console.log(parsed, 'parsed')
       switch (parsed.event) {
         case "tts-audio-start": {
           if (!sentenceId) {
             break;
           }
           // 后端 payload 不再返回 action 字段，这里随机选择 talk1/talk2 作为动作 id，保持动画交互
-          const actionId = Math.random() < 0.5 ? "talk1" : "talk2";
+          console.log(payload, 'parsed')
+          const actionType = payload.action || 'talk';
+          console.log(actionType, 'actionType')
           const requestId = safeString(payload.requestId);
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
-          if(!isRepeatRequest&&actionId && allLoaded) {
-            const animationExists = animations.some((animation) => animation.id === actionId);
+          if(!isRepeatRequest&&actionType && allLoaded) {
+            const animationExists = animations.some((animation) => animation.type === actionType);
             if (animationExists) {
               // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
-              switchToAnimationById(actionId);
+              switchToRandomAnimationByType('angry');
                 play();
             }
           }

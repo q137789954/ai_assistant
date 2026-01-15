@@ -244,16 +244,16 @@ export const processTextToSpeechChatFlow = async ({
   let assistantContent = "";
   let pendingSentence = "";
   let ttsPipeline: Promise<void> = Promise.resolve();
-  let pendingAction: string | null = null;
   let actionHandledByTts = false;
   // reply/json 是流式混合输出，需要拆分后分别处理
   let replyEnded = false;
   // replyBuffer 用于缓存未完全确认的文本，避免分隔符被拆段误判
   let replyBuffer = "";
-  // 先输出的 JSON（只包含 damage_delta）需要缓冲拼接并提前解析
+  // 先输出的 JSON（只包含 damage_delta、suggested_emotion）需要缓冲拼接并提前解析
   let headJsonBuffer = "";
   let headJsonParsed = false;
   let damageDelta: number | null = null;
+  let pendingAction: string | null = null;
   // 分隔符之后的结构化输出需要完整缓冲，等流式结束统一解析
   let tailJsonBuffer = "";
 
@@ -387,7 +387,9 @@ export const processTextToSpeechChatFlow = async ({
         }
         try {
           const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+          console.log(parsed, 'parsed')
           const candidate = parsed.damage_delta || 0;
+          pendingAction = parsed.suggested_emotion as string || '';
           if (typeof candidate === "number") {
             damageDelta = candidate;
             try {
