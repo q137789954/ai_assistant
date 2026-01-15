@@ -510,7 +510,7 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
             const animationExists = animations.some((animation) => animation.type === actionType);
             if (animationExists) {
               // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
-              switchToRandomAnimationByType('angry');
+              switchToRandomAnimationByType(actionType);
                 play();
             }
           }
