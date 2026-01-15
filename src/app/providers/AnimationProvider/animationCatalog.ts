@@ -56,7 +56,7 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
     type: 'listen',
-    timeScale: 1,
+    timeScale: 0.6,
   },
   {
     id: 'talk',
@@ -138,30 +138,30 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     type: 'sad',
     timeScale: 0.7,
   },
-  {
-    id: 'start1',
-    description: '开始动作',
-    animationName: 'start1',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-    type: 'start',
-    timeScale: 0.8,
-    audio:'/voice/start1.mp3',
-    audioStartFrame:2
-  },
-  {
-    id: 'start2',
-    description: '开始动作',
-    animationName: 'start2',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-    type: 'start',
-    timeScale: 0.8,
-    audio:'/voice/start2.mp3',
-    audioStartFrame:2
-  },
+  // {
+  //   id: 'start1',
+  //   description: '开始动作',
+  //   animationName: 'start1',
+  //   json: '/animation/penguin/animation.json',
+  //   atlas: '/animation/penguin/animation.atlas',
+  //   image: '/animation/penguin/animation.png',
+  //   type: 'start',
+  //   timeScale: 0.8,
+  //   audio:'/voice/start1.mp3',
+  //   audioStartFrame:2
+  // },
+  // {
+  //   id: 'start2',
+  //   description: '开始动作',
+  //   animationName: 'start2',
+  //   json: '/animation/penguin/animation.json',
+  //   atlas: '/animation/penguin/animation.atlas',
+  //   image: '/animation/penguin/animation.png',
+  //   type: 'start',
+  //   timeScale: 0.8,
+  //   audio:'/voice/start2.mp3',
+  //   audioStartFrame:2
+  // },
   {
     id: 'quit',
     description: '退出动作',

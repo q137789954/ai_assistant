@@ -18,7 +18,7 @@ import { useResourceLoading } from '@/app/providers/ResourceLoadingProvider'
 import { getOrCreateAudioContext } from '@/app/utils/audioContextManager'
 
 const DEFAULT_TIME_SCALE = 1.0
-const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3', 'idle4'] as const
+const IDLE_ANIMATIONS = ['idle1', 'idle2', 'idle3'] as const
 const IDLE_SWITCH_DELAY_MS = 3000
 
 export default function AnimationPlayer() {
@@ -272,6 +272,8 @@ export default function AnimationPlayer() {
   // 处理动画播放完成事件：入场动画播放完毕后切回待机，否则走原有待机轮播逻辑
   const handleAnimationComplete = useCallback(
     (animationName?: string) => {
+      console.log(animationName, 'animationName');
+      console.log(currentAnimation?.type, 'currentAnimation?.type ')
       if (currentAnimation?.type === 'start') {
         // 入场动画播放完成后随机切换到待机动画
         switchToRandomAnimationByType('idle')
