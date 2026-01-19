@@ -16,12 +16,16 @@ type SubscriptionSnapshot = {
   freeLimit: number;
 };
 
+type SubscriptionAction = "none" | "checkout" | "cancel";
+
 // Tabbar 订阅状态徽标：仅展示一个小图标，悬浮展示详情
 const SubscriptionStatusBadge = () => {
   // 会话状态用于判断是否允许拉取订阅信息
   const { status: sessionStatus } = useSession();
   // 订阅状态拉取中的 loading
   const [loading, setLoading] = useState(false);
+  // 订阅操作（结账/取消）中的 loading
+  const [actionLoading, setActionLoading] = useState(false);
   // 拉取或结账异常信息
   const [error, setError] = useState<string | null>(null);
   // 服务端订阅快照
@@ -85,6 +89,7 @@ const SubscriptionStatusBadge = () => {
         tooltip: "订阅状态加载中",
         iconClassName: "text-slate-400",
         clickable: false,
+        action: "none" as SubscriptionAction,
       };
     }
     if (sessionStatus === "unauthenticated") {
@@ -92,6 +97,7 @@ const SubscriptionStatusBadge = () => {
         tooltip: "未登录，登录后查看订阅信息",
         iconClassName: "text-slate-500",
         clickable: false,
+        action: "none" as SubscriptionAction,
       };
     }
     if (loading) {
@@ -99,6 +105,15 @@ const SubscriptionStatusBadge = () => {
         tooltip: "正在同步订阅状态",
         iconClassName: "text-amber-300",
         clickable: false,
+        action: "none" as SubscriptionAction,
+      };
+    }
+    if (actionLoading) {
+      return {
+        tooltip: "正在处理订阅操作，请稍候",
+        iconClassName: "text-amber-300",
+        clickable: false,
+        action: "none" as SubscriptionAction,
       };
     }
     if (error) {
@@ -106,25 +121,37 @@ const SubscriptionStatusBadge = () => {
         tooltip: `订阅状态异常：${error}`,
         iconClassName: "text-rose-400",
         clickable: false,
+        action: "none" as SubscriptionAction,
       };
     }
     if (subscription?.isSubscribed) {
       return {
-        tooltip: `已订阅，到期时间 ${formattedExpire}`,
+        tooltip: `已订阅，到期时间 ${formattedExpire}，点击取消订阅`,
         iconClassName: "text-lime-300",
-        clickable: false,
+        clickable: true,
+        action: "cancel" as SubscriptionAction,
       };
     }
     return {
       tooltip: `未订阅，剩余免费 ${remainingCount}/${subscription?.freeLimit ?? 0} 次，点击去订阅`,
       iconClassName: "text-slate-400",
       clickable: true,
+      action: "checkout" as SubscriptionAction,
     };
-  }, [error, formattedExpire, loading, remainingCount, sessionStatus, subscription]);
+  }, [
+    actionLoading,
+    error,
+    formattedExpire,
+    loading,
+    remainingCount,
+    sessionStatus,
+    subscription,
+  ]);
 
   // 订阅结账：点击后跳转到支付页面
   const handleCheckout = useCallback(async () => {
     setError(null);
+    setActionLoading(true);
     try {
       const response = await fetch("/api/subscription/checkout", {
         method: "POST",
@@ -140,8 +167,46 @@ const SubscriptionStatusBadge = () => {
       window.location.href = payload.data.checkoutUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : "订阅发起失败");
+    } finally {
+      setActionLoading(false);
     }
   }, []);
+
+  // 取消订阅：请求服务端通知 Creem 终止订阅
+  const handleCancelSubscription = useCallback(async () => {
+    if (!subscription?.isSubscribed) return;
+    const confirmed = window.confirm("确认取消订阅吗？取消后将在当前周期结束后生效。");
+    if (!confirmed) return;
+    setError(null);
+    setActionLoading(true);
+    try {
+      const response = await fetch("/api/subscription/cancel", {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        message?: string;
+      } | null;
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || "取消订阅失败");
+      }
+      await fetchStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "取消订阅失败");
+    } finally {
+      setActionLoading(false);
+    }
+  }, [fetchStatus, subscription?.isSubscribed]);
+
+  const handleAction = useCallback(() => {
+    if (statusMeta.action === "checkout") {
+      void handleCheckout();
+      return;
+    }
+    if (statusMeta.action === "cancel") {
+      void handleCancelSubscription();
+    }
+  }, [handleCancelSubscription, handleCheckout, statusMeta.action]);
 
   return (
     <Tooltip title={statusMeta.tooltip}>
@@ -149,8 +214,8 @@ const SubscriptionStatusBadge = () => {
         <button
           type="button"
           aria-label="订阅状态"
-          disabled={!statusMeta.clickable}
-          onClick={statusMeta.clickable ? handleCheckout : undefined}
+          disabled={!statusMeta.clickable || actionLoading}
+          onClick={statusMeta.clickable ? handleAction : undefined}
           className={[
             "flex h-9 w-9 items-center justify-center rounded-full border transition",
             statusMeta.clickable
