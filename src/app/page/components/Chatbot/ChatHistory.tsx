@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 
@@ -36,13 +36,6 @@ interface ChatHistoryProps {
   onPendingUserMessageRendered?: () => void
 }
 
-/**
- * ChatHistory 负责拉取历史、维护消息列表、处理流式助手更新并渲染虚拟化列表。
- * - 首次打开：拉取最新一页，自动滚到底部（仅一次）
- * - 上滑到顶部：加载更多（cursor 分页），prepend 且不跳动
- * - 顶部固定小 loading / 失败点击重试
- * - followOutput：仅在用户位于底部时跟随新消息
- */
 export default function ChatHistory({
   open,
   pendingUserMessage,
@@ -51,11 +44,9 @@ export default function ChatHistory({
   const { subscribe } = useWebSocketContext()
 
   const virtuosoRef = useRef<VirtuosoHandle>(null)
-  const streamingAssistantMessageIdRef = useRef<string | null>(null)
 
   // 让 prepend 时保持滚动位置稳定
   const [firstItemIndex, setFirstItemIndex] = useState(FIRST_ITEM_INDEX)
-
   const [messages, setMessages] = useState<Message[]>([])
 
   // 首次加载（最新一页）
@@ -72,20 +63,34 @@ export default function ChatHistory({
   // 只在“打开后首次加载完成”滚到底部一次
   const didAutoScrollToBottomRef = useRef(false)
 
-  // 防 StrictMode / 重复触发：用 open session id 忽略过期请求
+  // open session 防过期回写
   const openSessionIdRef = useRef(0)
+
+  // Abort 管理
+  const initAbortRef = useRef<AbortController | null>(null)
+  const loadMoreAbortRef = useRef<AbortController | null>(null)
 
   // startReached 防抖
   const debounceTimerRef = useRef<number | null>(null)
 
+  // 全局去重
+  const idsRef = useRef<Set<string>>(new Set())
+
+  // 用于“延后滚到底”调度（确保 Virtuoso 完成测量）
+  const raf1Ref = useRef<number | null>(null)
+  const raf2Ref = useRef<number | null>(null)
+  const timeoutRef = useRef<number | null>(null)
+
   const normalize = useCallback((rows: ApiMessage[]): Message[] => {
-    // API 是倒序（最新->更旧），UI 要正序（更旧->最新）所以 reverse
-    return (Array.isArray(rows) ? rows : [])
-      .map((m) => ({
-        id: String(m.id ?? createMessageId()),
-        role: m.role === 'ASSISTANT' ? 'ASSISTANT' : 'USER',
-        content: typeof m.content === 'string' ? m.content : '',
-      }))
+    // API 倒序（最新->更旧），UI 要正序（更旧->最新）所以 reverse
+    const list = Array.isArray(rows) ? rows : []
+    return list
+      .map((m) => {
+        const id = String(m.id ?? createMessageId())
+        const role = m.role === 'ASSISTANT' ? 'ASSISTANT' : 'USER'
+        const content = typeof m.content === 'string' ? m.content : ''
+        return { id, role, content } as Message
+      })
       .reverse()
   }, [])
 
@@ -98,16 +103,82 @@ export default function ChatHistory({
 
       const res = await fetch(url, { signal })
       if (!res.ok) throw new Error('加载聊天记录失败，请稍后重试')
-      const json = (await res.json())?.data as ApiPayload
-      return json
+
+      const json = await res.json()
+      const payload = json?.data as ApiPayload | undefined
+      if (!payload || !Array.isArray(payload.messages)) {
+        throw new Error('加载聊天记录失败：返回数据格式不正确')
+      }
+      return payload
     },
     [],
   )
 
+  const cancelScheduledScroll = useCallback(() => {
+    if (raf1Ref.current) {
+      cancelAnimationFrame(raf1Ref.current)
+      raf1Ref.current = null
+    }
+    if (raf2Ref.current) {
+      cancelAnimationFrame(raf2Ref.current)
+      raf2Ref.current = null
+    }
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+  }, [])
+
+  const scrollToBottomNow = useCallback(
+    (behavior: 'auto' | 'smooth' = 'auto') => {
+      if (messages.length === 0) return
+      const lastAbsIndex = firstItemIndex + messages.length - 1
+      virtuosoRef.current?.scrollToIndex({
+        index: lastAbsIndex,
+        align: 'end',
+        behavior,
+      })
+    },
+    [firstItemIndex, messages.length],
+  )
+
+  /**
+   * 核心修复：
+   * - Virtuoso 初次 data 进入时还在测量，立刻 scrollToIndex 会有概率不到底。
+   * - 用“双 rAF + setTimeout 兜底”在下一轮/下下轮布局完成后再滚。
+   */
+  const scheduleScrollToBottomOnce = useCallback(() => {
+    cancelScheduledScroll()
+
+    raf1Ref.current = requestAnimationFrame(() => {
+      raf2Ref.current = requestAnimationFrame(() => {
+        scrollToBottomNow('auto')
+      })
+    })
+
+    // 极端情况下（字体加载、图片撑高、布局抖动），再补一次兜底
+    timeoutRef.current = window.setTimeout(() => {
+      scrollToBottomNow('auto')
+    }, 200)
+  }, [cancelScheduledScroll, scrollToBottomNow])
+
   const resetState = useCallback(() => {
-    streamingAssistantMessageIdRef.current = null
+    initAbortRef.current?.abort()
+    initAbortRef.current = null
+
+    loadMoreAbortRef.current?.abort()
+    loadMoreAbortRef.current = null
+
+    cancelScheduledScroll()
+
+    if (debounceTimerRef.current) {
+      window.clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+
     didAutoScrollToBottomRef.current = false
 
+    idsRef.current = new Set()
     setMessages([])
     setFirstItemIndex(FIRST_ITEM_INDEX)
 
@@ -119,7 +190,7 @@ export default function ChatHistory({
 
     setHasMore(false)
     setNextCursor(null)
-  }, [])
+  }, [cancelScheduledScroll])
 
   // 打开时：拉取最新一页
   useEffect(() => {
@@ -131,7 +202,10 @@ export default function ChatHistory({
     openSessionIdRef.current += 1
     const sessionId = openSessionIdRef.current
 
+    initAbortRef.current?.abort()
     const controller = new AbortController()
+    initAbortRef.current = controller
+
     setIsInitLoading(true)
     setInitError(null)
     setLoadMoreError(null)
@@ -146,15 +220,19 @@ export default function ChatHistory({
         if (controller.signal.aborted) return
         if (sessionId !== openSessionIdRef.current) return
 
-        const page = normalize(payload?.messages ?? [])
+        const page = normalize(payload.messages)
+
+        // 初始化去重集合
+        const nextIds = new Set<string>()
+        for (const m of page) nextIds.add(m.id)
+        idsRef.current = nextIds
+
         setMessages(page)
         setFirstItemIndex(FIRST_ITEM_INDEX - page.length)
 
-        const p = payload?.pagination
+        const p = payload.pagination
         setHasMore(Boolean(p?.hasMore))
         setNextCursor(p?.nextCursor ?? null)
-
-        streamingAssistantMessageIdRef.current = null
       } catch (e) {
         if (controller.signal.aborted) return
         console.error('加载聊天记录失败：', e)
@@ -164,42 +242,57 @@ export default function ChatHistory({
       }
     })()
 
-    return () => controller.abort()
+    return () => {
+      controller.abort()
+      if (initAbortRef.current === controller) initAbortRef.current = null
+    }
   }, [open, fetchHistory, normalize, resetState])
 
-  // 首次加载完成后：只滚到底部一次
-  useEffect(() => {
+  // 首次加载完成后：只滚到底部一次（关键：用 schedule 延后）
+  useLayoutEffect(() => {
     if (!open) return
     if (isInitLoading) return
     if (messages.length === 0) return
     if (didAutoScrollToBottomRef.current) return
 
     didAutoScrollToBottomRef.current = true
-    virtuosoRef.current?.scrollToIndex({
-      index: firstItemIndex + messages.length - 1,
-      align: 'end',
-      behavior: 'auto',
-    })
-  }, [open, isInitLoading, messages.length, firstItemIndex])
+    scheduleScrollToBottomOnce()
+  }, [open, isInitLoading, messages.length, scheduleScrollToBottomOnce])
 
-  // 追加待发送的用户消息
+  // 追加待发送的用户消息（去重）
   useEffect(() => {
+    if (!open) return
     if (!pendingUserMessage) return
-    setMessages((prev) => [...prev, pendingUserMessage])
-    onPendingUserMessageRendered?.()
-  }, [pendingUserMessage, onPendingUserMessageRendered])
 
-  // 顶部加载更多（上滑至顶部）
+    const id = pendingUserMessage.id
+    if (idsRef.current.has(id)) {
+      onPendingUserMessageRendered?.()
+      return
+    }
+
+    idsRef.current.add(id)
+    setMessages((prev) => [...prev, pendingUserMessage])
+
+    requestAnimationFrame(() => {
+      onPendingUserMessageRendered?.()
+    })
+  }, [open, pendingUserMessage, onPendingUserMessageRendered])
+
   const loadMore = useCallback(async () => {
     if (!open) return
     if (isInitLoading || isLoadingMore) return
     if (!hasMore) return
     if (!nextCursor) return
 
+    openSessionIdRef.current += 1
+    const sessionId = openSessionIdRef.current
+
+    loadMoreAbortRef.current?.abort()
+    const controller = new AbortController()
+    loadMoreAbortRef.current = controller
+
     setIsLoadingMore(true)
     setLoadMoreError(null)
-
-    const controller = new AbortController()
 
     try {
       const payload = await fetchHistory({
@@ -208,28 +301,32 @@ export default function ChatHistory({
         signal: controller.signal,
       })
       if (controller.signal.aborted) return
+      if (sessionId !== openSessionIdRef.current) return
 
-      const page = normalize(payload?.messages ?? [])
+      const page = normalize(payload.messages)
 
-      // prepend：过滤重复（保险）+ 调整 firstItemIndex 保持位置不跳动
-      setMessages((prev) => {
-        const exist = new Set(prev.map((m) => m.id))
-        const unique = page.filter((m) => !exist.has(m.id))
-        if (unique.length > 0) {
-          setFirstItemIndex((fi) => fi - unique.length)
-          return [...unique, ...prev]
+      const unique: Message[] = []
+      for (const m of page) {
+        if (!idsRef.current.has(m.id)) {
+          idsRef.current.add(m.id)
+          unique.push(m)
         }
-        return prev
-      })
+      }
 
-      const p = payload?.pagination
+      if (unique.length > 0) {
+        setFirstItemIndex((fi) => fi - unique.length)
+        setMessages((prev) => [...unique, ...prev])
+      }
+
+      const p = payload.pagination
       setHasMore(Boolean(p?.hasMore))
       setNextCursor(p?.nextCursor ?? null)
     } catch (e) {
+      if (controller.signal.aborted) return
       console.error('加载更多失败：', e)
       setLoadMoreError(e instanceof Error ? e.message : '加载更多失败，点击重试')
     } finally {
-      setIsLoadingMore(false)
+      if (!controller.signal.aborted) setIsLoadingMore(false)
     }
   }, [open, isInitLoading, isLoadingMore, hasMore, nextCursor, fetchHistory, normalize])
 
@@ -246,34 +343,13 @@ export default function ChatHistory({
         window.clearTimeout(debounceTimerRef.current)
         debounceTimerRef.current = null
       }
+      cancelScheduledScroll()
     }
-  }, [])
+  }, [cancelScheduledScroll])
 
-  // websocket：只处理 complete（你现在的逻辑）
+  // websocket：只处理 complete（更健壮：优先用后端 id，尾部重复保护）
   useEffect(() => {
-    if (!open) {
-      streamingAssistantMessageIdRef.current = null
-      return
-    }
-
-    const appendOrUpdateAssistantMessage = (text: string) => {
-      if (!text) return
-
-      setMessages((prev) => {
-        const existingId = streamingAssistantMessageIdRef.current
-        const idx = existingId ? prev.findIndex((m) => m.id === existingId) : -1
-
-        if (idx !== -1) {
-          const next = [...prev]
-          next[idx] = { ...next[idx], content: text }
-          return next
-        }
-
-        const newId = createMessageId()
-        streamingAssistantMessageIdRef.current = newId
-        return [...prev, { id: newId, role: 'ASSISTANT', content: text }]
-      })
-    }
+    if (!open) return
 
     const unsubscribe = subscribe((event) => {
       if (typeof event.data !== 'string') return
@@ -286,19 +362,27 @@ export default function ChatHistory({
       }
       if (!parsed?.event) return
 
-      const payloadData = parsed.data ?? {}
-
       if (parsed.event === 'chat-response-complete') {
+        const payloadData = parsed.data ?? {}
         const finalContent = payloadData.content
-        if (typeof finalContent === 'string') {
-          appendOrUpdateAssistantMessage(finalContent)
-        }
-        streamingAssistantMessageIdRef.current = null
+        if (typeof finalContent !== 'string' || !finalContent) return
+
+        const maybeId = payloadData.id
+        const id = typeof maybeId === 'string' && maybeId ? maybeId : createMessageId()
+
+        if (idsRef.current.has(id)) return
+
+        setMessages((prev) => {
+          const last = prev[prev.length - 1]
+          if (last?.role === 'ASSISTANT' && last.content === finalContent) return prev
+
+          idsRef.current.add(id)
+          return [...prev, { id, role: 'ASSISTANT', content: finalContent }]
+        })
       }
     })
 
     return () => {
-      streamingAssistantMessageIdRef.current = null
       unsubscribe()
     }
   }, [open, subscribe])
@@ -307,8 +391,6 @@ export default function ChatHistory({
 
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 py-4 px-2 text-sm text-slate-900 shadow-inner">
-      {/* 移除垂直外边距，避免在固定高度容器内造成溢出 */}
-      {/* 顶部固定小状态条：加载更多 / 点击重试 */}
       {showTopBar && (
         <div className="absolute left-0 right-0 top-2 z-10 flex justify-center pointer-events-none">
           {isLoadingMore ? (
@@ -333,16 +415,13 @@ export default function ChatHistory({
         className="h-full"
         data={messages}
         firstItemIndex={firstItemIndex}
-        initialTopMostItemIndex={FIRST_ITEM_INDEX-1}
-        computeItemKey={(index, message) => message.id}
-        // 上滑到顶部：触发加载更多（防抖）
+        computeItemKey={(_, message) => message.id}
         startReached={() => {
           if (isInitLoading || isLoadingMore || !hasMore) return
           debouncedLoadMore()
         }}
-        // 只有在底部时才跟随新消息
         followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
-        itemContent={(index, message) => {
+        itemContent={(_, message) => {
           const isAssistant = message.role === 'ASSISTANT'
           return (
             <div
@@ -361,9 +440,10 @@ export default function ChatHistory({
 
               <div
                 className={clsx(
-                  // 移动端限制气泡最大宽度，避免铺满整行；助手侧额外扣除头像宽度
                   'max-w-[85%] lg:max-w-[20rem] rounded-[22px] px-4 py-3 leading-relaxed shadow-sm mb-4 whitespace-pre-line text-sm',
-                  isAssistant ? 'bg-slate-100 text-slate-900 max-w-[calc(85%-40px)] lg:max-w-[20rem]' : 'bg-sky-100 text-sky-900',
+                  isAssistant
+                    ? 'bg-slate-100 text-slate-900 max-w-[calc(85%-40px)] lg:max-w-[20rem]'
+                    : 'bg-sky-100 text-sky-900',
                 )}
               >
                 {message.content}
@@ -373,21 +453,18 @@ export default function ChatHistory({
         }}
       />
 
-      {/* 首次加载：遮罩 */}
       {isInitLoading && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-500">
           正在加载聊天记录...
         </div>
       )}
 
-      {/* 首次加载失败 */}
       {!isInitLoading && initError && (
         <div className="absolute inset-x-0 bottom-2 flex items-center justify-center text-xs text-rose-500">
           {initError}
         </div>
       )}
 
-      {/* 空态 */}
       {!isInitLoading && !initError && messages.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-500">
           暂无聊天记录，开始新的对话吧
