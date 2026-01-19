@@ -4,6 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Tooltip } from "antd";
 import { Crown } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/Dialog";
+import { Button } from "@/app/components/ui/button";
 
 type SubscriptionSnapshot = {
   // 当前账户是否已订阅
@@ -26,6 +35,8 @@ const SubscriptionStatusBadge = () => {
   const [loading, setLoading] = useState(false);
   // 订阅操作（结账/取消）中的 loading
   const [actionLoading, setActionLoading] = useState(false);
+  // 取消订阅二次确认弹窗
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   // 拉取或结账异常信息
   const [error, setError] = useState<string | null>(null);
   // 服务端订阅快照
@@ -172,11 +183,20 @@ const SubscriptionStatusBadge = () => {
     }
   }, []);
 
+  // 打开取消订阅确认弹窗
+  const handleOpenCancelDialog = useCallback(() => {
+    setCancelDialogOpen(true);
+  }, []);
+
+  // 关闭取消订阅确认弹窗，避免操作中被误关
+  const handleCloseCancelDialog = useCallback(() => {
+    if (actionLoading) return;
+    setCancelDialogOpen(false);
+  }, [actionLoading]);
+
   // 取消订阅：请求服务端通知 Creem 终止订阅
   const handleCancelSubscription = useCallback(async () => {
     if (!subscription?.isSubscribed) return;
-    const confirmed = window.confirm("确认取消订阅吗？取消后将在当前周期结束后生效。");
-    if (!confirmed) return;
     setError(null);
     setActionLoading(true);
     try {
@@ -190,6 +210,7 @@ const SubscriptionStatusBadge = () => {
       if (!response.ok || !payload?.success) {
         throw new Error(payload?.message || "取消订阅失败");
       }
+      setCancelDialogOpen(false);
       await fetchStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : "取消订阅失败");
@@ -204,30 +225,73 @@ const SubscriptionStatusBadge = () => {
       return;
     }
     if (statusMeta.action === "cancel") {
-      void handleCancelSubscription();
+      // 已订阅用户点击图标时弹出二次确认弹窗
+      handleOpenCancelDialog();
     }
-  }, [handleCancelSubscription, handleCheckout, statusMeta.action]);
+  }, [handleCheckout, handleOpenCancelDialog, statusMeta.action]);
 
   return (
-    <Tooltip title={statusMeta.tooltip}>
-      <span>
-        <button
-          type="button"
-          aria-label="订阅状态"
-          disabled={!statusMeta.clickable || actionLoading}
-          onClick={statusMeta.clickable ? handleAction : undefined}
-          className={[
-            "flex h-9 w-9 items-center justify-center rounded-full border transition",
-            statusMeta.clickable
-              ? "cursor-pointer border-white/20 bg-black/30 hover:border-lime-300 hover:text-lime-200"
-              : "cursor-default border-white/10 bg-black/20",
-            statusMeta.iconClassName,
-          ].join(" ")}
-        >
-          <Crown size={18} />
-        </button>
-      </span>
-    </Tooltip>
+    <>
+      <Tooltip title={statusMeta.tooltip}>
+        <span>
+          <button
+            type="button"
+            aria-label="订阅状态"
+            disabled={!statusMeta.clickable || actionLoading}
+            onClick={statusMeta.clickable ? handleAction : undefined}
+            className={[
+              "flex h-9 w-9 items-center justify-center rounded-full border transition",
+              statusMeta.clickable
+                ? "cursor-pointer border-white/20 bg-black/30 hover:border-lime-300 hover:text-lime-200"
+                : "cursor-default border-white/10 bg-black/20",
+              statusMeta.iconClassName,
+            ].join(" ")}
+          >
+            <Crown size={18} />
+          </button>
+        </span>
+      </Tooltip>
+      {/* 使用统一 Dialog 组件呈现取消订阅的二次确认 */}
+      <Dialog
+        open={cancelDialogOpen}
+        onOpenChange={handleCloseCancelDialog}
+        maskClosable={!actionLoading}
+        closable={false}
+        footer={null}
+        className="bg-white/20! border-[rgba(0,0,0,.1)]! backdrop-blur-3xl!"
+      >
+        <DialogContent className="rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-app">确认取消订阅</DialogTitle>
+            <DialogDescription className="text-sm text-app">
+              取消后将于当前周期结束时生效，期间仍可继续使用订阅权益。
+            </DialogDescription>
+          </DialogHeader>
+          {/* 若取消失败，在弹窗内给出错误提示便于用户再次确认 */}
+          {error ? (
+            <div className="mt-4 text-sm text-red-600">取消订阅失败</div>
+          ) : null}
+          <DialogFooter className="mt-6">
+            <Button
+              appearance="outlined"
+              tone="default"
+              onClick={handleCloseCancelDialog}
+              disabled={actionLoading}
+            >
+              暂不取消
+            </Button>
+            <Button
+              tone="danger"
+              
+              onClick={handleCancelSubscription}
+              loading={actionLoading}
+            >
+              确认取消
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
