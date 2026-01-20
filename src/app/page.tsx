@@ -203,9 +203,11 @@ export default function Home() {
    */
   const handleVoiceChunk = useCallback(
     (audio: Float32Array) => {
+      console.log('收到语音1')
       if (subscriptionBlocked) {
         return;
       }
+      console.log('收到语音2')
       ensureSpeechSession();
       const chunkMeta = {
         requestId: requestId.current,
@@ -384,12 +386,15 @@ export default function Home() {
   }, []);
 
   const onSpeechEnd = useCallback(() => {
+    switchToRandomAnimationByType("idle")
+    console.log('说话结束1')
     if (subscriptionBlocked) {
       requestId.current = null;
       speechStartTimestamp.current = null;
       updatePenguinCounter([]);
       return;
     }
+    console.log('说话结束2')
     emitEvent("chat:input", {
       content: [],
       outputFormat: "speech",
@@ -401,7 +406,7 @@ export default function Home() {
     requestId.current = null;
     speechStartTimestamp.current = null;
     updatePenguinCounter([]);
-  }, [emitEvent, subscriptionBlocked, updatePenguinCounter]);
+  }, [emitEvent, subscriptionBlocked, updatePenguinCounter, switchToRandomAnimationByType]);
 
   // 继续对战按钮点击后通知服务端准备新一轮回合
   const handleDefeatContinue = useCallback(() => {
@@ -414,7 +419,10 @@ export default function Home() {
 
   useVoiceInputListener({
     onSpeechSegment: handleVoiceChunk,
-    onSpeechEnd,
+    onSpeechEnd, 
+    onSpeechStart: () => {
+      console.log('说话开始')
+    },
     onError(error) {
       console.error("VAD 错误：", error);
     },

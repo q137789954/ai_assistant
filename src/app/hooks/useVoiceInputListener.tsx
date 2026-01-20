@@ -82,6 +82,57 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
   const positiveSpeechThresholdRef = useRef(
     FAST_VAD_PRESET.positiveSpeechThreshold ?? 0.6,
   )
+  // 记录最近一次收到“语音帧”的时间戳，用于超时补发 onSpeechEnd
+  const lastSpeechFrameAtRef = useRef<number | null>(null)
+  // 兜底结束的定时器句柄，避免 VAD 未触发 onSpeechEnd 时卡住
+  const endFallbackTimerRef = useRef<number | null>(null)
+  // 兜底结束的时间窗口（ms），基于 redemptionMs + buffer 计算
+  const endFallbackDelayMsRef = useRef<number>(500)
+
+  // 清理兜底定时器，避免重复触发或内存泄露
+  const clearEndFallbackTimer = useCallback(() => {
+    if (endFallbackTimerRef.current === null) {
+      return
+    }
+    window.clearTimeout(endFallbackTimerRef.current)
+    endFallbackTimerRef.current = null
+  }, [])
+
+  // 触发兜底 onSpeechEnd：当 VAD 未正常结束时，保证上层能收尾请求
+  const triggerFallbackSpeechEnd = useCallback(() => {
+    if (cancelledRef.current) {
+      return
+    }
+    // 如果当前已经不在“说话/推流”状态，说明已经正常结束，无需兜底
+    if (!speakingRef.current && !streamingRef.current) {
+      return
+    }
+    // 兜底走与 VAD 结束一致的收尾流程
+    optionOnSpeechEnd?.()
+    speakingRef.current = false
+    streamingRef.current = false
+    dispatch({ type: 'SET_USER_SPEAKING', payload: false })
+  }, [dispatch, optionOnSpeechEnd])
+
+  // 刷新兜底结束定时器：每次收到语音帧都延后结束判断
+  const scheduleEndFallback = useCallback(() => {
+    clearEndFallbackTimer()
+    endFallbackTimerRef.current = window.setTimeout(() => {
+      if (cancelledRef.current) {
+        return
+      }
+      const lastSpeechAt = lastSpeechFrameAtRef.current
+      if (!lastSpeechAt) {
+        return
+      }
+      const elapsed = Date.now() - lastSpeechAt
+      // 防止旧定时器误触发：只有超过阈值才真正执行兜底结束
+      if (elapsed < endFallbackDelayMsRef.current) {
+        return
+      }
+      triggerFallbackSpeechEnd()
+    }, endFallbackDelayMsRef.current)
+  }, [clearEndFallbackTimer, triggerFallbackSpeechEnd])
 
   /**
    * 每帧到来时判断是否命中语音阈值，满足则立即透传给 onSpeechSegment。
@@ -102,9 +153,12 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
       }
 
       streamingRef.current = true
+      lastSpeechFrameAtRef.current = Date.now()
+      // 每次有语音帧都刷新兜底结束时间，避免 onSpeechEnd 缺失导致卡住
+      scheduleEndFallback()
       onSpeechSegment?.(frame)
     },
-    [onSpeechSegment],
+    [onSpeechSegment, scheduleEndFallback],
   )
 
   // 根据全局开关启动 / 暂停 VAD
@@ -122,6 +176,8 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
       speakingRef.current = false
       streamingRef.current = false
       dispatch({ type: 'SET_USER_SPEAKING', payload: false })
+      clearEndFallbackTimer()
+      lastSpeechFrameAtRef.current = null
 
       // 当全局关闭语音输入时马上终止推送并标记状态
       cancelledRef.current = true
@@ -168,6 +224,10 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
           FAST_VAD_PRESET.positiveSpeechThreshold ??
           0.6
         positiveSpeechThresholdRef.current = mergedPositiveThreshold
+        // 兜底结束窗口：使用 redemptionMs + buffer，避免误判导致过早结束
+        const redemptionMs =
+          mergedVadOptions.redemptionMs ?? FAST_VAD_PRESET.redemptionMs ?? 200
+        endFallbackDelayMsRef.current = redemptionMs + 200
 
         // 记录调用方可能自定义的 onFrameProcessed，以便我们包裹后仍能透传事件
         const userOnFrameProcessed = mergedVadOptions.onFrameProcessed
@@ -198,6 +258,8 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
             speakingRef.current = false
             streamingRef.current = false
             dispatch({ type: 'SET_USER_SPEAKING', payload: false })
+            clearEndFallbackTimer()
+            lastSpeechFrameAtRef.current = null
           },
         })
 
@@ -243,6 +305,8 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
       // 退出时确保 speaking 状态复位
       speakingRef.current = false
       pausedRef.current = false
+      clearEndFallbackTimer()
+      lastSpeechFrameAtRef.current = null
     }
   }, [])
 }

@@ -272,8 +272,6 @@ export default function AnimationPlayer() {
   // 处理动画播放完成事件：入场动画播放完毕后切回待机，否则走原有待机轮播逻辑
   const handleAnimationComplete = useCallback(
     (animationName?: string) => {
-      console.log(animationName, 'animationName');
-      console.log(currentAnimation?.type, 'currentAnimation?.type ')
       if (currentAnimation?.type === 'start') {
         // 入场动画播放完成后随机切换到待机动画
         switchToRandomAnimationByType('idle')
