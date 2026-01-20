@@ -253,7 +253,7 @@ const SubscriptionStatusBadge = () => {
             {/* 使用 Next/Image 渲染本地图标，必要时跳过优化以避免优化器异常导致图标不显示 */}
             {
               subscription?.isSubscribed ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><path fill="#cf0" d="M2.005 19h20v2h-20zm0-14l5 3l5-6l5 6l5-3v12h-20z" stroke-width="0.5" stroke="currentColor"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><path fill="#cf0" d="M2.005 19h20v2h-20zm0-14l5 3l5-6l5 6l5-3v12h-20z" strokeWidth="0.5" stroke="currentColor"/></svg>
               ) : (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

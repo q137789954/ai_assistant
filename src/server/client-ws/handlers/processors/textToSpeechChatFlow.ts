@@ -190,6 +190,7 @@ export const processTextToSpeechChatFlow = async ({
     ? socket.data.clientConversations
     : [];
   const recentMessages = JSON.stringify(recentMessagesSource);
+  console.log(recentMessages, 'recentMessages')
   const userProfile = JSON.stringify(socket.data.userProfile ?? {});
   const systemPrompt = getToSpeechPrompt({
     running_summary: runningSummary,
