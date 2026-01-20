@@ -88,6 +88,8 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
   const endFallbackTimerRef = useRef<number | null>(null)
   // 兜底结束的时间窗口（ms），基于 redemptionMs + buffer 计算
   const endFallbackDelayMsRef = useRef<number>(500)
+  // 控制日志输出频率，避免 onFrameProcessed 过于频繁刷屏
+  const lastFrameLogAtRef = useRef<number>(0)
 
   // 清理兜底定时器，避免重复触发或内存泄露
   const clearEndFallbackTimer = useCallback(() => {
@@ -148,8 +150,36 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
         0.6
       const isSpeech = probs.isSpeech >= threshold
 
-      if (!isSpeech || !frame.length) {
+      // 低于阈值时不触发 onSpeechSegment，同时节流输出调试日志
+      if (!isSpeech) {
+        const now = Date.now()
+        if (now - lastFrameLogAtRef.current > 2000) {
+          console.debug('[useVoiceInputListener] 未命中语音阈值', {
+            score: probs.isSpeech,
+            threshold,
+          })
+          lastFrameLogAtRef.current = now
+        }
         return
+      }
+
+      if (!isSpeech || !frame.length) {
+        if (!frame.length) {
+          console.warn('[useVoiceInputListener] 命中语音但帧为空', {
+            score: probs.isSpeech,
+            threshold,
+          })
+        }
+        return
+      }
+
+      // 记录首帧命中，便于定位“有说话但没有发出去”的情况
+      if (!lastSpeechFrameAtRef.current) {
+        console.debug('[useVoiceInputListener] 语音帧命中', {
+          score: probs.isSpeech,
+          threshold,
+          frameLength: frame.length,
+        })
       }
 
       streamingRef.current = true
@@ -169,6 +199,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
         try {
           vadRef.current.pause()
           pausedRef.current = true
+          console.debug('[useVoiceInputListener] 语音输入关闭，暂停 VAD')
         } catch (e) {
           console.warn('[useVoiceInputListener] pause VAD 出错', e)
         }
@@ -193,6 +224,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
       try {
         vadRef.current.start()
         pausedRef.current = false
+        console.debug('[useVoiceInputListener] 语音输入打开，恢复 VAD')
         return true
       } catch (e) {
         console.warn('[useVoiceInputListener] resume VAD 出错', e)
@@ -243,6 +275,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
             if(optionOnSpeechStart) {
               optionOnSpeechStart()
             }
+            console.debug('[useVoiceInputListener] VAD 检测到开始说话')
             speakingRef.current = true
             streamingRef.current = true
             dispatch({ type: 'SET_USER_SPEAKING', payload: true })
@@ -253,6 +286,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
             if(optionOnSpeechEnd) {
               optionOnSpeechEnd()
             }
+            console.debug('[useVoiceInputListener] VAD 检测到结束说话')
 
             // 结束语音周期时关闭逐帧推送开关，并通知全局状态
             speakingRef.current = false
@@ -270,6 +304,7 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
         vadRef.current = instance
         instance.start()
+        console.debug('[useVoiceInputListener] VAD 初始化完成并启动')
       } catch (e: unknown) {
         console.error('[useVoiceInputListener] 初始化 MicVAD 失败', e)
         const err = e instanceof Error ? e : new Error(String(e))
