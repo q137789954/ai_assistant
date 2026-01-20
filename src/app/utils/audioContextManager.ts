@@ -3,7 +3,7 @@
  * 并让各处复用同一个上下文与 Worklet 模块。
  */
 
-const AUDIO_SAMPLE_RATE = 16000;
+const AUDIO_SAMPLE_RATE = 24000;
 
 let audioContext: AudioContext | null = null;
 let workletModuleLoaded = false;

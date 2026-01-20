@@ -40,7 +40,7 @@ const ModeSwitch = () => {
       }
       const arrayBuffer = await response.arrayBuffer();
       const decodeContext =
-        decodeContextRef.current ?? new AudioContext({ sampleRate: 16000 });
+        decodeContextRef.current ?? new AudioContext({ sampleRate: 24000 });
       decodeContextRef.current = decodeContext;
       // decodeAudioData 输出 Float32 PCM，直接取首个声道
       const audioBuffer = await decodeContext.decodeAudioData(arrayBuffer.slice(0));
