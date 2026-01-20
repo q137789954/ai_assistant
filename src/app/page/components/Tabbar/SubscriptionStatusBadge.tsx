@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/app/components/ui/Dialog";
 import { Button } from "@/app/components/ui/button";
+import Image from "next/image";
 
 type SubscriptionSnapshot = {
   // 当前账户是否已订阅
@@ -230,6 +231,8 @@ const SubscriptionStatusBadge = () => {
     }
   }, [handleCheckout, handleOpenCancelDialog, statusMeta.action]);
 
+  console.log(statusMeta.clickable, 'statusMeta.clickable')
+
   return (
     <>
       <Tooltip title={statusMeta.tooltip}>
@@ -242,12 +245,32 @@ const SubscriptionStatusBadge = () => {
             className={[
               "flex h-9 w-9 items-center justify-center rounded-full border transition",
               statusMeta.clickable
-                ? "cursor-pointer border-white/20 bg-black/30 hover:border-lime-300 hover:text-lime-200"
+                ? "cursor-pointer border-white/20 bg-black/30 text-[#828479] hover:border-lime-300! hover:text-lime-200!"
                 : "cursor-default border-white/10 bg-black/20",
               statusMeta.iconClassName,
             ].join(" ")}
           >
-            <Crown size={18} />
+            {/* 使用 Next/Image 渲染本地图标，必要时跳过优化以避免优化器异常导致图标不显示 */}
+            {
+              subscription?.isSubscribed ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><path fill="#cf0" d="M2.005 19h20v2h-20zm0-14l5 3l5-6l5 6l5-3v12h-20z" stroke-width="0.5" stroke="currentColor"/></svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  className="transition-colors"
+                >
+                  <path
+                    fill="currentColor"
+                    d="M2.005 19h20v2h-20zm0-14l5 3.5l5-6.5l5 6.5l5-3.5v12h-20zm2 3.841V15h16V8.841l-3.42 2.394l-4.58-5.955l-4.58 5.955z"
+                    stroke="currentColor"
+                    strokeWidth="0.5"
+                  />
+                </svg>
+              )
+            }
           </button>
         </span>
       </Tooltip>
