@@ -176,8 +176,7 @@ io.on("connection", async (socket) => {
   }
   userSockets.set(userId, socket);
   sendJoinNotifications(clientId, clients);
-  // 每个客户端连接时主动创建对应的 ASR WebSocket，后续语音片段将通过该通道转发
-  initializeAsrConnection(socket);
+  // ASR 连接不再随客户端建立而初始化，改为在 voice:stream-start 时再创建
 
   /**
  * 每个连接对应的对话 ID，存储消息上下文。
@@ -201,6 +200,41 @@ io.on("connection", async (socket) => {
     socket.data.roastBattleEnabled = true;
     // 将最新回合快照下发给客户端以刷新破防条与 UI
     emitRoastBattleRoundReady(socket);
+  });
+  // 语音流开始时才建立 ASR 连接，避免无意义的常驻连接
+  socket.on("voice:stream-start", () => {
+    if (socket.data.asrSocket) {
+      return;
+    }
+    initializeAsrConnection(socket);
+  });
+  // 语音流结束时关闭 ASR 连接，释放资源
+  socket.on("voice:stream-end", () => {
+    closeAsrConnection(socket);
+  });
+  // 接收语音流片段并转发给 ASR 服务
+  socket.on("voice:stream-chunk", (payload) => {
+    const asrSocket = socket.data.asrSocket;
+    if (!asrSocket || asrSocket.readyState !== 1) {
+      console.warn("ASR 未连接，已跳过语音片段转发");
+      return;
+    }
+
+    let buffer: Buffer | null = null;
+    if (Buffer.isBuffer(payload)) {
+      buffer = payload;
+    } else if (payload instanceof ArrayBuffer) {
+      buffer = Buffer.from(payload);
+    } else if (ArrayBuffer.isView(payload)) {
+      buffer = Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+    }
+
+    if (!buffer) {
+      console.warn("无法解析 voice:stream-chunk 音频数据，已跳过");
+      return;
+    }
+
+    asrSocket.send(buffer);
   });
   // 建立连接后加载用户画像与 userDailyThreads，供本次 WebSocket 流程复用
   await loadUserContextOnConnect(socket);

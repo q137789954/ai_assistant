@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useCallback } from "react";
 import { Textarea } from "@/app/components/ui";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
@@ -17,50 +17,22 @@ const AvatarCommandInput = ({
   const { stopTtsPlayback } = useTtsAudioPlayer();
 
   const globals = useContext(GlobalsContext);
-    const { dispatch } = globals ?? {};
+  const { dispatch } = globals ?? {};
 
   // 通过音频与动画控制钩子提前抢占现有播放资源，防止新指令与旧音频冲突
 
-  useEffect(() => {
-    // 订阅 WebSocket 消息，当聊天抽屉打开时接收助手回应
-    const unsubscribe = subscribe((event) => {
-      if (typeof event.data !== "string") {
-        return;
-      }
-
-      let parsed: { event?: string; data?: Record<string, unknown> } | null =
-        null;
-      try {
-        parsed = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-
-      if (!parsed?.event) {
-        return;
-      }
-
-      const payloadData = parsed.data ?? {};
-
-      // 打印错误日志，方便排查接口异常
-      if (parsed.event === "chat-response-error") {
-        console.error("助手响应错误：", payloadData.message);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [subscribe]);
-
-  const handleSubmit = () => {
+  const handleSubmit = useCallback((overrideText?: string) => {
     if (disabled) {
       return;
     }
-    const trimmed = input.trim();
+    // 如果传入了 ASR 文本则优先使用，否则回退到输入框内容
+    const rawText =
+      typeof overrideText === "string" ? overrideText : input;
+    const trimmed = rawText.trim();
     if (!trimmed) {
       return;
     }
+    console.log(trimmed, 'trimmed')
     const timestampWatermark = Date.now();
     if (dispatch) {
       dispatch({
@@ -86,7 +58,48 @@ const AvatarCommandInput = ({
     }
     setInput("");
     updatePenguinCounter([])
-  };
+  }, [disabled, dispatch, emitEvent, input, stopTtsPlayback, updatePenguinCounter]);
+
+  useEffect(() => {
+    // 订阅 WebSocket 消息，当聊天抽屉打开时接收助手回应
+    const unsubscribe = subscribe((event) => {
+      if (typeof event.data !== "string") {
+        return;
+      }
+
+      let parsed: { event?: string; data?: unknown } | null =
+        null;
+      try {
+        parsed = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (!parsed?.event) {
+        return;
+      }
+
+      const payloadData = parsed.data ?? {};
+
+      // 打印错误日志，方便排查接口异常
+      if (parsed.event === "chat-response-error") {
+        console.error("助手响应错误：", payloadData.message);
+      }
+
+      // 收到 ASR 最终结果后，直接触发发送逻辑（内容来自 ASR 而不是输入框）
+      if (parsed.event === "asr:result") {
+        const asrText =
+          typeof payloadData === "string"
+            ? payloadData
+            : String(payloadData ?? "");
+        handleSubmit(asrText);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [handleSubmit, subscribe]);
 
   const handleTextareaKeyDown = (
     event: React.KeyboardEvent<HTMLTextAreaElement>

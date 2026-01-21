@@ -5,39 +5,6 @@ import { serializePayload } from "../../utils";
 
 export type TtsEmotion = "sad" | "happy" | "angry";
 
-export const emotionToInstructions: Record<TtsEmotion, { instructions: string; speed: number }> = {
-  sad: {
-    speed: 0.92,
-    instructions: [
-      "Tone: sad, gentle, vulnerable, soft.",
-      "Emotional range: low; speak as if holding back tears, but stay intelligible.",
-      "Intonation: downward, slower cadence; longer pauses after sentences.",
-      "Whispering: slight breathiness, not full whisper.",
-      "Avoid shouting; keep volume controlled."
-    ].join("\n"),
-  },
-  happy: {
-    speed: 1.08,
-    instructions: [
-      "Tone: happy, bright, warm, friendly.",
-      "Emotional range: medium-high; smile while speaking.",
-      "Intonation: lively, upbeat; slight upward inflections; crisp endings.",
-      "Pacing: energetic but clear; short natural pauses.",
-      "No whispering."
-    ].join("\n"),
-  },
-  angry: {
-    speed: 1.02,
-    instructions: [
-      "Tone: angry, sharp, intense, impatient.",
-      "Emotional range: high but controlled; do NOT scream.",
-      "Intonation: hard consonants; clipped phrases; stressed keywords.",
-      "Pacing: slightly faster; minimal pauses; firm sentence endings.",
-      "No whispering."
-    ].join("\n"),
-  },
-};
-
 
 /**
  * 调用 OpenAI 的 gpt-4o-mini-tts 接口并把流式音频 chunk 转成 base64 推送给客户端。
@@ -91,8 +58,6 @@ export async function streamSentenceToTts(params: {
     response_format: "pcm",
     // 期望输出为 24k PCM，用于提升音质（需确保前端播放链路支持 24k）
     sample_rate: 24000,
-    // 提升语速，避免播放节奏过慢
-    // ...emotionToInstructions[actionField || '']
   };
 
   const response = await fetch(ttsUrl, {

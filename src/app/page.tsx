@@ -4,7 +4,11 @@ import { useCallback, useContext, useEffect, useState, useRef } from "react";
 import Chatbot from "./page/components/Chatbot";
 import AvatarCommandInput from "./page/AvatarCommandInput";
 import AnimationPlayer from "./page/components/AnimationPlayer";
-import { useVoiceInputListener, useTtsAudioPlayer } from "./hooks";
+import {
+  useVoiceInputListener,
+  useVoiceStreamToWebSocket,
+  useTtsAudioPlayer,
+} from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { RoastBattleContext } from "@/app/providers/RoastBattleProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
@@ -38,8 +42,6 @@ export default function Home() {
     new Map<string, { retortOptions?: string[]; playbackComplete: boolean }>()
   );
 
-  const requestId = useRef<string>(null);
-  const speechStartTimestamp = useRef<number>(null);
   const breakMeterRef = useRef<BreakMeterHandle | null>(null);
   // 复用解码用的 AudioContext，避免重复创建带来的开销
   const entryDecodeContextRef = useRef<AudioContext | null>(null);
@@ -182,48 +184,21 @@ export default function Home() {
   }, [roastBattleDispatch]);
 
   const ensureSpeechSession = useCallback(() => {
-    if (!requestId.current) {
-      requestId.current = `${Date.now()}-${Math.random()
-        .toString(16)
-        .slice(2)}`;
-      speechStartTimestamp.current = Date.now();
-      dispatch?.({
-        type: "SET_TIMESTAMP_WATERMARK",
-        payload: speechStartTimestamp.current,
-      });
-      // 发送新指令前重置语音播放与动画帧
+    // 发送新指令前重置语音播放与动画帧
       stopTtsPlayback();
       // resetToFirstFrame();
-      switchToRandomAnimationByType("listen");
-    }
-  }, [dispatch, stopTtsPlayback, switchToRandomAnimationByType]);
+      switchToRandomAnimationByType("idle")
+  }, [stopTtsPlayback, switchToRandomAnimationByType]);
 
   /**
    * 每次收到 VAD 语音段后通过 socket.io 的自定义事件把音频帧上报给服务端
    */
-  const handleVoiceChunk = useCallback(
-    (audio: Float32Array) => {
-      console.log('收到语音1')
-      if (subscriptionBlocked) {
-        return;
-      }
-      console.log('收到语音2')
+  const onSpeechStart = useCallback(
+    () => {
+      console.log('语音开始')
       ensureSpeechSession();
-      const chunkMeta = {
-        requestId: requestId.current,
-        chunkId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        sampleRate: 16000,
-        timestamp: Date.now(),
-        content: Array.from(audio),
-        outputFormat: "speech",
-        inputFormat: "speech",
-      };
-      const sent = emitEvent("chat:input", chunkMeta, audio);
-      if (!sent) {
-        console.warn("语音帧发送失败，请检查 WebSocket 连接状态");
-      }
     },
-    [emitEvent, ensureSpeechSession, subscriptionBlocked]
+    [ensureSpeechSession]
   );
 
   useEffect(() => {
@@ -360,6 +335,7 @@ export default function Home() {
     tryTriggerPenguinCounter,
     updateRoundRoastCount,
     incrementRoundRoastCount,
+    updatePenguinCounter
   ]);
 
   useEffect(() => {
@@ -385,29 +361,6 @@ export default function Home() {
     };
   }, []);
 
-  const onSpeechEnd = useCallback(() => {
-    switchToRandomAnimationByType("idle")
-    console.log('说话结束1')
-    if (subscriptionBlocked) {
-      requestId.current = null;
-      speechStartTimestamp.current = null;
-      updatePenguinCounter([]);
-      return;
-    }
-    console.log('说话结束2')
-    emitEvent("chat:input", {
-      content: [],
-      outputFormat: "speech",
-      inputFormat: "speech",
-      type: "end",
-      timestamp: Date.now(),
-      requestId: requestId.current,
-    });
-    requestId.current = null;
-    speechStartTimestamp.current = null;
-    updatePenguinCounter([]);
-  }, [emitEvent, subscriptionBlocked, updatePenguinCounter, switchToRandomAnimationByType]);
-
   // 继续对战按钮点击后通知服务端准备新一轮回合
   const handleDefeatContinue = useCallback(() => {
     switchToRandomAnimationByType("idle");
@@ -418,11 +371,7 @@ export default function Home() {
   }, [emitEvent, switchToRandomAnimationByType]);
 
   useVoiceInputListener({
-    onSpeechSegment: handleVoiceChunk,
-    onSpeechEnd, 
-    onSpeechStart: () => {
-      console.log('说话开始')
-    },
+    onSpeechStart: onSpeechStart,
     onError(error) {
       console.error("VAD 错误：", error);
     },
@@ -431,6 +380,11 @@ export default function Home() {
       // positiveSpeechThreshold: 0.7,
       // negativeSpeechThreshold: 0.3,
     },
+  });
+  useVoiceStreamToWebSocket({
+    startEvent: "voice:stream-start",
+    audioEvent: "voice:stream-chunk",
+    endEvent: "voice:stream-end",
   });
 
   const handleTextBtn = useCallback(() => {

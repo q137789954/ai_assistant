@@ -4,7 +4,19 @@ import { useContext, useEffect, useRef, useCallback } from 'react'
 import { MicVAD, type RealTimeVADOptions } from '@ricky0123/vad-web'
 import { GlobalsContext } from '@/app/providers/GlobalsProviders'
 
-// 默认指向 public/onnx-runtime 目录，保证 wasm/模型/worker 依赖都可通过静态路径访问
+/**
+ * =========================
+ * 资源路径与默认配置
+ * =========================
+ *
+ * vad-web（@ricky0123/vad-web）底层依赖：
+ * - onnxruntime-web 的 wasm 文件
+ * - vad 模型文件
+ * - worker 等静态资源
+ *
+ * 这里统一把资源放在 public/onnx-runtime/ 下，
+ * 通过 baseAssetPath / onnxWASMBasePath 让 MicVAD 能以静态路径加载资源。
+ */
 const DEFAULT_VAD_ASSET_PATH = '/onnx-runtime/'
 const DEFAULT_VAD_OPTIONS: Partial<RealTimeVADOptions> = {
   baseAssetPath: DEFAULT_VAD_ASSET_PATH,
@@ -12,291 +24,377 @@ const DEFAULT_VAD_OPTIONS: Partial<RealTimeVADOptions> = {
 }
 
 /**
- * 为“非常快”场景调整的 VAD 预设：
- * - redemptionMs 小：结束判断很快
- * - 上层再做 merge，避免拆句
+ * =========================
+ * 快速预设（可按需调整）
+ * =========================
+ *
+ * 目标：更快识别“开始/结束”
+ * - redemptionMs 越小：越快判定结束，但越可能拆句
+ * - preSpeechPadMs：补一点点开头，避免吃掉首音节
+ * - minSpeechMs：太短的段当作误触发
  */
 export const FAST_VAD_PRESET: Partial<RealTimeVADOptions> = {
   model: 'v5',
-
-
   positiveSpeechThreshold: 0.8,
   negativeSpeechThreshold: 0.6,
-
-  // 静音多久判定为“语音段结束”（ms）
-  // 越小越快，但越容易拆句；我们用上层 merge 来兜底
   redemptionMs: 200,
-
-  // 在语音片段前补一点，避免吃掉开头音节
   preSpeechPadMs: 150,
-
-  // 片段最短时长（ms），太短的直接视为误触发
   minSpeechMs: 100,
 }
 
+/**
+ * =========================
+ * 对外暴露的最小能力（纯粹版）
+ * =========================
+ *
+ * 只提供三类回调：
+ * - onSpeechStart：检测到“开始说话”
+ * - onSpeechSegment：检测到一段完整语音（Float32Array，16k PCM）
+ * - onSpeechEnd：这次说话周期结束（注意：兜底也会触发）
+ *
+ * + VoiceInputToggle（voiceInputEnabled）控制 VAD 的 pause/resume/init
+ *
+ * 其他功能（逐帧推流/阈值过滤/日志节流/合并句子等）统统不做。
+ */
 type VoiceInputListenerOptions = {
   /**
-   * 每次 VAD 判断出的独立语音段（16k Float32 PCM）
+   * 每段完整语音（来自 MicVAD 的 onSpeechEnd(audio)）
+   * audio 为 16k Float32 PCM（单声道）
    */
   onSpeechSegment?: (audio: Float32Array) => void
-  onSpeechEnd?: () => void
+
+  /** VAD 判断开始说话 */
   onSpeechStart?: () => void
+
   /**
-   * 初始化 / 运行时报错
+   * VAD 判断结束说话（或兜底超时结束）
+   * - 如果 VAD 没有触发正常 onSpeechEnd，这个也会被兜底触发，避免上层卡住
    */
+  onSpeechEnd?: () => void
+
+  /** 初始化/运行错误 */
   onError?: (error: Error) => void
-  /**
-   * 透传给 MicVAD 的配置（阈值、静音时长等）
-   */
+
+  /** 透传给 MicVAD 的配置 */
   vadOptions?: Partial<RealTimeVADOptions>
 }
 
 /**
- * useVoiceInputListener（只做 VAD + 回调）
+ * useVoiceInputListener（纯粹版 + 兜底说话状态回落）
  *
- * - 监听全局 voiceInputEnabled
- * - MicVAD 负责快速检测开始/结束
- * - 不做句子合并，仅将每段 raw audio 透传给调用方
+ * =========================
+ * 我们为什么还要 onFrameProcessed？
+ * =========================
+ *
+ * 你要求“纯粹”，只保留三种回调，但又希望：
+ * - 全局 speaking 状态不会因为某些异常（VAD 未触发 onSpeechEnd）而卡住
+ *
+ * 兜底逻辑需要一个“心跳信号”来判断用户是否仍在说话：
+ * - onFrameProcessed 会持续被调用（每帧都有 probs.isSpeech）
+ * - 我们不把 frame 往外发，不做阈值过滤、推流，只做一件事：
+ *   当 probs.isSpeech >= positiveSpeechThreshold 时，刷新 lastSpeechFrameAt
+ *
+ * 这样就可以：
+ * - 每次收到“语音帧”就延后兜底结束计时
+ * - 如果超过 endFallbackDelay（≈ redemptionMs + buffer）没收到语音帧，
+ *   且 VAD 也没给 onSpeechEnd，就判定“结束”并兜底触发 onSpeechEnd + speaking=false
  */
-export default function useVoiceInputListener(options: VoiceInputListenerOptions = {}) {
+export default function useVoiceInputListener(
+  options: VoiceInputListenerOptions = {},
+) {
   const globals = useContext(GlobalsContext)
   if (!globals) {
     throw new Error('useVoiceInputListener 必须在 GlobalsProviders 内部使用')
   }
 
   const { voiceInputEnabled, dispatch } = globals
-  const { onSpeechSegment, onError, vadOptions, onSpeechEnd: optionOnSpeechEnd, onSpeechStart: optionOnSpeechStart } = options
+  const { onSpeechSegment, onError, vadOptions, onSpeechEnd, onSpeechStart } =
+    options
 
+  /**
+   * =========================
+   * VAD 实例与生命周期控制
+   * =========================
+   */
   const vadRef = useRef<MicVAD | null>(null)
+
+  /** 防止并发初始化（重复 new） */
   const initializingRef = useRef(false)
-  // 记录上一次是否因 VoiceInputToggle 关闭而暂停了 VAD，方便再次打开时恢复
+
+  /**
+   * 标记是否因为 VoiceInputToggle 关闭而 pause 了 VAD：
+   * - 关闭：pause（保留实例，便于快速恢复）
+   * - 再打开：start（resume）
+   */
   const pausedRef = useRef(false)
-  // 代替原先的局部 cancelled 标志，确保回调在重启 VAD 后仍能感知最新状态
+
+  /**
+   * “取消标志”：
+   * - effect 清理 / 关闭 / 卸载时设为 true
+   * - 回调中检查，防止异步初始化结束后仍然 setState / dispatch
+   */
   const cancelledRef = useRef(false)
 
-  // 是否处于“VAD 认为用户在说话”的状态
+  /**
+   * =========================
+   * 兜底：说话状态回落（关键）
+   * =========================
+   *
+   * speakingRef：
+   * - 我们内部认为是否处于“说话周期中”
+   *
+   * lastSpeechFrameAt：
+   * - 最近一次识别到“语音帧”的时间戳（来自 onFrameProcessed）
+   *
+   * endFallbackTimer：
+   * - 定时检查，如果长时间没有语音帧，则认为结束（兜底）
+   *
+   * endFallbackDelayMs：
+   * - 兜底超时时间：
+   *   取 redemptionMs + buffer（例：200 + 250 = 450ms）
+   *   这样不会比 VAD 更激进，避免误把短停顿判成结束
+   *
+   * positiveSpeechThreshold：
+   * - 用于判断 frame 是否算“语音帧”（只用于兜底刷新心跳）
+   */
   const speakingRef = useRef(false)
-  // 控制是否在当前语音周期中持续向外推送每帧音频，关键信号源于 onSpeechStart/onSpeechEnd
-  const streamingRef = useRef(false)
-  // 动态记录最终使用的 positiveSpeechThreshold，便于在 onFrameProcessed 中根据真实阈值判断是否属于语音
-  const positiveSpeechThresholdRef = useRef(
+  const lastSpeechFrameAtRef = useRef<number | null>(null)
+  const endFallbackTimerRef = useRef<number | null>(null)
+  const endFallbackDelayMsRef = useRef<number>(600)
+  const positiveSpeechThresholdRef = useRef<number>(
     FAST_VAD_PRESET.positiveSpeechThreshold ?? 0.6,
   )
-  // 记录最近一次收到“语音帧”的时间戳，用于超时补发 onSpeechEnd
-  const lastSpeechFrameAtRef = useRef<number | null>(null)
-  // 兜底结束的定时器句柄，避免 VAD 未触发 onSpeechEnd 时卡住
-  const endFallbackTimerRef = useRef<number | null>(null)
-  // 兜底结束的时间窗口（ms），基于 redemptionMs + buffer 计算
-  const endFallbackDelayMsRef = useRef<number>(500)
-  // 控制日志输出频率，避免 onFrameProcessed 过于频繁刷屏
-  const lastFrameLogAtRef = useRef<number>(0)
 
-  // 清理兜底定时器，避免重复触发或内存泄露
+  /**
+   * 清理兜底定时器：避免重复触发、避免卸载后还回调
+   */
   const clearEndFallbackTimer = useCallback(() => {
-    if (endFallbackTimerRef.current === null) {
-      return
-    }
+    if (endFallbackTimerRef.current === null) return
     window.clearTimeout(endFallbackTimerRef.current)
     endFallbackTimerRef.current = null
   }, [])
 
-  // 触发兜底 onSpeechEnd：当 VAD 未正常结束时，保证上层能收尾请求
-  const triggerFallbackSpeechEnd = useCallback(() => {
-    if (cancelledRef.current) {
-      return
-    }
-    // 如果当前已经不在“说话/推流”状态，说明已经正常结束，无需兜底
-    if (!speakingRef.current && !streamingRef.current) {
-      return
-    }
-    // 兜底走与 VAD 结束一致的收尾流程
-    optionOnSpeechEnd?.()
-    speakingRef.current = false
-    streamingRef.current = false
-    dispatch({ type: 'SET_USER_SPEAKING', payload: false })
-  }, [dispatch, optionOnSpeechEnd])
-
-  // 刷新兜底结束定时器：每次收到语音帧都延后结束判断
-  const scheduleEndFallback = useCallback(() => {
-    clearEndFallbackTimer()
-    endFallbackTimerRef.current = window.setTimeout(() => {
-      if (cancelledRef.current) {
-        return
-      }
-      const lastSpeechAt = lastSpeechFrameAtRef.current
-      if (!lastSpeechAt) {
-        return
-      }
-      const elapsed = Date.now() - lastSpeechAt
-      // 防止旧定时器误触发：只有超过阈值才真正执行兜底结束
-      if (elapsed < endFallbackDelayMsRef.current) {
-        return
-      }
-      triggerFallbackSpeechEnd()
-    }, endFallbackDelayMsRef.current)
-  }, [clearEndFallbackTimer, triggerFallbackSpeechEnd])
-
   /**
-   * 每帧到来时判断是否命中语音阈值，满足则立即透传给 onSpeechSegment。
-   * 这样可以支持将音频逐帧推送给服务端，便于第三方流式处理；判断依据是真实阈值（可能来自用户配置）、
-   * 以及当前帧的模型得分，避免将噪声误认为语音段。
+   * 统一“结束”出口（非常重要）：
+   * - 正常路径：MicVAD 的 onSpeechEnd(audio) 触发 => finalizeSpeechEnd('vad')
+   * - 兜底路径：超时 => finalizeSpeechEnd('fallback')
+   *
+   * 统一出口可以确保：
+   * - speaking 状态只回落一次（防重复）
+   * - timer / lastSpeechFrameAt 都会清理
+   * - onSpeechEnd 一定会触发（包括兜底）
+   * - 全局 SET_USER_SPEAKING=false 一定会 dispatch
    */
-  const handleFrameProcessed = useCallback(
-    (probs: { isSpeech: number }, frame: Float32Array) => {
-      // 只有当模型得分超过当前阈值才视作语音并发送，避免无意义帧打扰下游
-      const threshold =
-        positiveSpeechThresholdRef.current ??
-        FAST_VAD_PRESET.positiveSpeechThreshold ??
-        0.6
-      const isSpeech = probs.isSpeech >= threshold
+  const finalizeSpeechEnd = useCallback(
+    (reason: 'vad' | 'fallback') => {
+      // 已取消（关闭/卸载/切换）时，任何回调都不应再影响状态
+      if (cancelledRef.current) return
 
-      // 低于阈值时不触发 onSpeechSegment，同时节流输出调试日志
-      if (!isSpeech) {
-        const now = Date.now()
-        if (now - lastFrameLogAtRef.current > 2000) {
-          console.debug('[useVoiceInputListener] 未命中语音阈值', {
-            score: probs.isSpeech,
-            threshold,
-          })
-          lastFrameLogAtRef.current = now
-        }
-        return
+      // 防重复触发：如果已经不是 speaking，则直接忽略
+      // （避免正常 onSpeechEnd 后，兜底 timer 又触发一次）
+      if (!speakingRef.current) return
+
+      // 1) 内部状态回落
+      speakingRef.current = false
+
+      // 2) 清理心跳与兜底 timer
+      lastSpeechFrameAtRef.current = null
+      clearEndFallbackTimer()
+
+      // 3) 对外：通知全局 speaking=false
+      dispatch({ type: 'SET_USER_SPEAKING', payload: false })
+
+      // 4) 对外：触发 onSpeechEnd（兜底也会触发，防止上层逻辑卡死）
+      onSpeechEnd?.()
+
+      // 5) 可选：你要调试兜底触发时机，可以留一个 warn
+      if (reason === 'fallback') {
+        console.warn(
+          '[useVoiceInputListener] VAD 未触发 onSpeechEnd，已兜底结束',
+        )
       }
-
-      if (!isSpeech || !frame.length) {
-        if (!frame.length) {
-          console.warn('[useVoiceInputListener] 命中语音但帧为空', {
-            score: probs.isSpeech,
-            threshold,
-          })
-        }
-        return
-      }
-
-      // 记录首帧命中，便于定位“有说话但没有发出去”的情况
-      if (!lastSpeechFrameAtRef.current) {
-        console.debug('[useVoiceInputListener] 语音帧命中', {
-          score: probs.isSpeech,
-          threshold,
-          frameLength: frame.length,
-        })
-      }
-
-      streamingRef.current = true
-      lastSpeechFrameAtRef.current = Date.now()
-      // 每次有语音帧都刷新兜底结束时间，避免 onSpeechEnd 缺失导致卡住
-      scheduleEndFallback()
-      onSpeechSegment?.(frame)
     },
-    [onSpeechSegment, scheduleEndFallback],
+    [clearEndFallbackTimer, dispatch, onSpeechEnd],
   )
 
-  // 根据全局开关启动 / 暂停 VAD
+  /**
+   * “刷新兜底计时器”：
+   * - 每次检测到语音帧，就延后结束判断
+   * - 这样只要用户还在说话（不断有语音帧），就不会触发兜底结束
+   */
+  const scheduleEndFallback = useCallback(() => {
+    clearEndFallbackTimer()
+
+    endFallbackTimerRef.current = window.setTimeout(() => {
+      if (cancelledRef.current) return
+
+      const last = lastSpeechFrameAtRef.current
+      if (!last) return
+
+      // 超过阈值仍无语音帧，认为结束
+      const elapsed = Date.now() - last
+      if (elapsed >= endFallbackDelayMsRef.current) {
+        finalizeSpeechEnd('fallback')
+      }
+    }, endFallbackDelayMsRef.current)
+  }, [clearEndFallbackTimer, finalizeSpeechEnd])
+
+  /**
+   * =========================
+   * 主 effect：响应 VoiceInputToggle
+   * =========================
+   *
+   * 规则：
+   * - voiceInputEnabled=false：pause（保留实例），并清理 speaking + timer
+   * - voiceInputEnabled=true：
+   *   - 如果之前 pause 过：start 恢复
+   *   - 否则：初始化 MicVAD 并 start
+   */
   useEffect(() => {
     cancelledRef.current = false
+
+    /**
+     * 关闭语音输入：
+     * - pause（保留实例）
+     * - 立刻清理 speaking 状态（避免 UI 卡住）
+     * - 清理兜底 timer
+     */
     if (!voiceInputEnabled) {
       if (vadRef.current) {
         try {
           vadRef.current.pause()
           pausedRef.current = true
-          console.debug('[useVoiceInputListener] 语音输入关闭，暂停 VAD')
         } catch (e) {
           console.warn('[useVoiceInputListener] pause VAD 出错', e)
         }
       }
-      speakingRef.current = false
-      streamingRef.current = false
-      dispatch({ type: 'SET_USER_SPEAKING', payload: false })
-      clearEndFallbackTimer()
-      lastSpeechFrameAtRef.current = null
 
-      // 当全局关闭语音输入时马上终止推送并标记状态
+      // 关闭时强制复位 speaking
+      speakingRef.current = false
+      lastSpeechFrameAtRef.current = null
+      clearEndFallbackTimer()
+
+      dispatch({ type: 'SET_USER_SPEAKING', payload: false })
+
+      // 标记取消，避免后续异步初始化回调影响状态
       cancelledRef.current = true
       return
     }
 
-    // 重新开启因开关关闭而暂停的 VAD 实例
-    const resumePausedVad = () => {
-      if (!pausedRef.current || !vadRef.current) {
-        return false
-      }
-
+    /**
+     * 打开语音输入：若是 pause 恢复，直接 start
+     */
+    if (pausedRef.current && vadRef.current) {
       try {
         vadRef.current.start()
         pausedRef.current = false
-        console.debug('[useVoiceInputListener] 语音输入打开，恢复 VAD')
-        return true
       } catch (e) {
         console.warn('[useVoiceInputListener] resume VAD 出错', e)
-        return false
       }
-    }
 
-    if (resumePausedVad()) {
       return () => {
         cancelledRef.current = true
       }
     }
 
+    /**
+     * 打开语音输入：首次初始化（或实例被 destroy 后重建）
+     */
     const ensureVad = async () => {
       if (vadRef.current || initializingRef.current) return
       initializingRef.current = true
 
       try {
-        // 将默认路径、快速预设以及调用方传入的选项按优先级合并，确保我们总有一套完整的配置供 MicVAD 使用
+        // 合并配置：默认路径 + 快速预设 + 外部传入覆盖
         const mergedVadOptions: Partial<RealTimeVADOptions> = {
           ...DEFAULT_VAD_OPTIONS,
           ...FAST_VAD_PRESET,
           ...vadOptions,
         }
 
-        // 记录落地的 positiveSpeechThreshold，供逐帧推送判断是否属于语音
-        const mergedPositiveThreshold =
+        /**
+         * 兜底时间窗口：
+         * - 基于 redemptionMs（静音判定结束时间）
+         * - 加 buffer（避免短停顿造成过早结束）
+         */
+        const redemptionMs =
+          mergedVadOptions.redemptionMs ?? FAST_VAD_PRESET.redemptionMs ?? 200
+        endFallbackDelayMsRef.current = redemptionMs + 250
+
+        /**
+         * 用于“语音帧心跳”的阈值（只用于兜底刷新）
+         */
+        positiveSpeechThresholdRef.current =
           mergedVadOptions.positiveSpeechThreshold ??
           FAST_VAD_PRESET.positiveSpeechThreshold ??
           0.6
-        positiveSpeechThresholdRef.current = mergedPositiveThreshold
-        // 兜底结束窗口：使用 redemptionMs + buffer，避免误判导致过早结束
-        const redemptionMs =
-          mergedVadOptions.redemptionMs ?? FAST_VAD_PRESET.redemptionMs ?? 200
-        endFallbackDelayMsRef.current = redemptionMs + 200
 
-        // 记录调用方可能自定义的 onFrameProcessed，以便我们包裹后仍能透传事件
+        /**
+         * 如果外部传入了 onFrameProcessed，我们会透传它：
+         * - 我们先做兜底心跳刷新
+         * - 再调用用户自己的 onFrameProcessed（不改变你原本的使用方式）
+         */
         const userOnFrameProcessed = mergedVadOptions.onFrameProcessed
+
         const instance = await MicVAD.new({
           ...mergedVadOptions,
+
+          /**
+           * onFrameProcessed：仅用于兜底“心跳”
+           * - 不向外吐帧
+           * - 不做推流
+           * - 不做过滤/节流日志
+           */
           onFrameProcessed: (probs, frame) => {
-            handleFrameProcessed(probs, frame)
+            const threshold = positiveSpeechThresholdRef.current
+
+            // 只有当模型认为是语音帧时才刷新心跳
+            if (probs.isSpeech >= threshold) {
+              lastSpeechFrameAtRef.current = Date.now()
+
+              // 只有在 speaking 周期中才需要延后结束判断
+              if (speakingRef.current) {
+                scheduleEndFallback()
+              }
+            }
+
+            // 透传给外部（如果调用方需要）
             userOnFrameProcessed?.(probs, frame)
           },
 
+          /**
+           * onSpeechStart：进入说话周期
+           * - 立刻设置 speaking=true
+           * - 初始化心跳时间戳
+           * - 启动兜底定时器
+           * - 触发回调 + 更新全局状态
+           */
           onSpeechStart: () => {
             if (cancelledRef.current) return
-            if(optionOnSpeechStart) {
-              optionOnSpeechStart()
-            }
-            console.debug('[useVoiceInputListener] VAD 检测到开始说话')
+
             speakingRef.current = true
-            streamingRef.current = true
+            lastSpeechFrameAtRef.current = Date.now()
+            scheduleEndFallback()
+
+            onSpeechStart?.()
             dispatch({ type: 'SET_USER_SPEAKING', payload: true })
           },
 
-          onSpeechEnd: () => {
+          /**
+           * onSpeechEnd：MicVAD 正常给出整段语音
+           * - 先把这段 audio 吐给 onSpeechSegment
+           * - 再走统一 finalizeSpeechEnd('vad')：
+           *   这会触发 onSpeechEnd + speaking=false + 清理 timer
+           */
+          onSpeechEnd: (audio: Float32Array) => {
             if (cancelledRef.current) return
-            if(optionOnSpeechEnd) {
-              optionOnSpeechEnd()
-            }
-            console.debug('[useVoiceInputListener] VAD 检测到结束说话')
 
-            // 结束语音周期时关闭逐帧推送开关，并通知全局状态
-            speakingRef.current = false
-            streamingRef.current = false
-            dispatch({ type: 'SET_USER_SPEAKING', payload: false })
-            clearEndFallbackTimer()
-            lastSpeechFrameAtRef.current = null
+            onSpeechSegment?.(audio)
+            finalizeSpeechEnd('vad')
           },
         })
 
+        // 初始化完成但期间被关闭/卸载：立刻销毁，避免资源泄露
         if (cancelledRef.current) {
           instance.destroy()
           return
@@ -304,10 +402,9 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
 
         vadRef.current = instance
         instance.start()
-        console.debug('[useVoiceInputListener] VAD 初始化完成并启动')
       } catch (e: unknown) {
-        console.error('[useVoiceInputListener] 初始化 MicVAD 失败', e)
         const err = e instanceof Error ? e : new Error(String(e))
+        console.error('[useVoiceInputListener] 初始化 MicVAD 失败', err)
         onError?.(err)
 
         // 避免 UI 显示“已开启”但实际上没在听
@@ -322,11 +419,39 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
     return () => {
       cancelledRef.current = true
     }
-  }, [voiceInputEnabled, dispatch, onError, vadOptions, handleFrameProcessed])
+  }, [
+    voiceInputEnabled,
+    dispatch,
+    onSpeechStart,
+    onSpeechEnd,
+    onSpeechSegment,
+    onError,
+    vadOptions,
+    clearEndFallbackTimer,
+    scheduleEndFallback,
+    finalizeSpeechEnd,
+  ])
 
-  // 组件卸载时，彻底销毁 VAD（释放 AudioContext / Worklet / 模型等资源）
+  /**
+   * =========================
+   * 卸载 effect：彻底释放资源
+   * =========================
+   *
+   * - destroy MicVAD（释放 AudioContext / Worklet / 模型等）
+   * - 清理 timer / speaking 状态
+   * - 全局 speaking=false
+   */
   useEffect(() => {
     return () => {
+      cancelledRef.current = true
+      pausedRef.current = false
+
+      speakingRef.current = false
+      lastSpeechFrameAtRef.current = null
+      clearEndFallbackTimer()
+
+      dispatch({ type: 'SET_USER_SPEAKING', payload: false })
+
       if (vadRef.current) {
         try {
           vadRef.current.destroy()
@@ -335,13 +460,6 @@ export default function useVoiceInputListener(options: VoiceInputListenerOptions
         }
         vadRef.current = null
       }
-
-      // 清理语音相关的状态，以免残留影响下一次激活
-      // 退出时确保 speaking 状态复位
-      speakingRef.current = false
-      pausedRef.current = false
-      clearEndFallbackTimer()
-      lastSpeechFrameAtRef.current = null
     }
-  }, [])
+  }, [dispatch, clearEndFallbackTimer])
 }

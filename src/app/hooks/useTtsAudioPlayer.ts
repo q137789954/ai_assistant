@@ -496,6 +496,7 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
       const sentenceId = safeString(payload.sentenceId);
       switch (parsed.event) {
         case "tts-audio-start": {
+          console.log('tts-audio-start', payload)
           if (!sentenceId) {
             break;
           }
@@ -507,12 +508,16 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
           if(!isRepeatRequest&&actionType && allLoaded) {
-            const animationExists = animations.some((animation) => animation.type === actionType);
-            if (animationExists) {
-              // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
-              switchToRandomAnimationByType(actionType);
+
+            switchToRandomAnimationByType('angry');
                 play();
-            }
+
+            // const animationExists = animations.some((animation) => animation.type === actionType);
+            // if (animationExists) {
+            //   // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
+            //   switchToRandomAnimationByType(actionType);
+            //     play();
+            // }
           }
           if (requestId) {
             lastRequestIdRef.current = requestId;
@@ -536,6 +541,7 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           if (!sentenceId) {
             break;
           }
+           console.log('tts-audio-chunk', payload)
           const entry = sentencesRef.current.get(sentenceId);
           const base64 = safeString(payload.base64);
           if (!base64 || !entry) {
@@ -557,6 +563,7 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
             break;
           }
           const entry = sentencesRef.current.get(sentenceId);
+          console.log(entry, '到了这里')
           if (!entry) {
             break;
           }
