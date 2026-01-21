@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useTtsAudioPlayer } from "@/app/hooks";
+import { useTtsAudioPlayerContext } from "@/app/providers/TtsAudioPlayerProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 
 const ModeSwitch = () => {
-  const { stopTtsPlayback, playSpeechBuffer } = useTtsAudioPlayer();
+  const { stopTtsPlayback, playSpeechBuffer } = useTtsAudioPlayerContext();
   const { emitEvent, subscribe } = useWebSocketContext();
   // 复用解码用的 AudioContext，减少频繁创建带来的开销
   const decodeContextRef = useRef<AudioContext | null>(null);

@@ -129,6 +129,7 @@ export async function streamSentenceToTts(params: {
       return;
     }
     completionSignaled = true;
+    console.log('发送了 tts-audio-complete', requestId)
     socket.emit(
       "message",
       serializePayload({

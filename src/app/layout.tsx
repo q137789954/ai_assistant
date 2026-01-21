@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import GlobalsProviders from "./providers/GlobalsProviders";
 import WebSocketProviders from "./providers/WebSocketProviders";
+import TtsAudioPlayerProvider from "./providers/TtsAudioPlayerProvider";
 import { MicrophonePermissionDialog } from "@/app/components/features";
 import AuthProviders from "@/app/providers/AuthProviders";
 import AnimationProvider from "./providers/AnimationProvider";
@@ -54,9 +55,11 @@ export default async function RootLayout({
             >
               <AnimationProvider>
                 <WebSocketProviders url={websocketUrl}>
-                  <RoastBattleProviders>
-                    <ResourceLoadingGate>{children}</ResourceLoadingGate>
-                  </RoastBattleProviders>
+                  <TtsAudioPlayerProvider>
+                    <RoastBattleProviders>
+                      <ResourceLoadingGate>{children}</ResourceLoadingGate>
+                    </RoastBattleProviders>
+                  </TtsAudioPlayerProvider>
                   <MicrophonePermissionDialog />
                 </WebSocketProviders>
               </AnimationProvider>

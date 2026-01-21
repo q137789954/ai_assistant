@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext, useCallback } from "react";
 import { Textarea } from "@/app/components/ui";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
-import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
+import { useTtsAudioPlayerContext } from "@/app/providers/TtsAudioPlayerProvider";
 import { VoiceInputToggle } from "@/app/components/features";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 
@@ -14,7 +14,7 @@ const AvatarCommandInput = ({
 }) => {
   const [input, setInput] = useState("");
   const { emitEvent, subscribe } = useWebSocketContext();
-  const { stopTtsPlayback } = useTtsAudioPlayer();
+  const { stopTtsPlayback } = useTtsAudioPlayerContext();
 
   const globals = useContext(GlobalsContext);
   const { dispatch } = globals ?? {};

@@ -541,7 +541,6 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           if (!sentenceId) {
             break;
           }
-           console.log('tts-audio-chunk', payload)
           const entry = sentencesRef.current.get(sentenceId);
           const base64 = safeString(payload.base64);
           if (!base64 || !entry) {

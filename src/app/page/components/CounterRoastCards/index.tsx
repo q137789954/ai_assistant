@@ -4,7 +4,7 @@ import  React, {useCallback, useContext} from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { Variants } from "motion/react";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
-import { useTtsAudioPlayer } from "@/app/hooks/useTtsAudioPlayer";
+import { useTtsAudioPlayerContext } from "@/app/providers/TtsAudioPlayerProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 
 export type PenguinCounterCard = {
@@ -36,7 +36,7 @@ function makeGroupKey(items: PenguinCounterCard[], groupId?: string) {
 function CounterRoastCards({ items = [], groupId, updatePenguinCounter }: Props) {
 
   const {dispatch} = useContext(GlobalsContext) || {};
-  const { stopTtsPlayback } = useTtsAudioPlayer();
+  const { stopTtsPlayback } = useTtsAudioPlayerContext();
   const { emitEvent } = useWebSocketContext();
 
   const safeItems = React.useMemo(() => items.slice(0, 3), [items]);

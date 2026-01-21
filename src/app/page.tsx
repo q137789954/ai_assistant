@@ -7,11 +7,11 @@ import AnimationPlayer from "./page/components/AnimationPlayer";
 import {
   useVoiceInputListener,
   useVoiceStreamToWebSocket,
-  useTtsAudioPlayer,
 } from "./hooks";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
 import { RoastBattleContext } from "@/app/providers/RoastBattleProviders";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
+import { useTtsAudioPlayerContext } from "@/app/providers/TtsAudioPlayerProvider";
 import Tabbar from "./page/components/Tabbar";
 import { useAnimationPlayerActions } from "@/app/providers/AnimationProvider";
 import BreakMeter, {
@@ -124,19 +124,31 @@ export default function Home() {
     [updatePenguinCounter]
   );
 
-  const { stopTtsPlayback } = useTtsAudioPlayer({
-    onRequestPlaybackComplete: (completedRequestId) => {
+  const { stopTtsPlayback, setOnRequestPlaybackComplete } =
+    useTtsAudioPlayerContext();
+
+  const handleRequestPlaybackComplete = useCallback(
+    (completedRequestId: string) => {
       // 使用播放完成信号替代 tts-audio-complete，避免音频未播完就触发卡片更新
-      const record = pendingPenguinCounterRef.current.get(
-        completedRequestId
-      ) ?? {
-        playbackComplete: false,
-      };
+      const record =
+        pendingPenguinCounterRef.current.get(completedRequestId) ?? {
+          playbackComplete: false,
+        };
       record.playbackComplete = true;
       pendingPenguinCounterRef.current.set(completedRequestId, record);
       tryTriggerPenguinCounter(completedRequestId);
     },
-  });
+    [tryTriggerPenguinCounter],
+  );
+
+  useEffect(() => {
+    // 将“播放完成回调”注册到全局 TTS Provider，保证只存在一个订阅入口
+    setOnRequestPlaybackComplete(handleRequestPlaybackComplete);
+    return () => {
+      // 组件卸载时清理回调，避免旧逻辑残留
+      setOnRequestPlaybackComplete(undefined);
+    };
+  }, [handleRequestPlaybackComplete, setOnRequestPlaybackComplete]);
 
   /**
    * 拉取吐槽对战统计并写入 GlobalsContext
