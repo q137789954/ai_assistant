@@ -97,6 +97,28 @@ export const processTextToSpeechChatFlow = async ({
     return false;
   }
 
+  // ✅ 每次新请求都刷新 TTS 流的“最新序号”，并主动中止旧的 TTS 连接
+  // 目的：保证只有最后一次请求的 TTS 会继续播报，旧请求直接废弃
+  const ttsFlowId = (() => {
+    const currentId =
+      typeof socket.data.ttsFlowCounter === "number" ? socket.data.ttsFlowCounter : 0;
+    const nextId = currentId + 1;
+    socket.data.ttsFlowCounter = nextId;
+    socket.data.latestTtsFlowId = nextId;
+
+    const previousController = socket.data.activeTtsController as
+      | TtsStreamController
+      | null
+      | undefined;
+    if (previousController) {
+      previousController.abort();
+    }
+    socket.data.activeTtsController = null;
+    return nextId;
+  })();
+
+  const isLatestTtsFlow = () => socket.data.latestTtsFlowId === ttsFlowId;
+
   // 校验订阅与免费额度
   try {
     const { isSubscribed, ttsUsageCount } = await resolveSubscriptionState(userId);
@@ -244,6 +266,13 @@ export const processTextToSpeechChatFlow = async ({
   const MIN_BUFFER_CHARS = 12;
 
   const flushTtsBuffer = () => {
+    if (!isLatestTtsFlow()) {
+      if (ttsController) {
+        ttsController.abort();
+        ttsController = null;
+      }
+      return;
+    }
     if (!ttsController) return;
     const text = ttsTextBuffer;
     if (!text) return;
@@ -253,6 +282,13 @@ export const processTextToSpeechChatFlow = async ({
   };
 
   const pushToTts = (text: string) => {
+    if (!isLatestTtsFlow()) {
+      if (ttsController) {
+        ttsController.abort();
+        ttsController = null;
+      }
+      return;
+    }
     if (!ttsController) return;
     if (!text) return;
 
@@ -372,17 +408,20 @@ export const processTextToSpeechChatFlow = async ({
           // ✅ 头部 JSON 解析完成后，立刻启动“一条 reply 一条 TTS 连接”
           const emotion: TtsEmotion | null = isTtsEmotion(pendingAction) ? pendingAction : null;
 
-          ttsController = streamSentenceToTts({
-            clientId,
-            conversationId,
-            socket,
-            userId,
-            requestId,
-            timestamp,
-            action: pendingAction ?? undefined, // 透传给前端（可选）
-            llmAction: pendingAction ?? undefined,
-            emotion,
-          });
+          if (isLatestTtsFlow()) {
+            ttsController = streamSentenceToTts({
+              clientId,
+              conversationId,
+              socket,
+              userId,
+              requestId,
+              timestamp,
+              action: pendingAction ?? undefined, // 透传给前端（可选）
+              llmAction: pendingAction ?? undefined,
+              emotion,
+            });
+            socket.data.activeTtsController = ttsController;
+          }
 
           // rest 可能包含 reply 内容
           if (rest) {
@@ -458,7 +497,7 @@ export const processTextToSpeechChatFlow = async ({
 
         // 启动 TTS（即使晚了也尽量启动）
         const emotion: TtsEmotion | null = isTtsEmotion(pendingAction) ? pendingAction : null;
-        if (!ttsController) {
+        if (!ttsController && isLatestTtsFlow()) {
           ttsController = streamSentenceToTts({
             clientId,
             conversationId,
@@ -470,6 +509,7 @@ export const processTextToSpeechChatFlow = async ({
             llmAction: pendingAction ?? undefined,
             emotion,
           });
+          socket.data.activeTtsController = ttsController;
         }
 
         if (rest) handleReplyStream(rest);

@@ -25,6 +25,7 @@ const AvatarCommandInput = ({
     if (disabled) {
       return;
     }
+    console.log(new Date(), '发送文本')
     // 如果传入了 ASR 文本则优先使用，否则回退到输入框内容
     const rawText =
       typeof overrideText === "string" ? overrideText : input;

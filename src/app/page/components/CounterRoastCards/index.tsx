@@ -88,6 +88,7 @@ function CounterRoastCards({ items = [], groupId, updatePenguinCounter }: Props)
         payload: timestampWatermark,
       });
     }
+    console.log(new Date(), '发送文本')
     // 发送新指令前重置语音播放与视频帧
     stopTtsPlayback();
     // 构建消息元数据，包含唯一 ID 及格式要求

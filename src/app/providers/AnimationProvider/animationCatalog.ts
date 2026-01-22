@@ -59,16 +59,6 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     timeScale: 0.5,
   },
   {
-    id: 'anger2',
-    description: '愤怒的说',
-    animationName: 'anger2',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-    type: 'angry',
-    timeScale: 0.5,
-  },
-  {
     id: 'contempt1',
     description: '轻蔑的说',
     animationName: 'contempt1',

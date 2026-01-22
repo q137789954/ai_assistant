@@ -5,8 +5,6 @@ import { serializePayload } from "../../utils";
 
 export type TtsEmotion = "contempt" | "angry";
 
-const isEmotion = (v: unknown): v is TtsEmotion => v === "contempt" || v === "angry";
-
 // Fish 的情绪控制是文本 tag（不是 request 字段）
 const EMOTION_TAG: Record<TtsEmotion, string> = {
   angry: "(angry)",
@@ -71,6 +69,8 @@ export type TtsStreamController = {
   pushText: (text: string) => void;
   /** 告诉 TTS：文本输入结束（必须调用，否则可能一直等） */
   closeText: () => void;
+  /** 强制中止本次 TTS 连接（用于最新请求覆盖旧请求） */
+  abort: () => void;
   /** 等待音频流结束（服务端 close/finish） */
   done: () => Promise<void>;
   /** 本次流的 id（沿用 sentenceId 字段名，避免你前端改字段） */
@@ -124,6 +124,7 @@ export function streamSentenceToTts(params: {
   // ✅ 改：仅在首次音频 chunk 推送前触发一次 start
   let startSignaled = false;
   const signalStart = () => {
+    if (aborted) return;
     if (startSignaled) return;
     startSignaled = true;
 
@@ -145,6 +146,7 @@ export function streamSentenceToTts(params: {
 
   let chunkIndex = 0;
   let completionSignaled = false;
+  let aborted = false;
 
   // PCM 16-bit 对齐
   let pendingByte: Uint8Array | null = null;
@@ -162,6 +164,7 @@ export function streamSentenceToTts(params: {
   };
 
   const signalCompletion = () => {
+    if (aborted && completionSignaled) return;
     if (completionSignaled) return;
     completionSignaled = true;
 
@@ -195,6 +198,26 @@ export function streamSentenceToTts(params: {
   };
 
   const fish = getFishClient();
+  let connRef: any = null;
+
+  const closeConnSafely = () => {
+    try {
+      if (typeof connRef?.close === "function") connRef.close();
+      else if (typeof connRef?.disconnect === "function") connRef.disconnect();
+      else if (typeof connRef?.socket?.close === "function") connRef.socket.close();
+    } catch {
+      // ignore
+    }
+  };
+
+  // ✅ 外部强制中止：立即断开连接并通知完成，避免旧连接继续占用资源
+  const abort = () => {
+    if (aborted) return;
+    aborted = true;
+    textQueue.close();
+    closeConnSafely();
+    signalCompletion();
+  };
 
   const request: Record<string, unknown> = {
     text: "",
@@ -202,25 +225,17 @@ export function streamSentenceToTts(params: {
     sample_rate: 24000,
     latency: "balanced",
     chunk_length: 200,
-    reference_id: "802e3bc2b27e49c2995d23ef70e6ac89",
+    // reference_id: "91635604486d4968939f2ae967c9fa2d",
   };
 
   const run = async () => {
     const conn: any = await fish.textToSpeech.convertRealtime(request as any, textQueue.stream());
-
-    const closeConnSafely = () => {
-      try {
-        if (typeof conn?.close === "function") conn.close();
-        else if (typeof conn?.disconnect === "function") conn.disconnect();
-        else if (typeof conn?.socket?.close === "function") conn.socket.close();
-      } catch {
-        // ignore
-      }
-    };
+    connRef = conn;
 
     armTimeout(closeConnSafely);
 
     conn.on(RealtimeEvents.AUDIO_CHUNK, (audio: unknown) => {
+      if (aborted) return;
       armTimeout(closeConnSafely);
 
       if (!(audio instanceof Uint8Array) && !Buffer.isBuffer(audio)) return;
@@ -268,6 +283,7 @@ export function streamSentenceToTts(params: {
     });
 
     conn.on(RealtimeEvents.ERROR, (err: unknown) => {
+      if (aborted) return;
       console.error("ttsStreamSender(fish): realtime error", {
         clientId,
         conversationId,
@@ -280,6 +296,7 @@ export function streamSentenceToTts(params: {
     });
 
     conn.on(RealtimeEvents.CLOSE, () => {
+      if (aborted) return;
       pendingByte = null;
       signalCompletion();
     });
@@ -315,6 +332,7 @@ export function streamSentenceToTts(params: {
     sentenceId,
     pushText: (text: string) => textQueue.push(text),
     closeText: () => textQueue.close(),
+    abort,
     done: () => donePromise,
   };
 }
