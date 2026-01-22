@@ -76,7 +76,7 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
     type: 'contempt',
-    timeScale: 0.7,
+    timeScale: 0.75,
   },
   {
     id: 'contempt2',
@@ -86,7 +86,7 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
     type: 'contempt',
-    timeScale: 0.7,
+    timeScale: 0.75,
   },
   // {
   //   id: 'start1',

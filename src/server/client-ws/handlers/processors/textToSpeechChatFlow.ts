@@ -8,11 +8,8 @@ import { compressClientConversations } from "../clientConversationsProcessors";
 import { refreshRecentUserDailyThreads } from "../userContextLoader";
 import { applyRoastBattleDamageDelta } from "./roastBattleProcessor";
 import { extractFirstJson } from "./streamJsonExtractor";
-import {
-  extractCompletedSentences,
-  stripActionMarker,
-} from "./ttsSentenceUtils";
-import { streamSentenceToTts } from "./ttsStreamSender";
+import { stripActionMarker } from "./ttsSentenceUtils";
+import { streamSentenceToTts, type TtsEmotion, type TtsStreamController } from "./ttsStreamSender";
 
 interface textToSpeechChatFlowParams {
   clientId: string;
@@ -68,10 +65,10 @@ const consumeFreeTtsQuota = async (userId: string) => {
   });
 };
 
+const isTtsEmotion = (v: unknown): v is TtsEmotion => v === "contempt" || v === "angry";
+
 /**
- * 处理文本输入的全部流程：落库用户输入、调用 Grok 流式接口、持续推送 chunk、落库助手回复。
- * @param params 文本流处理所需的上下文与连接信息
- * @returns 流式处理是否全部完成（遇到异常时返回 false，可用于终止上游逻辑）
+ * 处理文本输入的全部流程：落库用户输入、调用 LLM 流式接口、把 reply 直接流式喂给 Fish TTS。
  */
 export const processTextToSpeechChatFlow = async ({
   clientId,
@@ -82,7 +79,6 @@ export const processTextToSpeechChatFlow = async ({
   requestId,
   timestamp,
 }: textToSpeechChatFlowParams): Promise<boolean> => {
-  // 只有字符串才能写入文本列，先做类型校验以防异常
   if (typeof content !== "string") {
     console.error("textChatFlow: 收到的文本内容非法，要求字符串", {
       clientId,
@@ -91,7 +87,7 @@ export const processTextToSpeechChatFlow = async ({
     });
     return false;
   }
-  // 语音识别可能出现空白或纯空格结果，避免写库与下游调用触发约束错误
+
   const normalizedContent = content.trim();
   if (!normalizedContent) {
     console.warn("textChatFlow: 收到空白文本内容，已忽略本次请求", {
@@ -100,10 +96,10 @@ export const processTextToSpeechChatFlow = async ({
     });
     return false;
   }
-  // 校验订阅与免费额度，超过限额时直接拦截本次请求
+
+  // 校验订阅与免费额度
   try {
-    const { isSubscribed, ttsUsageCount } =
-      await resolveSubscriptionState(userId);
+    const { isSubscribed, ttsUsageCount } = await resolveSubscriptionState(userId);
     if (!isSubscribed) {
       if (ttsUsageCount >= FREE_TTS_USAGE_LIMIT) {
         socket.emit(
@@ -142,10 +138,9 @@ export const processTextToSpeechChatFlow = async ({
     );
     return false;
   }
-  // 验证成功后立即将用户输入写入数据库，便于会话记录与问题追踪
-  // 读取 Grok 流式响应，累计文本并在每次收到 chunk 后尝试分句。
+
+  // 写入用户输入
   try {
-    // 尝试把用户输入写入消息表，便于后续会话追踪
     await prisma.conversationMessage.create({
       data: {
         id: randomUUID(),
@@ -165,7 +160,7 @@ export const processTextToSpeechChatFlow = async ({
     });
   }
 
-  // 组装“前情提要”：合并最近 7 天与历史高分 threads 的 text 内容
+  // running summary
   const recentThreads = Array.isArray(socket.data.userDailyThreadsRecent)
     ? socket.data.userDailyThreadsRecent
     : [];
@@ -175,16 +170,11 @@ export const processTextToSpeechChatFlow = async ({
   const topThreads = Array.isArray(socket.data.userDailyThreadsTop)
     ? socket.data.userDailyThreadsTop
     : [];
-  const runningSummary = [
-    ...recentThreads,
-    ...legacyRecentThreads,
-    ...topThreads,
-  ]
+  const runningSummary = [...recentThreads, ...legacyRecentThreads, ...topThreads]
     .map((thread) => (typeof thread?.text === "string" ? thread.text : ""))
     .filter(Boolean)
     .join("\n");
 
-  // 最近对话与用户画像需要序列化为字符串，以便完整传给提示词模板
   const recentMessagesSource = Array.isArray(socket.data.clientConversations)
     ? socket.data.clientConversations
     : [];
@@ -196,11 +186,8 @@ export const processTextToSpeechChatFlow = async ({
     user_profile: userProfile,
   });
 
-  // 连接中断时需要重试，否则流式请求会直接中止，前端只收到连接错误
-  const sleep = (ms: number) =>
-    new Promise((resolve) => {
-      setTimeout(resolve, ms);
-    });
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const createChatStreamWithRetry = async () => {
     const maxAttempts = 3;
     let lastError: unknown = null;
@@ -208,17 +195,10 @@ export const processTextToSpeechChatFlow = async ({
       try {
         return await socket.data.llmClient.chat.completions.create({
           model: "grok-4-fast-non-reasoning",
-          // model: "qwen-turbo",
-          stream: true, // 开启流式返回以便后续使用 for-await 读取每个 chunk
+          stream: true,
           messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: normalizedContent,
-            },
+            { role: "system", content: systemPrompt },
+            { role: "user", content: normalizedContent },
           ],
         });
       } catch (error) {
@@ -239,106 +219,87 @@ export const processTextToSpeechChatFlow = async ({
     throw lastError;
   };
 
-  // 下面的状态变量用于积累助手的回答、维护 chunk 序号以及串行化 TTS 调用
+  // 状态变量：累计助手回复
   let assistantContent = "";
-  let pendingSentence = "";
-  let ttsPipeline: Promise<void> = Promise.resolve();
-  let actionHandledByTts = false;
-  // reply/json 是流式混合输出，需要拆分后分别处理
+
+  // reply/json 拆分
   let replyEnded = false;
-  // replyBuffer 用于缓存未完全确认的文本，避免分隔符被拆段误判
   let replyBuffer = "";
-  // 先输出的 JSON（只包含 damage_delta、suggested_emotion）需要缓冲拼接并提前解析
   let headJsonBuffer = "";
   let headJsonParsed = false;
   let damageDelta: number | null = null;
+
+  // 你原先把 suggested_emotion 放进 pendingAction（命名有点混，但先不动外层）
   let pendingAction: string | null = null;
-  // 分隔符之后的结构化输出需要完整缓冲，等流式结束统一解析
+
   let tailJsonBuffer = "";
 
-  // 通过 Promise 链把所有需要转换的句子串行化，避免 TTS 请求并发导致顺序错乱。
-  const enqueueSentence = (sentence: string) => {
-    const normalized = sentence.trim();
-    if (!normalized) {
-      return;
-    }
+  // ✅ 新：真正流式 TTS controller（一条 reply 一条连接）
+  let ttsController: TtsStreamController | null = null;
 
-    const actionForSentence =
-      !actionHandledByTts && pendingAction ? pendingAction : undefined;
-    if (actionForSentence) {
-      actionHandledByTts = true;
-    }
+  // ✅ 新：把 LLM 的细碎 delta 轻量合并再喂给 TTS（避免 push 太碎）
+  let ttsTextBuffer = "";
+  let lastTtsFlushAt = 0;
+  const FLUSH_INTERVAL_MS = 120;
+  const MIN_BUFFER_CHARS = 12;
 
-    ttsPipeline = ttsPipeline
-      .then(() =>
-        streamSentenceToTts({
-          sentence: normalized,
-          clientId,
-          conversationId,
-          socket,
-          userId,
-          action: actionForSentence,
-          llmAction: pendingAction ?? undefined,
-          requestId,
-          timestamp,
-        })
-      )
-      .catch((error) => {
-        console.error("textToSpeechChatFlow: TTS 服务处理失败", {
-          clientId,
-          conversationId,
-          sentence: normalized,
-          error,
-        });
-      });
+  const flushTtsBuffer = () => {
+    if (!ttsController) return;
+    const text = ttsTextBuffer;
+    if (!text) return;
+    ttsTextBuffer = "";
+    ttsController.pushText(text);
+    lastTtsFlushAt = Date.now();
+  };
+
+  const pushToTts = (text: string) => {
+    if (!ttsController) return;
+    if (!text) return;
+
+    ttsTextBuffer += text;
+
+    const now = Date.now();
+    const hasPunc = /[。！？!?，,.;；:\n]/.test(text);
+    if (ttsTextBuffer.length >= MIN_BUFFER_CHARS || hasPunc || now - lastTtsFlushAt >= FLUSH_INTERVAL_MS) {
+      flushTtsBuffer();
+    }
   };
 
   const handleReplyChunk = (textChunk: string) => {
-    if (!textChunk) {
-      return;
-    }
+    if (!textChunk) return;
     assistantContent += textChunk;
-    // 把当前 chunk 和上一轮未完成的片段拼接，提取出已经完整的句子并送入 TTS 管线
-    const combinedText = pendingSentence + textChunk;
-    const { sanitized, action } = stripActionMarker(combinedText);
-    if (action && !pendingAction) {
-      pendingAction = action;
-    }
-    const { sentences, remainder } = extractCompletedSentences(sanitized);
-    pendingSentence = remainder;
-    sentences.forEach(enqueueSentence);
+
+    // 保留你原来的动作/标记剥离
+    const { sanitized, action } = stripActionMarker(textChunk);
+    if (action && !pendingAction) pendingAction = action;
+
+    // ✅ 真正流式：直接喂给 TTS（sanitized）
+    if (sanitized) pushToTts(sanitized);
   };
 
-  /**
-   * 处理“reply + 分隔符 + 尾部 JSON”的流式拼接逻辑。
-   * - 在 reply 阶段持续送入 TTS 分句
-   * - 捕获分隔符后将剩余内容写入尾部 JSON 缓冲区
-   */
   const handleReplyStream = (textChunk: string) => {
-    if (!textChunk) {
-      return;
-    }
+    if (!textChunk) return;
 
     if (!replyEnded) {
-      // reply 阶段：寻找分隔符
       replyBuffer += textChunk;
       const delimiterIndex = replyBuffer.indexOf(STREAM_REPLY_DELIMITER);
       if (delimiterIndex !== -1) {
-        // 找到分隔符：分隔符前是 reply，分隔符后是尾部 JSON
         const replyPart = replyBuffer.slice(0, delimiterIndex);
         handleReplyChunk(replyPart);
-        const remaining = replyBuffer.slice(
-          delimiterIndex + STREAM_REPLY_DELIMITER.length
-        );
+
+        // reply 结束：flush + close TTS 输入
+        flushTtsBuffer();
+        ttsController?.closeText();
+
+        const remaining = replyBuffer.slice(delimiterIndex + STREAM_REPLY_DELIMITER.length);
         tailJsonBuffer += remaining;
         replyBuffer = "";
         replyEnded = true;
         return;
       }
 
-      // 未找到分隔符时，保留可能是分隔符前缀的尾巴，避免误切
-      const safeLength =
-        replyBuffer.length - (STREAM_REPLY_DELIMITER.length - 1);
+      // safe cut：保留 delimiter 前缀尾巴
+      const safeLength = replyBuffer.length - (STREAM_REPLY_DELIMITER.length - 1);
       if (safeLength > 0) {
         const replyPart = replyBuffer.slice(0, safeLength);
         replyBuffer = replyBuffer.slice(safeLength);
@@ -347,16 +308,13 @@ export const processTextToSpeechChatFlow = async ({
       return;
     }
 
-    // reply 已结束，剩余流量全部并入尾部 JSON 缓冲区
+    // reply 已结束，剩余流量并入尾部 JSON
     tailJsonBuffer += textChunk;
   };
 
   const isIgnorableStreamError = (error: unknown) => {
-    if (!(error instanceof Error)) {
-      return false;
-    }
+    if (!(error instanceof Error)) return false;
     const normalizedMessage = error.message.toLowerCase();
-    // 某些流式连接会以 terminated/aborted 结束，视为正常中止，避免前端误报
     return (
       normalizedMessage === "terminated" ||
       normalizedMessage.includes("terminated") ||
@@ -366,28 +324,28 @@ export const processTextToSpeechChatFlow = async ({
   };
 
   let streamError: unknown = null;
+
   try {
     const responseStream = await createChatStreamWithRetry();
-    // 遍历的流式响应，逐步构建助手回复并推送 chunk
+
     for await (const chunk of responseStream) {
       const delta = chunk.choices?.[0]?.delta;
-      const deltaContent =
-        typeof delta?.content === "string" ? delta.content : "";
-      if (!deltaContent) {
-        continue;
-      }
+      const deltaContent = typeof delta?.content === "string" ? delta.content : "";
+      if (!deltaContent) continue;
 
       if (!headJsonParsed) {
-        // 先解析头部 JSON（仅包含 damage_delta），解析成功后才进入 reply 阶段
         headJsonBuffer += deltaContent;
         const { jsonText, rest } = extractFirstJson(headJsonBuffer);
-        if (!jsonText) {
-          continue;
-        }
+        if (!jsonText) continue;
+
         try {
           const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+
+          // damage
           const candidate = parsed.damage_delta || 0;
-          pendingAction = parsed.suggested_emotion as string || '';
+          // suggested_emotion（你原来叫 pendingAction，这里继续沿用）
+          pendingAction = (parsed.suggested_emotion as string) || "";
+
           if (typeof candidate === "number") {
             damageDelta = candidate;
             try {
@@ -398,14 +356,38 @@ export const processTextToSpeechChatFlow = async ({
                 damageDelta: candidate,
               });
               if (shouldStop) {
+                // 如果你要中止，也要确保 TTS 不会挂起
+                ttsController?.closeText();
+                await ttsController?.done().catch(() => {});
                 return true;
               }
             } catch (error) {
               console.error("textToSpeechChatFlow: 更新对战回合失败", error);
             }
           }
+
           headJsonParsed = true;
           headJsonBuffer = "";
+
+          // ✅ 头部 JSON 解析完成后，立刻启动“一条 reply 一条 TTS 连接”
+          const emotion: TtsEmotion | null = isTtsEmotion(pendingAction) ? pendingAction : null;
+
+          ttsController = streamSentenceToTts({
+            clientId,
+            conversationId,
+            socket,
+            userId,
+            requestId,
+            timestamp,
+            action: pendingAction ?? undefined, // 透传给前端（可选）
+            llmAction: pendingAction ?? undefined,
+            emotion,
+          });
+
+          // rest 可能包含 reply 内容
+          if (rest) {
+            handleReplyStream(rest);
+          }
         } catch (error) {
           console.error("textToSpeechChatFlow: 解析头部 JSON 失败", {
             clientId,
@@ -414,13 +396,9 @@ export const processTextToSpeechChatFlow = async ({
             jsonText,
             rawBuffer: headJsonBuffer,
           });
-          // 解析失败时保留缓冲区，继续等待后续数据补齐
           continue;
         }
-        // 头部 JSON 解析完成后，剩余内容可能包含 reply 或分隔符
-        if (rest) {
-          handleReplyStream(rest);
-        }
+
         continue;
       }
 
@@ -430,37 +408,43 @@ export const processTextToSpeechChatFlow = async ({
     streamError = error;
   }
 
+  // 流异常处理
   if (streamError && !isIgnorableStreamError(streamError)) {
-    console.error("textChatFlow: Grok 流式响应处理失败", {
+    console.error("textChatFlow: LLM 流式响应处理失败", {
       clientId,
       conversationId,
       error: streamError,
     });
-    const errorPayload = serializePayload({
-      event: "chat-response-error",
-      data: {
-        clientId,
-        conversationId,
-        message:
-          streamError instanceof Error
-            ? streamError.message
-            : "未知的 Grok 流式响应异常",
-      },
-    });
-    socket.emit("message", errorPayload);
+    socket.emit(
+      "message",
+      serializePayload({
+        event: "chat-response-error",
+        data: {
+          clientId,
+          conversationId,
+          message:
+            streamError instanceof Error ? streamError.message : "未知的 LLM 流式响应异常",
+        },
+      })
+    );
+
+    // ✅ 失败也要收尾 TTS，避免前端卡住
+    flushTtsBuffer();
+    ttsController?.closeText();
+    await ttsController?.done().catch(() => {});
     return false;
   }
 
   if (streamError) {
-    console.warn("textChatFlow: Grok 流式连接提前终止，尝试收尾处理", {
+    console.warn("textChatFlow: LLM 流式连接提前终止，尝试收尾处理", {
       clientId,
       conversationId,
       error: streamError,
     });
   }
 
+  // 如果头部 JSON 最终还没解析到，尝试最后再提取一次
   if (!headJsonParsed && headJsonBuffer.trim()) {
-    // 流式结束仍未解析到头部 JSON，尝试最后再提取一次
     const { jsonText, rest } = extractFirstJson(headJsonBuffer);
     if (jsonText) {
       try {
@@ -469,12 +453,28 @@ export const processTextToSpeechChatFlow = async ({
         if (typeof candidate === "number") {
           damageDelta = candidate;
         }
+        pendingAction = (parsed.suggested_emotion as string) || pendingAction;
         headJsonParsed = true;
-        if (rest) {
-          handleReplyStream(rest);
+
+        // 启动 TTS（即使晚了也尽量启动）
+        const emotion: TtsEmotion | null = isTtsEmotion(pendingAction) ? pendingAction : null;
+        if (!ttsController) {
+          ttsController = streamSentenceToTts({
+            clientId,
+            conversationId,
+            socket,
+            userId,
+            requestId,
+            timestamp,
+            action: pendingAction ?? undefined,
+            llmAction: pendingAction ?? undefined,
+            emotion,
+          });
         }
+
+        if (rest) handleReplyStream(rest);
       } catch (error) {
-        console.error("textToSpeechChatFlow: 解析头部 JSON 失败", {
+        console.error("textToSpeechChatFlow: 解析头部 JSON 失败(末尾兜底)", {
           clientId,
           conversationId,
           error,
@@ -485,72 +485,58 @@ export const processTextToSpeechChatFlow = async ({
     }
   }
 
+  // 流结束但没遇到分隔符：把剩余当 reply
   if (!replyEnded && replyBuffer) {
-    // 流式结束仍未遇到分隔符时，把剩余内容当作 reply 处理
     handleReplyChunk(replyBuffer);
     replyBuffer = "";
   }
 
-  if (pendingSentence.trim()) {
-    // 循环结束后如果还有残留片段，也需要转换为语音
-    enqueueSentence(pendingSentence);
-    pendingSentence = "";
-  }
+  // reply 结束时如果还没 close（比如没有 delimiter），这里兜底 close
+  flushTtsBuffer();
+  ttsController?.closeText();
 
+  // 解析 tail JSON
   if (tailJsonBuffer.trim()) {
-    // JSON 必须完整后再解析并下发给客户端
     const jsonTextRaw = tailJsonBuffer.trim();
     let jsonText = jsonTextRaw;
     const strayDelimiterIndex = jsonText.indexOf(STREAM_REPLY_DELIMITER);
     if (strayDelimiterIndex !== -1) {
-      // 兜底处理：如果 JSON 后又混入分隔符，截断后再解析
       jsonText = jsonText.slice(0, strayDelimiterIndex).trim();
     }
-    if (!jsonText) {
-      return true;
-    }
-    // 尝试只解析首个完整 JSON，避免尾部夹杂多余 JSON 导致解析失败
-    const { jsonText: extractedJson } = extractFirstJson(jsonText);
-    if (!extractedJson) {
-      return true;
-    }
-    jsonText = extractedJson.trim();
-    if (!jsonText) {
-      return true;
-    }
-    try {
-      const parsed = JSON.parse(jsonText) as Record<string, unknown>;
-      if (damageDelta !== null && typeof parsed.damage_delta !== "number") {
-        // 头部 JSON 已解析到 damage_delta 时补回，保持下游结构兼容
-        parsed.damage_delta = damageDelta;
+    if (jsonText) {
+      const { jsonText: extractedJson } = extractFirstJson(jsonText);
+      if (extractedJson) {
+        try {
+          const parsed = JSON.parse(extractedJson.trim()) as Record<string, unknown>;
+          if (damageDelta !== null && typeof parsed.damage_delta !== "number") {
+            parsed.damage_delta = damageDelta;
+          }
+          socket.emit(
+            "message",
+            serializePayload({
+              event: "chat-response-meta",
+              data: { requestId, ...parsed },
+            })
+          );
+        } catch (error) {
+          console.error("textToSpeechChatFlow: 解析 LLM 结构化输出失败", {
+            clientId,
+            conversationId,
+            error,
+            extractedJson,
+            jsonTextRaw,
+          });
+        }
       }
-      socket.emit(
-        "message",
-        serializePayload({
-          event: "chat-response-meta",
-          data: {
-            requestId,
-            ...parsed,
-          },
-        })
-      );
-    } catch (error) {
-      console.error("textToSpeechChatFlow: 解析 LLM 结构化输出失败", {
-        clientId,
-        conversationId,
-        error,
-        jsonText,
-        jsonTextRaw,
-      });
     }
   }
 
-  // 等待所有排队的 TTS 请求完成后再继续后续流程
-  await ttsPipeline;
+  // ✅ 等待 TTS 音频流结束（单连接）
+  await ttsController?.done().catch(() => {});
 
+  // 落库 assistant
   if (assistantContent) {
     const assistantTimestamp = Date.now();
-    // 如果助手生成了文字回复，同步写入数据库以完整记录会话
     try {
       await prisma.conversationMessage.create({
         data: {
@@ -571,25 +557,15 @@ export const processTextToSpeechChatFlow = async ({
       });
     }
 
-    // 把完整助手回复追加到 socket.data.clientConversations 以保持上下文
     socket.data.clientConversations.push(
       { role: "user", content: normalizedContent, timestamp },
-      {
-        role: "assistant",
-        content: assistantContent,
-        timestamp: assistantTimestamp,
-      }
+      { role: "assistant", content: assistantContent, timestamp: assistantTimestamp }
     );
+
     if (socket.data.clientConversations.length >= 10) {
-      // 异步触发线程压缩，压缩成功后刷新本次连接的最近 7 天 threads
-      compressClientConversations({
-        socket,
-        batchSize: 10,
-      })
+      compressClientConversations({ socket, batchSize: 10 })
         .then((result) => {
-          if (!result) {
-            return;
-          }
+          if (!result) return;
           return refreshRecentUserDailyThreads(socket);
         })
         .catch((error) => {
@@ -604,7 +580,3 @@ export const processTextToSpeechChatFlow = async ({
 
   return true;
 };
-
-/**
- * 从积累的文本中提取以句末标点结束的完整句子，返回句子列表及剩余未封装的尾部。
- */
