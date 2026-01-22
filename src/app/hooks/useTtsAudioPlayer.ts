@@ -161,6 +161,8 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
   const workletReadyRef = useRef(false);
   const currentWorkletSentenceIdRef = useRef<string | null>(null);
   const currentWorkletEntryRef = useRef<SentenceState | null>(null);
+  const handleWorkletMessageRef = useRef<((event: MessageEvent) => void) | null>(null);
+  const playNextFromQueueRef = useRef<(() => void) | null>(null);
   const lastRequestIdRef = useRef<string | null>(null);
   // 追踪每个 requestId 下尚未完成的 sentenceId 集合及动画是否已触发
   const requestSentenceMapRef = useRef(
@@ -177,58 +179,66 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
 
   // 一个句子多个 chunk 到来时缓存提供到 Worklet 的通道数组
   // 将解码后的 PCM 数据暂存到句子的队列里，等待此句子被激活后再推送到 Worklet。
-  const queueWorkletChannels = (entry: SentenceState, channelData: Float32Array[]) => {
-    if (!entry.workletBuffers) {
-      entry.workletBuffers = [];
-    }
-    entry.workletBuffers.push(channelData);
-  };
+  const queueWorkletChannels = useCallback(
+    (entry: SentenceState, channelData: Float32Array[]) => {
+      if (!entry.workletBuffers) {
+        entry.workletBuffers = [];
+      }
+      entry.workletBuffers.push(channelData);
+    },
+    [],
+  );
 
   // 每次向 Worklet 推送数据前确保时序正确，并把 channel.buffer 归还给 Worklet
   // 把 PCM 通道数据通过 MessagePort 发送给 Worklet，并做好环形缓冲状态重置。
-  const sendToWorklet = (entry: SentenceState, channelData: Float32Array[]) => {
-    const port = workletPortRef.current;
-    if (!port) {
-      queueWorkletChannels(entry, channelData);
-      return;
-    }
-    entry.workletDrained = false;
-    port.postMessage(
-      {
-        type: "push",
-        channelData,
-      },
-      channelData.map((channel) => channel.buffer),
-    );
-  };
+  const sendToWorklet = useCallback(
+    (entry: SentenceState, channelData: Float32Array[]) => {
+      const port = workletPortRef.current;
+      if (!port) {
+        queueWorkletChannels(entry, channelData);
+        return;
+      }
+      entry.workletDrained = false;
+      port.postMessage(
+        {
+          type: "push",
+          channelData,
+        },
+        channelData.map((channel) => channel.buffer),
+      );
+    },
+    [queueWorkletChannels],
+  );
 
   // 如果当前正在播放的句子就是目标句子，立即发送数据，否则入队等待。
-  const sendOrQueueWorkletChannels = (
-    sentenceId: string,
-    entry: SentenceState,
-    channelData: Float32Array[],
-  ) => {
-    // 如果当前正在播放的句子就是目标句子则直接推送，否则做异步缓存
-    if (
-      currentSentenceIdRef.current === sentenceId &&
-      currentWorkletSentenceIdRef.current === sentenceId
-    ) {
-      sendToWorklet(entry, channelData);
-      return;
-    }
-    queueWorkletChannels(entry, channelData);
-  };
+  const sendOrQueueWorkletChannels = useCallback(
+    (sentenceId: string, entry: SentenceState, channelData: Float32Array[]) => {
+      // 如果当前正在播放的句子就是目标句子则直接推送，否则做异步缓存
+      if (
+        currentSentenceIdRef.current === sentenceId &&
+        currentWorkletSentenceIdRef.current === sentenceId
+      ) {
+        sendToWorklet(entry, channelData);
+        return;
+      }
+      queueWorkletChannels(entry, channelData);
+    },
+    [queueWorkletChannels, sendToWorklet],
+  );
 
   // 逐条发送累计的 PCM 数据，保证新句子的缓冲在切换时被刷新。
-  const flushWorkletBuffers = (entry: SentenceState) => {
-    if (!entry.workletBuffers?.length) {
-      return;
-    }
-    entry.workletBuffers.forEach((channels) => {
-      sendToWorklet(entry, channels);
-    });
-    entry.workletBuffers = [];
-  };
+  const flushWorkletBuffers = useCallback(
+    (entry: SentenceState) => {
+      if (!entry.workletBuffers?.length) {
+        return;
+      }
+      entry.workletBuffers.forEach((channels) => {
+        sendToWorklet(entry, channels);
+      });
+      entry.workletBuffers = [];
+    },
+    [sendToWorklet],
+  );
 
   // 注册 requestId 与句子的对应关系，方便识别整轮 TTS 是否完成
   const registerSentenceForRequest = (requestId: string, sentenceId: string) => {
@@ -247,7 +257,7 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
   };
 
   // 当某句播放结束时，通知对应的 request 集合并在全部完成时切换舞蹈动画
-  const handleRequestCompletionForSentence = (sentenceId: string, requestId?: string) => {
+  const handleRequestCompletionForSentence = useCallback((sentenceId: string, requestId?: string) => {
     if (!requestId) {
       return;
     }
@@ -268,10 +278,11 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
     onRequestPlaybackCompleteRef.current?.(requestId);
     switchToAnimationById("idle1");
     play();
-  };
+  }, [play, switchToAnimationById]);
 
   // 使用 AudioContext 解码当前 chunk 为 PCM，并交由上面的发送/排队逻辑处理。
-  const decodeChunkForWorklet = (sentenceId: string, entry: SentenceState, chunk: Uint8Array) => {
+  const decodeChunkForWorklet = useCallback(
+    (sentenceId: string, entry: SentenceState, chunk: Uint8Array) => {
     if (!entry.useWorklet) {
       return;
     }
@@ -282,7 +293,9 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
       return;
     }
     sendOrQueueWorkletChannels(sentenceId, entry, [floatChannel]);
-  };
+    },
+    [sendOrQueueWorkletChannels],
+  );
   
   // 当前句子播放结束或被清理时释放资源，并从状态集合移除。
   const cleanupEntry = useCallback((sentenceId: string) => {
@@ -317,39 +330,31 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
     }
   }, [cleanupEntry]);
 
-  const enqueueSentence = (sentenceId: string) => {
-    // 将状态完整的句子放入播放队列，避免重复入列
-    const entry = sentencesRef.current.get(sentenceId);
-    if (!entry || entry.enqueued) {
-      return;
-    }
-    entry.enqueued = true;
-    queueRef.current.push(sentenceId);
-    playNextFromQueue();
-  };
-
   // 启动 Worklet 播放路径：恢复音频上下文，刷新 Worklet 状态，立刻消费缓冲并标记当前播放句子。
-  const startWorkletPlayback = (sentenceId: string, entry: SentenceState) => {
-    const context = audioContextRef.current;
-    const port = workletPortRef.current;
-    if (!context || !port) {
-      return false;
-    }
-    context.resume().catch(() => {
-      // 继续播放即使 resume 被阻止
-    });
-    currentWorkletSentenceIdRef.current = sentenceId;
-    currentWorkletEntryRef.current = entry;
-    entry.workletDrained = false;
-    port.postMessage({ type: "resetState" });
-    flushWorkletBuffers(entry);
-    isPlayingRef.current = true;
-    currentSentenceIdRef.current = sentenceId;
-    return true;
-  };
+  const startWorkletPlayback = useCallback(
+    (sentenceId: string, entry: SentenceState) => {
+      const context = audioContextRef.current;
+      const port = workletPortRef.current;
+      if (!context || !port) {
+        return false;
+      }
+      context.resume().catch(() => {
+        // 继续播放即使 resume 被阻止
+      });
+      currentWorkletSentenceIdRef.current = sentenceId;
+      currentWorkletEntryRef.current = entry;
+      entry.workletDrained = false;
+      port.postMessage({ type: "resetState" });
+      flushWorkletBuffers(entry);
+      isPlayingRef.current = true;
+      currentSentenceIdRef.current = sentenceId;
+      return true;
+    },
+    [flushWorkletBuffers],
+  );
 
   // 根据当前播放状态调度 Worklet，只在 Worklet 可用且 idle 时将队列头送入播放。
-  const playNextFromQueue = () => {
+  const playNextFromQueue = useCallback(() => {
     if (isPlayingRef.current) {
       return;
     }
@@ -385,10 +390,21 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
       queueRef.current.shift();
       cleanupEntry(nextId);
     }
-  };
+  }, [cleanupEntry, startWorkletPlayback]);
+
+  const enqueueSentence = useCallback((sentenceId: string) => {
+    // 将状态完整的句子放入播放队列，避免重复入列
+    const entry = sentencesRef.current.get(sentenceId);
+    if (!entry || entry.enqueued) {
+      return;
+    }
+    entry.enqueued = true;
+    queueRef.current.push(sentenceId);
+    playNextFromQueue();
+  }, [playNextFromQueue]);
 
   // Worklet 播放完成后的回调：清理当前句子，重置播放标记并尝试下一个队列。
-  const finalizeWorkletPlayback = () => {
+  const finalizeWorkletPlayback = useCallback(() => {
     const sentenceId = currentWorkletSentenceIdRef.current;
     if (!sentenceId) {
       return;
@@ -402,27 +418,93 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
     isPlayingRef.current = false;
     currentSentenceIdRef.current = null;
     playNextFromQueue();
-  };
+  }, [cleanupEntry, handleRequestCompletionForSentence, playNextFromQueue]);
 
   // 监听 Worklet 发来的事件，用于记录播放延迟及判断缓冲区是否耗尽。
-  const handleWorkletMessage = (event: MessageEvent) => {
-    const data = event.data;
-    if (!data || typeof data.type !== "string") {
-      return;
-    }
-    const entry = currentWorkletEntryRef.current;
-    const sentenceId = currentWorkletSentenceIdRef.current;
-    if (data.type === "started" && entry && sentenceId) {
-      // Worklet 首次启动输出时刻，记录播放延迟
-      logPlaybackLatency(sentenceId, entry);
-    }
-    if (data.type === "buffer-drained" && entry) {
-      entry.workletDrained = true;
-      if (entry.isComplete) {
-        finalizeWorkletPlayback();
+  const handleWorkletMessage = useCallback(
+    (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data.type !== "string") {
+        return;
       }
-    }
-  };
+      const entry = currentWorkletEntryRef.current;
+      const sentenceId = currentWorkletSentenceIdRef.current;
+      if (data.type === "started" && entry && sentenceId) {
+        // Worklet 首次启动输出时刻，记录播放延迟
+        logPlaybackLatency(sentenceId, entry);
+      }
+      if (data.type === "buffer-drained" && entry) {
+        entry.workletDrained = true;
+        if (entry.isComplete) {
+          finalizeWorkletPlayback();
+        }
+      }
+    },
+    [finalizeWorkletPlayback],
+  );
+
+  useEffect(() => {
+    handleWorkletMessageRef.current = handleWorkletMessage;
+  }, [handleWorkletMessage]);
+
+  useEffect(() => {
+    playNextFromQueueRef.current = playNextFromQueue;
+  }, [playNextFromQueue]);
+
+  const subscribeDepsRef = useRef({
+    allLoaded,
+    animations,
+    currentAnimationType: currentAnimation?.type ?? "",
+    switchToAnimationById,
+    switchToRandomAnimationByType,
+    play,
+    timestampWatermark,
+    enqueueSentence,
+    decodeChunkForWorklet,
+    finalizeWorkletPlayback,
+    cleanupEntry,
+    handleRequestCompletionForSentence,
+    playNextFromQueue,
+    stopTtsPlayback,
+    registerSentenceForRequest,
+  });
+
+  useEffect(() => {
+    // 使用 ref 保存最新依赖，避免订阅 effect 因动画/回调变化频繁重建导致播放中断
+    subscribeDepsRef.current = {
+      allLoaded,
+      animations,
+      currentAnimationType: currentAnimation?.type ?? "",
+      switchToAnimationById,
+      switchToRandomAnimationByType,
+      play,
+      timestampWatermark,
+      enqueueSentence,
+      decodeChunkForWorklet,
+      finalizeWorkletPlayback,
+      cleanupEntry,
+      handleRequestCompletionForSentence,
+      playNextFromQueue,
+      stopTtsPlayback,
+      registerSentenceForRequest,
+    };
+  }, [
+    allLoaded,
+    animations,
+    currentAnimation?.type,
+    switchToAnimationById,
+    switchToRandomAnimationByType,
+    play,
+    timestampWatermark,
+    enqueueSentence,
+    decodeChunkForWorklet,
+    finalizeWorkletPlayback,
+    cleanupEntry,
+    handleRequestCompletionForSentence,
+    playNextFromQueue,
+    stopTtsPlayback,
+    registerSentenceForRequest,
+  ]);
 
   useEffect(() => {
     if (typeof AudioContext === "undefined") {
@@ -447,12 +529,14 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           numberOfOutputs: 1,
           outputChannelCount: [2],
         });
-        node.port.onmessage = handleWorkletMessage;
+        node.port.onmessage = (event) => {
+          handleWorkletMessageRef.current?.(event);
+        };
         node.connect(context.destination);
         workletNodeRef.current = node;
         workletPortRef.current = node.port;
         workletReadyRef.current = true;
-        playNextFromQueue();
+        playNextFromQueueRef.current?.();
       } catch (error) {
         console.warn("ttsAudioPlayer: 初始化 AudioWorklet 失败", error);
       }
@@ -472,6 +556,10 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
   useEffect(() => {
     // 订阅后台 WebSocket 消息，按事件类型构建句子数据上下文
     const dismantle = subscribe((event) => {
+      const deps = subscribeDepsRef.current;
+      if (!deps) {
+        return;
+      }
       const parsed = describeEvent(event);
       if (!parsed || typeof parsed.event !== "string") {
         return;
@@ -484,8 +572,8 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
         typeof echoTimestamp === "number" ? echoTimestamp : Number(echoTimestamp);
       // 只有 timestampWatermark 为 null 或 echoTimestamp 不小于 watermark 时才继续处理，保证新指令抢占资源
       if (
-        timestampWatermark !== null &&
-        (!Number.isFinite(parsedEchoTimestamp) || parsedEchoTimestamp < timestampWatermark)
+        deps.timestampWatermark !== null &&
+        (!Number.isFinite(parsedEchoTimestamp) || parsedEchoTimestamp < deps.timestampWatermark)
       ) {
         return;
       }
@@ -501,10 +589,10 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           const requestId = safeString(payload.requestId);
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
-          if (!isRepeatRequest && actionType && allLoaded) {
+          if (!isRepeatRequest && actionType && deps.allLoaded) {
 
-            switchToRandomAnimationByType('angry');
-                play();
+            deps.switchToRandomAnimationByType('angry');
+                deps.play();
 
             // const animationExists = animations.some((animation) => animation.type === actionType);
             // if (animationExists) {
@@ -512,12 +600,12 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
             //   switchToRandomAnimationByType(actionType);
             //     play();
             // }
-          } else if (isRepeatRequest && actionType && allLoaded) {
+          } else if (isRepeatRequest && actionType && deps.allLoaded) {
             // 重复 requestId 时仅在当前动画类型不匹配时切换，避免说话动画缺失
-            const currentType = currentAnimation?.type ?? "";
+            const currentType = deps.currentAnimationType ?? "";
             if (currentType !== actionType) {
-              switchToRandomAnimationByType(actionType);
-              play();
+              deps.switchToRandomAnimationByType(actionType);
+              deps.play();
             }
           }
           if (requestId) {
@@ -533,9 +621,9 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
             requestId: requestId || undefined,
           });
           if (requestId) {
-            registerSentenceForRequest(requestId, sentenceId);
+            deps.registerSentenceForRequest(requestId, sentenceId);
           }
-          enqueueSentence(sentenceId);
+          deps.enqueueSentence(sentenceId);
           break;
         }
         case "tts-audio-chunk": {
@@ -552,9 +640,9 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           }
           const chunk = base64ToUint8Array(base64);
           // 将 chunk 解码并推入 Worklet 缓存
-          decodeChunkForWorklet(sentenceId, entry, chunk);
+          deps.decodeChunkForWorklet(sentenceId, entry, chunk);
           if (!isPlayingRef.current) {
-            playNextFromQueue();
+            deps.playNextFromQueue();
           }
           break;
         }
@@ -569,11 +657,11 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           // 收到 complete 表示不会再有 chunk，尝试让 Worklet 结束并清理缓存
           entry.isComplete = true;
           if (entry.useWorklet && entry.workletDrained) {
-            finalizeWorkletPlayback();
+            deps.finalizeWorkletPlayback();
           } else if (!entry.useWorklet) {
             const requestId = entry.requestId;
-            cleanupEntry(sentenceId);
-            handleRequestCompletionForSentence(sentenceId, requestId);
+            deps.cleanupEntry(sentenceId);
+            deps.handleRequestCompletionForSentence(sentenceId, requestId);
             queueRef.current = queueRef.current.filter((id) => id !== sentenceId);
           }
           break;
@@ -586,17 +674,9 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
     return () => {
       // 取消订阅并立即停止所有未完成的播放，避免内存泄漏
       dismantle();
-      stopTtsPlayback();
+      subscribeDepsRef.current.stopTtsPlayback();
     };
-  }, [
-    subscribe,
-    allLoaded,
-    animations,
-    switchToAnimationById,
-    play,
-    stopTtsPlayback,
-    timestampWatermark,
-  ]);
+  }, [subscribe]);
 
   /**
    * 直接播放一段外部传入的语音数据（支持 Float32/Int16/Uint8/普通数字数组）。
