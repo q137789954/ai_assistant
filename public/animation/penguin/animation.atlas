@@ -1,6 +1,6 @@
 
 animation.png
-size: 4522,11660
+size: 4522,12464
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
@@ -1974,6 +1974,146 @@ frame_280
 frame_281
   rotate: false
   xy: 454, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_282
+  rotate: false
+  xy: 906, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_283
+  rotate: false
+  xy: 1358, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_284
+  rotate: false
+  xy: 1810, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_285
+  rotate: false
+  xy: 2262, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_286
+  rotate: false
+  xy: 2714, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_287
+  rotate: false
+  xy: 3166, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_288
+  rotate: false
+  xy: 3618, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_289
+  rotate: false
+  xy: 4070, 11258
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_290
+  rotate: false
+  xy: 2, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_291
+  rotate: false
+  xy: 454, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_292
+  rotate: false
+  xy: 906, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_293
+  rotate: false
+  xy: 1358, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_294
+  rotate: false
+  xy: 1810, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_295
+  rotate: false
+  xy: 2262, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_296
+  rotate: false
+  xy: 2714, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_297
+  rotate: false
+  xy: 3166, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_298
+  rotate: false
+  xy: 3618, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_299
+  rotate: false
+  xy: 4070, 11660
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_300
+  rotate: false
+  xy: 2, 12062
+  size: 450, 400
+  orig: 450, 400
+  offset: 0, 0
+  index: -1
+frame_301
+  rotate: false
+  xy: 454, 12062
   size: 450, 400
   orig: 450, 400
   offset: 0, 0

@@ -10,7 +10,7 @@ export interface AnimationMeta {
   atlas?: string
   image?: string
   animationName?: string
-  type: 'idle' | 'listen' | 'talk' | 'start' | 'quit' | 'angry' | 'happy' | 'sad'
+  type: 'idle' | 'start' | 'quit' | 'angry' | 'contempt'
   timeScale?: number
   audio?: string
   audioStartFrame?: number
@@ -49,26 +49,6 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     timeScale: 0.3,
   },
   {
-    id: 'listen',
-    description: '听动作',
-    animationName: 'listen',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-    type: 'listen',
-    timeScale: 0.3,
-  },
-  {
-    id: 'talk',
-    description: '说动作',
-    animationName: 'talk',
-    json: '/animation/penguin/animation.json',
-    atlas: '/animation/penguin/animation.atlas',
-    image: '/animation/penguin/animation.png',
-    type: 'talk',
-    timeScale: 1,
-  },
-  {
     id: 'anger1',
     description: '愤怒的说',
     animationName: 'anger1',
@@ -76,7 +56,7 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
     type: 'angry',
-    timeScale: 0.3,
+    timeScale: 0.5,
   },
   {
     id: 'anger2',
@@ -86,7 +66,27 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',
     type: 'angry',
-    timeScale: 0.3,
+    timeScale: 0.5,
+  },
+  {
+    id: 'contempt1',
+    description: '轻蔑的说',
+    animationName: 'contempt1',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+    type: 'contempt',
+    timeScale: 0.7,
+  },
+  {
+    id: 'contempt2',
+    description: '轻蔑的说',
+    animationName: 'contempt2',
+    json: '/animation/penguin/animation.json',
+    atlas: '/animation/penguin/animation.atlas',
+    image: '/animation/penguin/animation.png',
+    type: 'contempt',
+    timeScale: 0.7,
   },
   // {
   //   id: 'start1',
@@ -115,7 +115,7 @@ export const DEFAULT_ANIMATION_LIST: AnimationMeta[] = [
   {
     id: 'quit',
     description: '退出动作',
-    animationName: 'quit',
+    animationName: 'quit1',
     json: '/animation/penguin/animation.json',
     atlas: '/animation/penguin/animation.atlas',
     image: '/animation/penguin/animation.png',

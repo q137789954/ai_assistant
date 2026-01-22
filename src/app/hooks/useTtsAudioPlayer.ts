@@ -584,6 +584,7 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           if (!sentenceId) {
             break;
           }
+          console.log(payload)
           // 后端 payload 不再返回 action 字段，这里随机选择 talk1/talk2 作为动作 id，保持动画交互
           const actionType = payload.action || 'talk';
           const requestId = safeString(payload.requestId);
@@ -591,15 +592,17 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
           if (!isRepeatRequest && actionType && deps.allLoaded) {
 
-            deps.switchToRandomAnimationByType('angry');
-                deps.play();
+            // deps.switchToRandomAnimationByType('angry');
+            //     deps.play();
 
-            // const animationExists = animations.some((animation) => animation.type === actionType);
-            // if (animationExists) {
-            //   // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
-            //   switchToRandomAnimationByType(actionType);
-            //     play();
-            // }
+            const animationExists = deps.animations.some((animation) => animation.type === actionType);
+            console.log(animationExists, actionType)
+            console.log(deps.animations, 'animations')
+            if (animationExists) {
+              // 动作字段对应的动画 id 在所有资源加载完成后直接切换并播放，增强交互体验
+              deps.switchToRandomAnimationByType(actionType);
+                deps.play();
+            }
           } else if (isRepeatRequest && actionType && deps.allLoaded) {
             // 重复 requestId 时仅在当前动画类型不匹配时切换，避免说话动画缺失
             const currentType = deps.currentAnimationType ?? "";
