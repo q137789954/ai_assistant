@@ -31,7 +31,6 @@ export async function streamSentenceToTts(params: {
     timestamp,
   } = params;
   const sentenceId = randomUUID();
-  console.log(sentence, 'sentence')
 
   // OpenAI TTS 需要使用 API Key 鉴权，避免未配置时导致难以定位的问题
   const apiKey ='sk-2tF2rqxA6OHRB25Qca5sdRWaZCJ6EQTei2qbtfQBEFEIC5e9';
@@ -40,8 +39,6 @@ export async function streamSentenceToTts(params: {
   }
 
   const actionField = llmAction ?? action;
-  console.log(llmAction, 'llmAction')
-  console.log(action, 'action')
 
   // 允许通过环境变量覆盖 OpenAI 端点，便于在代理或私有网关场景复用
   const baseUrl = "https://oricreate.org";
@@ -59,6 +56,8 @@ export async function streamSentenceToTts(params: {
     // 期望输出为 24k PCM，用于提升音质（需确保前端播放链路支持 24k）
     sample_rate: 24000,
   };
+
+  console.log(sentence, 'sentence')
 
   const response = await fetch(ttsUrl, {
     method: "POST",
@@ -93,6 +92,7 @@ export async function streamSentenceToTts(params: {
     // 在 TTS 音频开始事件中同步传递 LLM 本次回复的动作字段，避免客户端异步等待
     startData.action = actionField;
   }
+  console.log('tts-audio-start', requestId)
   socket.emit(
     "message",
     serializePayload({
@@ -102,19 +102,19 @@ export async function streamSentenceToTts(params: {
   );
 
   // 直接通知前端当前句子内容，避免依赖服务端回传的 sentence 字段
-  socket.emit(
-    "message",
-    serializePayload({
-      event: "tts-audio-sentence",
-      data: {
-        clientId,
-        conversationId,
-        sentenceId,
-        sentence,
-        timestamp: new Date().toISOString(),
-      },
-    })
-  );
+  // socket.emit(
+  //   "message",
+  //   serializePayload({
+  //     event: "tts-audio-sentence",
+  //     data: {
+  //       clientId,
+  //       conversationId,
+  //       sentenceId,
+  //       sentence,
+  //       timestamp: new Date().toISOString(),
+  //     },
+  //   })
+  // );
 
   // 获取流式响应 reader 以便逐个读取二进制音频数据
   const reader = response.body.getReader();
@@ -129,7 +129,7 @@ export async function streamSentenceToTts(params: {
       return;
     }
     completionSignaled = true;
-    console.log('发送了 tts-audio-complete', requestId)
+    console.log('tts-audio-complete', requestId)
     socket.emit(
       "message",
       serializePayload({
@@ -180,6 +180,7 @@ export async function streamSentenceToTts(params: {
 
       // 将二进制音频数据转成 base64，透传给前端解码
       const base64 = Buffer.from(alignedChunk).toString("base64");
+      console.log('tts-audio-chunk', requestId)
       socket.emit(
         "message",
         serializePayload({

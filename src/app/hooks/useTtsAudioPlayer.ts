@@ -1,8 +1,5 @@
 import { useCallback, useContext, useEffect, useRef } from "react";
-import {
-  useAnimationCatalog,
-  useAnimationPlayerActions,
-} from "@/app/providers/AnimationProvider";
+import { useAnimationPlayer } from "@/app/providers/AnimationProvider";
 import { useResourceLoading } from "@/app/providers/ResourceLoadingProvider";
 import { useWebSocketContext } from "@/app/providers/WebSocketProviders";
 import { GlobalsContext } from "@/app/providers/GlobalsProviders";
@@ -142,9 +139,9 @@ type UseTtsAudioPlayerOptions = {
 
 export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
   const { subscribe } = useWebSocketContext();
-  // 仅订阅动画列表与动作，避免 currentAnimation 更新导致播放器逻辑反复重建
-  const { animations } = useAnimationCatalog();
-  const { switchToAnimationById, play, switchToRandomAnimationByType } = useAnimationPlayerActions();
+  // 需要读取当前动画类型用于重复 requestId 的兜底切换，因此改为订阅完整动画状态
+  const { animations, currentAnimation, switchToAnimationById, play, switchToRandomAnimationByType } =
+    useAnimationPlayer();
   const { allLoaded } = useResourceLoading();
   // 读取全局的 timestampWatermark，确保旧指令的 TTS 语音在新指令发出后不会继续执行
   const globalsContext = useContext(GlobalsContext);
@@ -173,6 +170,8 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
   const onRequestPlaybackCompleteRef = useRef<
     UseTtsAudioPlayerOptions["onRequestPlaybackComplete"]
   >(options?.onRequestPlaybackComplete);
+
+  console.log(11111)
 
   useEffect(() => {
     onRequestPlaybackCompleteRef.current = options?.onRequestPlaybackComplete;
@@ -501,13 +500,12 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
             break;
           }
           // 后端 payload 不再返回 action 字段，这里随机选择 talk1/talk2 作为动作 id，保持动画交互
-          console.log(payload, 'parsed')
           const actionType = payload.action || 'talk';
           console.log(actionType, 'actionType')
           const requestId = safeString(payload.requestId);
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
-          if(!isRepeatRequest&&actionType && allLoaded) {
+          if (!isRepeatRequest && actionType && allLoaded) {
 
             switchToRandomAnimationByType('angry');
                 play();
@@ -518,6 +516,13 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
             //   switchToRandomAnimationByType(actionType);
             //     play();
             // }
+          } else if (isRepeatRequest && actionType && allLoaded) {
+            // 重复 requestId 时仅在当前动画类型不匹配时切换，避免说话动画缺失
+            const currentType = currentAnimation?.type ?? "";
+            if (currentType !== actionType) {
+              switchToRandomAnimationByType(actionType);
+              play();
+            }
           }
           if (requestId) {
             lastRequestIdRef.current = requestId;

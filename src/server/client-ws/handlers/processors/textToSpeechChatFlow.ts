@@ -104,7 +104,6 @@ export const processTextToSpeechChatFlow = async ({
   try {
     const { isSubscribed, ttsUsageCount } =
       await resolveSubscriptionState(userId);
-      console.log(isSubscribed, ttsUsageCount)
     if (!isSubscribed) {
       if (ttsUsageCount >= FREE_TTS_USAGE_LIMIT) {
         socket.emit(
@@ -190,7 +189,6 @@ export const processTextToSpeechChatFlow = async ({
     ? socket.data.clientConversations
     : [];
   const recentMessages = JSON.stringify(recentMessagesSource);
-  console.log(recentMessages, 'recentMessages')
   const userProfile = JSON.stringify(socket.data.userProfile ?? {});
   const systemPrompt = getToSpeechPrompt({
     running_summary: runningSummary,
@@ -388,7 +386,6 @@ export const processTextToSpeechChatFlow = async ({
         }
         try {
           const parsed = JSON.parse(jsonText) as Record<string, unknown>;
-          console.log(parsed, 'parsed')
           const candidate = parsed.damage_delta || 0;
           pendingAction = parsed.suggested_emotion as string || '';
           if (typeof candidate === "number") {

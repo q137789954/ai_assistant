@@ -156,11 +156,9 @@ export default function Home() {
    * - 接口返回失败时仅记录日志，避免影响主流程
    */
   const refreshRoastBattleStats = useCallback(async () => {
-    console.log("刷新吐槽对战统计数据...");
     if (!roastBattleDispatch) {
       return;
     }
-    console.log("开始请求吐槽对战统计接口...");
 
     try {
       const response = await fetch("/api/roast-battle/stats");
