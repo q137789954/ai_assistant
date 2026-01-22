@@ -171,8 +171,6 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
     UseTtsAudioPlayerOptions["onRequestPlaybackComplete"]
   >(options?.onRequestPlaybackComplete);
 
-  console.log(11111)
-
   useEffect(() => {
     onRequestPlaybackCompleteRef.current = options?.onRequestPlaybackComplete;
   }, [options?.onRequestPlaybackComplete]);
@@ -495,13 +493,11 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
       const sentenceId = safeString(payload.sentenceId);
       switch (parsed.event) {
         case "tts-audio-start": {
-          console.log('tts-audio-start', payload)
           if (!sentenceId) {
             break;
           }
           // 后端 payload 不再返回 action 字段，这里随机选择 talk1/talk2 作为动作 id，保持动画交互
           const actionType = payload.action || 'talk';
-          console.log(actionType, 'actionType')
           const requestId = safeString(payload.requestId);
           const isRepeatRequest = !!requestId && requestId === lastRequestIdRef.current;
           // 处理动画切换：仅在首次接收到相同 requestId 时才切换，避免重复触发动画
@@ -567,7 +563,6 @@ export const useTtsAudioPlayer = (options?: UseTtsAudioPlayerOptions) => {
             break;
           }
           const entry = sentencesRef.current.get(sentenceId);
-          console.log(entry, '到了这里')
           if (!entry) {
             break;
           }

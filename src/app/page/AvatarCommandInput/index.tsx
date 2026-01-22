@@ -32,7 +32,6 @@ const AvatarCommandInput = ({
     if (!trimmed) {
       return;
     }
-    console.log(trimmed, 'trimmed')
     const timestampWatermark = Date.now();
     if (dispatch) {
       dispatch({

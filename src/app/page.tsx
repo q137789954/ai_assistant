@@ -176,8 +176,6 @@ export default function Home() {
         return;
       }
 
-      console.log(payload.data.winCount, payload.data.minRoastCount);
-
       roastBattleDispatch({
         type: "SET_ROAST_BATTLE_STATS",
         payload: {
@@ -205,7 +203,6 @@ export default function Home() {
    */
   const onSpeechStart = useCallback(
     () => {
-      console.log('语音开始')
       ensureSpeechSession();
     },
     [ensureSpeechSession]
@@ -251,7 +248,6 @@ export default function Home() {
         case "roast-battle-rounds": {
           // 初始化时同步当前吐槽对战回合分数，确保破防条从真实进度开始
           const payload = (parsed.data ?? {}) as Record<string, unknown>;
-          console.log("roast-battle-rounds payload:", payload);
           const roundSnapshot =
             (payload.round as { roastCount?: number } | null) ?? null;
           if (!roundSnapshot) {
@@ -282,7 +278,6 @@ export default function Home() {
           // 处理见下方专门逻辑
           // damage_delta 可能来自字符串或数字，统一转成数字后再更新破防条
           const payload = parsed.data ?? {};
-          console.log("chat-response-meta payload:", payload);
           const damageDeltaRaw = payload.damage_delta;
           const damageDelta =
             typeof damageDeltaRaw === "number"

@@ -231,8 +231,6 @@ const SubscriptionStatusBadge = () => {
     }
   }, [handleCheckout, handleOpenCancelDialog, statusMeta.action]);
 
-  console.log(statusMeta.clickable, 'statusMeta.clickable')
-
   return (
     <>
       <Tooltip title={statusMeta.tooltip}>
