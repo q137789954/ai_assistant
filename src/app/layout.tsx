@@ -45,8 +45,7 @@ export default async function RootLayout({
   // 统一在入口处声明需要预加载的视频资源/音频（public 下的文件直接用 /video/... 访问）
   const preloadVideoResources = ["/video/firework.mov", "/video/firework.webm", "/voice/roast_battle_succeed.mp3"];
   const websocketUrl =
-    process.env.NEXT_PUBLIC_SOCKET_SERVER_URL ??
-    process.env.NEXT_PUBLIC_WEBSOCKET_URL ??
+    process.env.SOCKET_SERVER_PORT ??
     "http://localhost:4000";
   return (
     <html lang="en">
