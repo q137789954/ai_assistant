@@ -75,7 +75,7 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <main className="min-h-dvh w-full bg-[#0a0a0a] text-white px-6 py-12">
+    <main className="h-dvh w-full bg-[#0a0a0a] text-white px-6 py-12 overflow-scroll">
       <div className="mx-auto w-full max-w-4xl space-y-10">
         <header className="space-y-3">
           <p className="text-sm uppercase tracking-[0.2em] text-secondary">

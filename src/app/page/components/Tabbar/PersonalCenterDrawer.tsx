@@ -2,6 +2,7 @@
 
 import { useCallback, useContext, useEffect, useRef, useState, type TouchEvent } from "react";
 import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Drawer } from "@/app/components/ui";
 import { Typography } from "antd";
 import { Copy, Check, Settings, X } from "lucide-react";
@@ -32,6 +33,8 @@ const PersonalCenterDrawer = () => {
   const handleClosePersonalCenter = useCallback(() => {
     dispatch?.({ type: "SET_PERSONAL_CENTER_VISIBILITY", payload: false });
   }, [dispatch]);
+  // 路由控制用于菜单点击跳转
+  const router = useRouter();
   // 用户显示名称状态，便于编辑后立即更新
   const sessionName = session?.user?.name ?? "";
   const [displayName, setDisplayName] = useState(sessionName);
@@ -46,11 +49,22 @@ const PersonalCenterDrawer = () => {
 
   // 修改密码弹窗受控状态
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  // 隐藏抽屉后再跳转，避免界面闪烁
+  const handlePrivacyPolicy = useCallback(() => {
+    handleClosePersonalCenter();
+    router.push("/privacy");
+  }, [handleClosePersonalCenter, router]);
+  // 隐藏抽屉后再跳转到条款页
+  const handleTerms = useCallback(() => {
+    handleClosePersonalCenter();
+    router.push("/terms");
+  }, [handleClosePersonalCenter, router]);
 
   // 菜单项配置收敛在抽屉内部，避免 Tabbar 维护业务细节
   const menuItems: PersonalCenterMenuItem[] = [
     { label: "🔒 Change Password", onClick: () => setPasswordModalOpen(true) },
-    { label: "🛡️ Privacy Policy" },
+    { label: "🛡️ Privacy Policy", onClick: handlePrivacyPolicy },
+    { label: "📄 Terms", onClick: handleTerms },
   ];
 
   // 退出登录统一处理跳转逻辑
